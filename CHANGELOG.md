@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.7.0](https://github.com/suelio-arts/robin/compare/v2.6.0...v2.7.0) (2026-08-03)
+
+
+### Features
+
+* harden Luna review pipeline ([#2](https://github.com/suelio-arts/robin/issues/2)) ([22b7fba](https://github.com/suelio-arts/robin/commit/22b7fbaf903a6cd58717179f88138aaa89cc92e3))
+
+
+### Bug Fixes
+
+* use provider default temperature ([#1](https://github.com/suelio-arts/robin/issues/1)) ([09b3ee0](https://github.com/suelio-arts/robin/commit/09b3ee003e6e75a5cb10400958ca1c5ecfe67eac))
+
 ## [2.6.0](https://github.com/antongulin/robin/compare/v2.5.1...v2.6.0) (2026-07-15)
 
 

@@ -31,7 +31,8 @@ Add Robin to this repository.
 - Action ref if needed: antongulin/robin@main
 - Secrets: LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
 - Do NOT use @v0 or any v0 tag
-- Do NOT use pull_request_target or synchronize on pull_request
+- Never check out or execute pull-request code from `pull_request_target`; use
+  it only with Robin's pinned API-only review action
 Read AGENTS.md in the robin repo for full rules.
 ```
 

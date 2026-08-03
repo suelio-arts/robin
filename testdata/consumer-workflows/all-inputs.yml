@@ -20,6 +20,7 @@ jobs:
     uses: ./.github/workflows/review.yml
     with:
       fail-on-high: false
+      reasoning-effort: low
       # Boolean workflow_call input — bare false matches real consumer YAML
       # (e.g. request-changes: false). Omit to defer to .github/robin.yml.
       request-changes: false

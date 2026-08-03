@@ -8,6 +8,11 @@ on:
         required: false
         type: boolean
         default: false
+      reasoning-effort:
+        description: "Optional reasoning effort for compatible models: low, medium, or high."
+        required: false
+        type: string
+        default: ""
       request-changes:
         description: "Whether a high severity finding submits a blocking REQUEST_CHANGES review. true posts REQUEST_CHANGES; false always posts COMMENT (advisor mode). Omit to use the repo config, which defaults to true."
         required: false
@@ -111,6 +116,7 @@ jobs:
           llm-api-key: ${{ secrets.LLM_API_KEY }}
           llm-base-url: ${{ secrets.LLM_BASE_URL }}
           model: ${{ secrets.LLM_MODEL }}
+          reasoning-effort: ${{ inputs.reasoning-effort }}
           fail-on-high: ${{ inputs.fail-on-high }}
           request-changes: ${{ inputs.request-changes }}
           max-diff-size: ${{ inputs.max-diff-size }}

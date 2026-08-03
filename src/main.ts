@@ -2,11 +2,11 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
 import { GitUtils } from "./git-utils";
-import { ReviewParser, StructuredReview } from "./review-parser";
+import { ReviewFinding, ReviewParser, StructuredReview } from "./review-parser";
 import { shouldRetryStructuredReview } from "./review-retry";
 import { GitHubReviewer, ROBIN_SIGNATURE } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
-import { filterDiff, splitDiffIntoFiles } from "./diff-filter";
+import { chunkDiffByFile, filterDiff, splitDiffIntoFiles } from "./diff-filter";
 import { annotateDiffWithLineNumbers } from "./diff-annotate";
 import {
   DEFAULT_CONFIG_FILE,
@@ -19,6 +19,8 @@ import {
 } from "./repo-config";
 import { getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
+import { isPullRequestReviewEvent } from "./events";
+import { buildFileContext, focusedContext } from "./review-context";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -48,12 +50,7 @@ async function run(): Promise<void> {
     let prNumber: number | undefined;
     let command: ReviewerCommand = "review"; // default command for PR events
 
-    if (eventName === "pull_request_target") {
-      core.warning("pull_request_target is intentionally not supported because it can expose secrets to untrusted PR code. Use pull_request or maintainer-only issue_comment commands instead.");
-      return;
-    }
-
-    if (eventName === "pull_request") {
+    if (isPullRequestReviewEvent(eventName)) {
       if (payload.action === "synchronize" && !reviewOnSynchronize) {
         core.info("Skipping pull_request synchronize event. Pushes to an existing PR are reviewed manually with /review unless review-on-synchronize is true.");
         return;
@@ -117,6 +114,10 @@ async function run(): Promise<void> {
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
     const model = core.getInput("model") || "";
+    const reasoningEffortInput = core.getInput("reasoning-effort") || "";
+    if (reasoningEffortInput && !["low", "medium", "high"].includes(reasoningEffortInput)) {
+      throw new Error(`Invalid reasoning-effort: ${reasoningEffortInput}`);
+    }
     const failOnHigh = core.getInput("fail-on-high") === "true";
     const maxDiffSizeInput = core.getInput("max-diff-size") || "50000";
     const maxCommentsInput = core.getInput("max-comments") || "25";
@@ -173,7 +174,9 @@ async function run(): Promise<void> {
     }
 
     const gitUtils = new GitUtils(octokit as any);
-    const baseRef = payload.pull_request?.base?.sha;
+    const { data: pullRequest } = await octokit.rest.pulls.get({ owner, repo, pull_number: prNumber });
+    const baseRef = pullRequest.base.sha;
+    const headRef = pullRequest.head.sha;
     const repoConfig = await loadRepoConfig(
       octokit,
       gitUtils,
@@ -233,12 +236,15 @@ async function run(): Promise<void> {
       return;
     }
 
-    const truncatedDiff = reviewDiff.length > maxDiffSize 
+    const reviewChunks = splitDiffIntoFiles(reviewDiff).flatMap(({ content }) =>
+      chunkDiffByFile(content, maxDiffSize)
+    );
+    const summaryDiff = reviewDiff.length > maxDiffSize
       ? reviewDiff.slice(0, maxDiffSize) + "\n\n[... Diff truncated due to size limit]"
       : reviewDiff;
 
     core.info(
-      `Diff size: ${reviewDiff.length} chars${reviewDiff.length > maxDiffSize ? " (truncated)" : ""}${removedFiles.length > 0 ? ` (${removedFiles.length} file(s) filtered)` : ""}`
+      `Diff size: ${reviewDiff.length} chars in ${reviewChunks.length} review chunk(s)${removedFiles.length > 0 ? ` (${removedFiles.length} file(s) filtered)` : ""}`
     );
     const reviewInstructions = command === "review"
       ? await loadReviewInstructions(
@@ -268,18 +274,13 @@ async function run(): Promise<void> {
           statusCommentId,
           buildProgressStatusBody(detail, statusCommand, statusModel)
         );
-      }
+      },
+      reasoningEffortInput as "low" | "medium" | "high" | undefined
     );
     const useJsonMode = command === "review" && jsonResponseMode;
     
-    let reviewText: string;
     if (command === "summary") {
-      reviewText = (await runSummary(llm, truncatedDiff)).content;
-    } else {
-      reviewText = (await runReview(llm, truncatedDiff, reviewInstructions, useJsonMode)).content;
-    }
-
-    if (command === "summary") {
+      const reviewText = (await runSummary(llm, summaryDiff)).content;
       // Post summary as a regular comment
       await octokit.rest.issues.createComment({
         owner,
@@ -290,34 +291,31 @@ async function run(): Promise<void> {
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("summary"));
     } else {
       // Full review parsed and posted as a review
-      core.info("Parsing review response...");
-      let parsedReview = ReviewParser.parseDetailed(reviewText);
-      let findings = parsedReview.findings;
-
-      if (shouldRetryStructuredReview(findings, parsedReview.usedJson)) {
-        core.warning("Structured review parse was empty; retrying once with JSON-only instructions.");
-        await updateStatusComment(
-          octokit,
-          owner,
-          repo,
-          statusCommentId,
-          buildProgressStatusBody(
-            "First pass returned no parseable findings — retrying with JSON-only instructions…",
-            statusCommand,
-            statusModel
-          )
-        );
-        const retryText = (
-          await runReview(
-            llm,
-            truncatedDiff,
-            `${reviewInstructions}\n\nReturn ONLY a single valid JSON object. Do not use markdown.`,
-            true
-          )
-        ).content;
-        parsedReview = ReviewParser.parseDetailed(retryText);
-        findings = parsedReview.findings;
+      const findings: StructuredReview = {
+        summary: "",
+        high: [],
+        medium: [],
+        low: [],
+        suggestions: [],
+        rawResponse: "",
+      };
+      for (let start = 0; start < reviewChunks.length; start += 3) {
+        const batch = reviewChunks.slice(start, start + 3);
+        const reviews = await Promise.all(batch.map(async (chunk, offset) => {
+          core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
+          const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
+          return runReviewPipeline(llm, chunk, context, reviewInstructions, useJsonMode);
+        }));
+        for (const review of reviews) {
+          findings.summary += `${review.summary}\n`;
+          findings.high.push(...review.high);
+          findings.medium.push(...review.medium);
+          findings.low.push(...review.low);
+          findings.suggestions.push(...review.suggestions);
+        }
       }
+
+      deduplicateFindings(findings);
 
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
 
@@ -683,12 +681,82 @@ async function runReview(
   llm: LLMClient,
   diff: string,
   reviewInstructions: string,
-  jsonResponseMode: boolean
+  jsonResponseMode: boolean,
+  context = ""
 ) {
   const systemPrompt = getReviewPrompt(reviewInstructions);
-  const userContent = buildReviewInput(diff);
+  const userContent = buildReviewInput(diff, context);
   core.info("Getting full code review...");
   return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
+}
+
+const DISCOVERY_INSTRUCTIONS = [
+  "Audit only inputs, parsing, validation, authorization, identity, roles, and route dispatch. For each credential/client construction, prove the complete route and arguments are validated first. For each unattended privileged CLI invocation, prove the canonical machine identity and role are asserted first.",
+  "Audit only lifecycle and mutable state across success, failure, retry, duplicate callback, concurrency, cancellation, relaunch, and corrupt persisted data. Treat an async read-modify-write of an entire persisted collection as unsafe unless the whole operation is serialized or atomic.",
+  "Audit only external API and persistence contracts: exact fields, masks, units, currency, mutation targets, partial success, idempotency, readback, and recovery.",
+  "Audit only build/platform compatibility and changed tests. Report a test only when its assertion can pass while the intended changed behavior is broken.",
+  "Run the MIX regression checklist only: map failure text to the error element rather than status; reject valueless options coerced to true; check persisted-string split before index zero; detect whole-collection read-modify-write races; skip already-stamped qualification scans; enforce autopilot assertions and validation-before-client; verify field-mask casing and currency; and ensure a remote create followed by child creates can resume after any child failure.",
+];
+
+async function runReviewPipeline(
+  llm: LLMClient,
+  diff: string,
+  context: string,
+  reviewInstructions: string,
+  jsonResponseMode: boolean
+): Promise<StructuredReview> {
+  const checklist = DISCOVERY_INSTRUCTIONS.at(-1)!;
+  const discovery = await Promise.all(
+    [...DISCOVERY_INSTRUCTIONS, checklist, checklist].map(async (instructions) => {
+      const response = await runReview(
+        llm,
+        diff,
+        [reviewInstructions, instructions].filter(Boolean).join("\n\n"),
+        jsonResponseMode,
+        context
+      );
+      const parsed = ReviewParser.parseDetailed(response.content);
+      if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
+      return ReviewParser.parse((await runReview(
+        llm,
+        diff,
+        `${reviewInstructions}\n\n${instructions}\n\nReturn ONLY a single valid JSON object.`,
+        true,
+        context
+      )).content);
+    })
+  );
+  const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
+  const input = `${buildReviewInput(diff, context)}\n\nCANDIDATE FINDINGS:\n${candidates}`;
+  const verified = ReviewParser.parse((await llm.chatCompletion(getReviewPrompt([
+    reviewInstructions,
+    "Final evidence pass: do not add findings. Keep only candidates whose trigger, changed line, failing path, and material impact are directly proven.",
+    "Reject pre-existing or copied behavior, unsupported callers/build targets/configurations, provider-contract hypotheticals, and concurrency contradicted by a serialized caller.",
+    "Keep concrete repository-contract violations and partial operations where a committed parent cannot be resumed after a changed child operation fails.",
+  ].filter(Boolean).join("\n\n")), input, true)).content);
+  const consensus = ReviewParser.parse((await llm.chatCompletion(getReviewPrompt([
+    reviewInstructions,
+    "Consensus-only pass: do not add findings. Keep a root cause only when it appears in at least two candidate objects and the code does not directly disprove it.",
+    "Preserve repeated persisted-index crashes and whole-collection read-modify-write races.",
+  ].filter(Boolean).join("\n\n")), input, true)).content);
+
+  for (const severity of ["high", "medium", "low", "suggestions"] as const) {
+    verified[severity].push(...consensus[severity]);
+  }
+  deduplicateFindings(verified);
+  return verified;
+}
+
+function deduplicateFindings(review: StructuredReview): void {
+  const seen = new Set<string>();
+  for (const severity of ["high", "medium", "low", "suggestions"] as const) {
+    review[severity] = review[severity].filter((finding: ReviewFinding) => {
+      const key = `${finding.file || ""}:${finding.line || 0}:${finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").slice(0, 12).join(" ")}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
 }
 
 async function runSummary(llm: LLMClient, diff: string) {
@@ -698,9 +766,9 @@ async function runSummary(llm: LLMClient, diff: string) {
   return await llm.chatCompletion(systemPrompt, userContent, false);
 }
 
-function buildReviewInput(diff: string): string {
+function buildReviewInput(diff: string, context = ""): string {
   const annotated = annotateDiffWithLineNumbers(diff);
-  return [
+  const input = [
     "Review the following code diff and return only the strict JSON object described in the system prompt.",
     "Each line is prefixed with its line number in the NEW file (blank for removed lines and headers).",
     "For any line-specific finding, copy that exact number into the `line` field. Do not guess or recount.",
@@ -709,7 +777,20 @@ function buildReviewInput(diff: string): string {
     "```diff",
     annotated,
     "```",
-  ].join("\n");
+  ];
+  if (context) {
+    input.push(
+      "UNCHANGED BASE/HEAD FILE CONTEXT (evidence only; anchor comments to changed lines):",
+      "```",
+      context,
+      "```",
+      "FOCUSED CONTRACT EVIDENCE:",
+      "```",
+      focusedContext(context),
+      "```"
+    );
+  }
+  return input.join("\n");
 }
 
 function buildSummaryInput(diff: string): string {

@@ -1,0 +1,64 @@
+{
+  "repository": "suelio-arts/mix-mono",
+  "scoring": {
+    "match": "Same PR, file, and root cause; generic advice does not count.",
+    "acceptance": "No high false positives; precision >= CodeRabbit; recall within 5 points of CodeRabbit. Surpasses only when recall and precision are both no worse and one is higher."
+  },
+  "cases": [
+    {
+      "pr": 265,
+      "base": "0fee7f042f59626762e8f417fd678e58549112ef",
+      "head": "559d358245ef2157e01076c0745dcb58ab035562",
+      "labels": [
+        {"file": "studio/ops/ads/google_ads.py", "rootCause": "update mask uses amount_micros while the API field is amountMicros"},
+        {"file": "studio/ops/ads/google_ads.py", "rootCause": "USD spend cap is applied without verifying the customer currency"}
+      ]
+    },
+    {
+      "pr": 267,
+      "base": "1a9c601fcfc52dce83a7397f6e3c612161b22f0c",
+      "head": "e7e5f34c630750ef23640d5dc454cca4ecf40cde",
+      "labels": [
+        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "valueless required world fields are persisted as the string true"},
+        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "world creation bypasses the canonical autopilot session or role check"}
+      ]
+    },
+    {
+      "pr": 275,
+      "base": "b6de35986b85e89fd0911dc153580883102d9196",
+      "head": "0b7c270c9b918746e9550dcf92dd0523ad2ed446",
+      "labels": [
+        {"file": "studio/ops/ads/cli.py", "rootCause": "Apple Ads client and token request happen before complete route validation"},
+        {"file": "ios/scripts/loops_backend.py", "rootCause": "automated Apple Ads commands do not assert the canonical autopilot session"}
+      ]
+    },
+    {
+      "pr": 277,
+      "base": "9556f8060441f2c882dfa8527fd833c57adaaf37",
+      "head": "f39518403c93b692c2df380041663f3bcc0627ce",
+      "labels": [
+        {"file": "backend/functions/src/endpoints/walk-beat.ts", "rootCause": "qualification scans remain on the hot path after the session is stamped"},
+        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "empty persisted milestone entry traps at parts[0]"},
+        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "concurrent read-modify-write of mirrored milestones can lose an entry"},
+        {"file": "ios/AR/MIX iOS/Model/Onboarding.swift", "rootCause": "repeated auth callbacks can start duplicate completion requests"},
+        {"file": "ios/AR/Shared/Services/SpatialStoriesAPIService.swift", "rootCause": "corrupt best-effort attribution state causes a permanent launch crash loop"}
+      ]
+    },
+    {
+      "pr": 280,
+      "base": "f9d9590bfb7d89fa28ab7f591f23dc2ed1030110",
+      "head": "b59a27e103f138fb371483be557cdb33478db1ad",
+      "labels": [
+        {"file": "studio/ops/appstore/release.py", "rootCause": "partial localization creation cannot be resumed safely"}
+      ]
+    }
+  ],
+  "negativeControls": [
+    {"pr": 254, "base": "23abe489578e18eb6287fe1df995e87ee52e18fa", "head": "3a77304197f92c6620e0eb3f9527f44b3c39683c", "labels": []},
+    {"pr": 255, "base": "22b9a01915a8c85caf18bf86d033024deca33906", "head": "9e526ef3c5110ca4e9a419d61d4110baf0574a07", "labels": []},
+    {"pr": 260, "base": "87c08a4266d55536dcd09cdadcc51bd7ebd532e6", "head": "4c6230b0b26d8691197cd87507c21fdf574df2c6", "labels": []},
+    {"pr": 261, "base": "df59821248ea27683575a700d811723da7aea270", "head": "93b815a1068f65c96140f4fd63b68ba8f41afae9", "labels": []},
+    {"pr": 269, "base": "968fb553c6c478c035e33c319ff2a0fb515ff32d", "head": "bfb8404aea4cc3edb428818d144963e6d299df1f", "labels": []},
+    {"pr": 271, "base": "52305556f3e379106893ca6332177bc63c45a483", "head": "390e2bb06e44913456f58d09aa7191c282671a16", "labels": []}
+  ]
+}

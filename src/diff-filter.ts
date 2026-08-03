@@ -83,3 +83,22 @@ export function filterDiff(
 
   return { filtered: kept.join(""), removedFiles };
 }
+
+export function chunkDiffByFile(diff: string, maxChunkSize: number): string[] {
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const file of splitDiffIntoFiles(diff)) {
+    if (current && current.length + file.content.length > maxChunkSize) {
+      chunks.push(current);
+      current = "";
+    }
+    if (file.content.length > maxChunkSize) {
+      chunks.push(`${file.content.slice(0, maxChunkSize)}\n\n[... File diff truncated]`);
+    } else {
+      current += file.content;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}

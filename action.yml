@@ -20,6 +20,10 @@ inputs:
   model:
     description: "Model name to use. Examples: gpt-4o, llama3.2, codellama:13b, or your provider-specific model name."
     required: true
+  reasoning-effort:
+    description: "Optional reasoning effort for compatible models: low, medium, or high."
+    required: false
+    default: ""
   fail-on-high:
     description: "If true, the action will fail when high severity issues are found."
     required: false

@@ -232,7 +232,6 @@ export class LLMClient {
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
       ],
-      temperature: 0.1,
     };
 
     if (this.maxOutputTokens) {

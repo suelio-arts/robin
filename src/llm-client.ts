@@ -22,6 +22,7 @@ export interface ChatCompletionResult {
 }
 
 export type LlmProgressHandler = (detail: string) => void | Promise<void>;
+export type ReasoningEffort = "low" | "medium" | "high";
 
 export class LLMClient {
   private client: OpenAI;
@@ -30,6 +31,7 @@ export class LLMClient {
   private maxAttempts: number;
   private routerModel: boolean;
   private onProgress?: LlmProgressHandler;
+  private reasoningEffort?: ReasoningEffort;
 
   constructor(
     baseUrl: string,
@@ -38,11 +40,13 @@ export class LLMClient {
     maxOutputTokens?: number,
     timeoutMs = DEFAULT_LLM_TIMEOUT_MS,
     maxAttempts = DEFAULT_LLM_COMPLETION_ATTEMPTS,
-    onProgress?: LlmProgressHandler
+    onProgress?: LlmProgressHandler,
+    reasoningEffort?: ReasoningEffort
   ) {
     this.model = model;
     this.routerModel = isOpenRouterRouterModel(model);
     this.onProgress = onProgress;
+    this.reasoningEffort = reasoningEffort;
     this.maxOutputTokens =
       maxOutputTokens && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
         ? maxOutputTokens
@@ -236,6 +240,10 @@ export class LLMClient {
 
     if (this.maxOutputTokens) {
       request.max_tokens = this.maxOutputTokens;
+    }
+
+    if (this.reasoningEffort) {
+      request.reasoning_effort = this.reasoningEffort;
     }
 
     if (jsonResponseMode) {

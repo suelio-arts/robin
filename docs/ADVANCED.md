@@ -109,6 +109,7 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `llm-api-key` / `LLM_API_KEY` | `ollama` | Provider API key |
 | `llm-base-url` / `LLM_BASE_URL` | — | OpenAI-compatible base URL (required) |
 | `model` / `LLM_MODEL` | — | Model name (required) |
+| `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
 | `fail-on-high` | `false` | Fail the check if high-severity issues are found |
 | `request-changes` | omit → `true` (defer to repo config) | `true` submits a blocking REQUEST_CHANGES review on high findings; `false` posts a non-blocking COMMENT (advisor mode). Reusable workflow input is a boolean with no default — omit it to let `.github/robin.yml` win |
 | `max-diff-size` | `50000` | Max diff characters sent to the model |
@@ -280,7 +281,8 @@ Practices:
 
 - Store keys in GitHub Secrets only.
 - Use `permissions: actions: read`, `contents: read`, and `pull-requests: write`.
-- Do not use `pull_request_target` with this action.
+- Use `pull_request_target` only from a pinned trusted workflow that does not
+  check out or execute pull-request code. Robin fetches the diff through GitHub's API.
 - Keep slash commands at `min-command-permission: write` unless you accept cost/abuse risk.
 - Fork PRs from outsiders may not receive secrets — use manual `/review` from a maintainer.
 

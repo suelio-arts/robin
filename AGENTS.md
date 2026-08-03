@@ -21,7 +21,8 @@ For a direct action step: `antongulin/robin@main` or `@v1`.
 ## Do not use
 
 - `@v0`, `v0`, or any `v0` release tag — workflows fail or point at stale code.
-- `pull_request_target` — not supported; security risk with secrets.
+- `pull_request_target` with checkout or execution of pull-request code. Robin's
+  API-only review path may use it from a pinned, trusted base workflow.
 - `synchronize` on `pull_request` unless the user explicitly wants review on every push.
 
 ## Required secrets (in the consumer repo)

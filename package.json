@@ -28,6 +28,7 @@
     "dev": "ts-node src/main.ts",
     "lint": "eslint src/**/*.ts",
     "test": "jest",
+    "eval:mix": "ts-node scripts/eval-mix-recent-prs.ts",
     "package": "ncc build dist/index.js -o dist --license licenses.txt && npm run clean"
   },
   "keywords": [

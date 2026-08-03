@@ -1,4 +1,4 @@
-import { DEFAULT_SKIP_PATH_PATTERNS, filterDiff, matchPathPattern, shouldSkipPath } from "./diff-filter";
+import { chunkDiffByFile, DEFAULT_SKIP_PATH_PATTERNS, filterDiff, matchPathPattern, shouldSkipPath } from "./diff-filter";
 
 describe("matchPathPattern", () => {
   it("matches lockfiles and dist paths", () => {
@@ -63,5 +63,20 @@ describe("shouldSkipPath", () => {
     expect(shouldSkipPath("crates/foo/Cargo.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
     expect(shouldSkipPath("Gemfile.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
     expect(shouldSkipPath("poetry.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
+  });
+});
+
+describe("chunkDiffByFile", () => {
+  it("keeps later files instead of truncating the whole pull request", () => {
+    const diff = [
+      "diff --git a/a.ts b/a.ts\n+++ b/a.ts\n@@ -0,0 +1 @@\n+first\n",
+      "diff --git a/b.ts b/b.ts\n+++ b/b.ts\n@@ -0,0 +1 @@\n+second\n",
+    ].join("");
+
+    const chunks = chunkDiffByFile(diff, 70);
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toContain("a.ts");
+    expect(chunks[1]).toContain("b.ts");
   });
 });

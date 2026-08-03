@@ -18,7 +18,8 @@ Recommended workflow practices:
 
 - Use GitHub Secrets for API keys.
 - Keep workflow permissions minimal: `contents: read` and `pull-requests: write`.
-- Avoid `pull_request_target`; this action intentionally skips that event.
+- `pull_request_target` is supported only for the API-only review path. Never
+  add checkout or execution of pull-request code to that trusted workflow.
 - Keep slash commands maintainer-only with `min-command-permission: "write"` unless you understand the cost and privacy tradeoffs.
 - Gate `issue_comment` jobs by trusted `author_association` in workflow `if` conditions to avoid starting jobs for untrusted comments.
 - Pin this action to `@main` (supported default) or an immutable commit SHA. Do not use `@v0` — it is outdated and breaks consumer workflows.

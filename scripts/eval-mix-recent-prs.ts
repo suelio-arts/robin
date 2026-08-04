@@ -10,6 +10,8 @@ import { buildFileContext, publicContractSubjects } from "../src/review-context"
 import { LLMClient } from "../src/llm-client";
 
 type EvalCase = { pr: number; base: string; head: string };
+type RejectedCandidate = { file: string; rootCause: string; reason: string };
+type NegativeControl = EvalCase & { rejectedCandidates: RejectedCandidate[] };
 
 const apiKey = process.env.OPENAI_API_KEY;
 if (!apiKey) throw new Error("OPENAI_API_KEY is required");
@@ -22,7 +24,7 @@ const manifest = JSON.parse(
   developmentCases: EvalCase[];
   negativeControls: EvalCase[];
   holdoutCases: EvalCase[];
-  holdoutNegativeControls: EvalCase[];
+  holdoutNegativeControls: NegativeControl[];
 };
 const client = new OpenAI({ apiKey });
 const webClient = new LLMClient("https://api.openai.com/v1", apiKey, "gpt-5.6-luna", undefined, undefined, undefined, undefined, "high");
@@ -55,7 +57,7 @@ async function main() {
     throw new Error("EVAL_SET must be development or holdout");
   }
   const cases = evalSet === "holdout"
-    ? [...manifest.holdoutCases, ...manifest.holdoutNegativeControls]
+    ? manifest.holdoutCases
     : [...manifest.developmentCases, ...manifest.negativeControls];
   for (const testCase of cases.filter(
     (candidate) =>
@@ -168,6 +170,43 @@ async function main() {
       chunks: responses,
     });
     writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
+  }
+  if (evalSet === "holdout") {
+    for (const testCase of manifest.holdoutNegativeControls) {
+      for (const candidate of testCase.rejectedCandidates) {
+        const diff = execFileSync(
+          "git",
+          ["diff", "--no-ext-diff", "--unified=20", testCase.base, testCase.head, "--", candidate.file],
+          { cwd: mixRepo, encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }
+        );
+        const headFile = execFileSync("git", ["show", `${testCase.head}:${candidate.file}`], {
+          cwd: mixRepo,
+          encoding: "utf8",
+          maxBuffer: 10 * 1024 * 1024,
+        });
+        const decision = await review([
+          "You are the final precision gate for a code review candidate.",
+          "Decide only whether the supplied candidate is a current defect at the exact reviewed head.",
+          "Reject stale, already-fixed, pre-existing, speculative, unreachable, or contradicted candidates.",
+          "Return strict JSON only: {\"approved\":true|false,\"reason\":\"short evidence\"}",
+        ].join("\n"), [
+          `CANDIDATE: ${JSON.stringify(candidate)}`,
+          "EXACT FILE DIFF:",
+          annotateDiffWithLineNumbers(diff),
+          "EXACT HEAD FILE:",
+          headFile,
+        ].join("\n\n"));
+        results.push({
+          pr: testCase.pr,
+          head: testCase.head,
+          kind: "candidate-rejection",
+          candidate,
+          decision: JSON.parse(decision.choices[0]?.message.content || "{}"),
+          usage: decision.usage,
+        });
+        writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
+      }
+    }
   }
   writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
   console.log(`Wrote ${results.length} Luna-high reviews to ${output}`);

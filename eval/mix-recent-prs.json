@@ -144,9 +144,19 @@
     ]}
   ],
   "holdoutNegativeControls": [
-    {"pr":235,"base":"8af51b083ee0048ef08f3082c4840b48513fc658","head":"0c4d35ccec4e0ff50e530cf47fc6e0e397cd94aa","labels":[],"rejected":["CodeRabbit fetch-timeout and camera-failure claim was stale at this SHA","CodeRabbit short-landscape scroll claim was stale at this SHA"]},
-    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","labels":[],"rejected":["CodeRabbit fixed-temp-file concurrency claim was stale at this SHA","CodeRabbit business_id validation ordering claim was stale at this SHA"]},
-    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"eb32f74370beba26f12adc11eebfd3b4fec7645c","labels":[],"rejected":["CodeRabbit quarantine retry claim was stale at this SHA"]},
-    {"pr":247,"base":"c813a4ad4ddb6491dde87fd5f5bda4930e06a5df","head":"ee6bf5e99e9b9e81973ac1b3b18dfaa28d58d39f","labels":[],"rejected":["CodeRabbit product-request timeout-task claim was stale at this SHA"]}
+    {"pr":235,"base":"8af51b083ee0048ef08f3082c4840b48513fc658","head":"0c4d35ccec4e0ff50e530cf47fc6e0e397cd94aa","rejectedCandidates":[
+      {"file":"web/qr/800/experience-v1.mjs","rootCause":"layout and target fetches lack timeouts and camera failures are unhandled","reason":"stale: both fetches use AbortSignal.timeout and camera callbacks enter preview fallback"},
+      {"file":"web/qr/800/styles-v1.css","rootCause":"a short landscape viewport makes Enter AR unreachable because the intro cannot scroll","reason":"stale: intro is capped at 100svh with overflow-y auto and safe centering"}
+    ]},
+    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","rejectedCandidates":[
+      {"file":"studio/ops/ads/reddit_ads.py","rootCause":"a fixed temporary filename corrupts concurrent token and state writes","reason":"stale: exact head uses a random O_EXCL temporary file and atomic replace"},
+      {"file":"studio/ops/ads/cli.py","rootCause":"missing business_id is checked only after network-backed client construction","reason":"stale: the route validates business_id before constructing RedditAdsClient"}
+    ]},
+    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"eb32f74370beba26f12adc11eebfd3b4fec7645c","rejectedCandidates":[
+      {"file":"workbench/server/run_retention.py","rootCause":"failed quarantine deletion has no later cleanup path","reason":"stale: apply_retention sweeps prior quarantine entries before processing the current plan"}
+    ]},
+    {"pr":247,"base":"c813a4ad4ddb6491dde87fd5f5bda4930e06a5df","head":"ee6bf5e99e9b9e81973ac1b3b18dfaa28d58d39f","rejectedCandidates":[
+      {"file":"ios/AR/Shared/Store/Store.swift","rootCause":"a completed product request leaves its timeout task running for twelve seconds","reason":"stale: success, catch, replacement, and deinit all cancel the timeout task"}
+    ]}
   ]
 }

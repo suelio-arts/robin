@@ -10,8 +10,11 @@ This is a development corpus, not an untouched holdout: prompts and tools were
 tuned against some of these cases. Do not claim parity from it. Freeze the pipeline,
 then adjudicate and score unseen PRs as a separate holdout before promotion.
 
-`holdoutCases` and `holdoutNegativeControls` are the frozen unseen set. Do not use
-their results to tune the prompt or pipeline; replace them before another iteration.
+`holdoutCases` and `holdoutNegativeControls` are the frozen unseen set. Negative
+controls are specific stale candidate comments, not claims that their entire PRs
+are defect-free. Do not count a different validated defect as a false positive.
+Do not use holdout results to tune the prompt or pipeline; replace the set before
+another iteration.
 
 Run Luna at explicit high reasoning effort:
 

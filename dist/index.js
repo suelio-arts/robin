@@ -1655,19 +1655,8 @@ async function runReview(llm, diff, reviewInstructions, jsonResponseMode, contex
     core.info("Getting full code review...");
     return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
 }
-const DISCOVERY_INSTRUCTIONS = [
-    "Audit only inputs, parsing, validation, authorization, identity, roles, route dispatch, and collection semantics. Trace each changed boundary end to end; verify ordering, identity, joins, and fallbacks preserve the domain meaning rather than array or map implementation order. When canonical order metadata is optional, accept a collection-order fallback only if the supplied contract defines that collection as ordered.",
-    "Audit only lifecycle and mutable state across success, failure, retry, duplicate callback, concurrency, cancellation, relaunch, corrupt persisted data, and viewport or media-query transitions. Trace every early-return state or plan shape into its consumer, and verify maintenance failures do not suppress the primary operation. Verify responsive UI state is reconciled when layout modes change.",
-    "Audit only external API and persistence contracts: exact fields, masks, units, currency, pagination, mutation targets, partial success, idempotency, readback, and recovery. Use supplied repository and public-documentation evidence; do not guess provider behavior.",
-    "Audit only build/platform compatibility and changed tests. Report a test only when its assertion can pass while the intended changed behavior is broken.",
-    "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
-];
-const DISCOVERY_PASSES = [
-    ...DISCOVERY_INSTRUCTIONS,
-    "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
-];
 async function runReviewPipeline(llm, diff, context, reviewInstructions, jsonResponseMode, publicDocumentationCache = new Map()) {
-    const discovery = await Promise.all(DISCOVERY_PASSES.map(async (instructions) => {
+    const discovery = await Promise.all(review_prompts_1.DISCOVERY_PASSES.map(async (instructions) => {
         const response = await runReview(llm, diff, [reviewInstructions, instructions].filter(Boolean).join("\n\n"), jsonResponseMode, context);
         const parsed = review_parser_1.ReviewParser.parseDetailed(response.content);
         if (!(0, review_retry_1.shouldRetryStructuredReview)(parsed.findings, parsed.usedJson))
@@ -1863,9 +1852,18 @@ function selectApprovedCandidates(candidates, response, summary = "") {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DISCOVERY_PASSES = void 0;
 exports.getReviewPrompt = getReviewPrompt;
 exports.getSummaryPrompt = getSummaryPrompt;
 exports.getHelpMessage = getHelpMessage;
+exports.DISCOVERY_PASSES = [
+    "Audit only inputs, parsing, validation, authorization, identity, roles, route dispatch, and collection semantics. Trace each changed boundary end to end; verify ordering, identity, joins, fallbacks, and normalized readback comparisons preserve domain meaning rather than implementation order. Accept collection-order fallback only when its supplied contract defines that collection as ordered. Check empty collections before indexing and require CLI failures to use the established user-facing error contract.",
+    "Audit only lifecycle and mutable state across success, empty, failure, retry, duplicate callback, concurrency, cancellation, relaunch, corrupt persisted data, and viewport or media-query transitions. Trace every early-return state or plan shape into its consumer, and verify maintenance failures do not suppress the primary operation. Verify responsive UI state is reconciled when layout modes change.",
+    "Audit only external API and persistence contracts: exact fields, masks, units, currency, pagination, mutation targets, partial success, idempotency, readback, recovery, and geographic or query bounds. Trace user-entered search/filter values into the actual provider request. Use supplied repository and public-documentation evidence; do not guess provider behavior.",
+    "Audit only build/platform compatibility and changed tests. Check required registries and preflight lists against every newly used callable or capability. Report a test only when its assertion can pass while the intended changed behavior is broken.",
+    "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
+    "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
+];
 function getReviewPrompt(extraInstructions = "") {
     const prompt = [
         "You are a senior code reviewer. Find concrete regressions introduced by this diff.",

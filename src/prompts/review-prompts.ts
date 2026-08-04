@@ -1,3 +1,12 @@
+export const DISCOVERY_PASSES = [
+  "Audit only inputs, parsing, validation, authorization, identity, roles, route dispatch, and collection semantics. Trace each changed boundary end to end; verify ordering, identity, joins, fallbacks, and normalized readback comparisons preserve domain meaning rather than implementation order. Accept collection-order fallback only when its supplied contract defines that collection as ordered. Check empty collections before indexing and require CLI failures to use the established user-facing error contract.",
+  "Audit only lifecycle and mutable state across success, empty, failure, retry, duplicate callback, concurrency, cancellation, relaunch, corrupt persisted data, and viewport or media-query transitions. Trace every early-return state or plan shape into its consumer, and verify maintenance failures do not suppress the primary operation. Verify responsive UI state is reconciled when layout modes change.",
+  "Audit only external API and persistence contracts: exact fields, masks, units, currency, pagination, mutation targets, partial success, idempotency, readback, recovery, and geographic or query bounds. Trace user-entered search/filter values into the actual provider request. Use supplied repository and public-documentation evidence; do not guess provider behavior.",
+  "Audit only build/platform compatibility and changed tests. Check required registries and preflight lists against every newly used callable or capability. Report a test only when its assertion can pass while the intended changed behavior is broken.",
+  "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
+  "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
+];
+
 export function getReviewPrompt(extraInstructions = ""): string {
   const prompt = [
     "You are a senior code reviewer. Find concrete regressions introduced by this diff.",

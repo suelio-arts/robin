@@ -8,7 +8,7 @@ describe("MIX review benchmark", () => {
     expect(manifest.negativeControls.length).toBeGreaterThanOrEqual(5);
     expect(manifest.developmentCases.flatMap((testCase) => testCase.labels).length).toBeGreaterThanOrEqual(12);
     expect(manifest.holdoutCases.flatMap((testCase) => testCase.labels)).toHaveLength(7);
-    expect(manifest.holdoutNegativeControls.flatMap(({ rejected }) => rejected)).toHaveLength(6);
+    expect(manifest.holdoutNegativeControls.flatMap(({ rejectedCandidates }) => rejectedCandidates)).toHaveLength(6);
     const developmentHeads = new Set([...manifest.developmentCases, ...manifest.negativeControls].map(({ head }) => head));
     expect([...manifest.holdoutCases, ...manifest.holdoutNegativeControls].every(({ head }) => !developmentHeads.has(head))).toBe(true);
   });

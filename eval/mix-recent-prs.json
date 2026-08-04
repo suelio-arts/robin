@@ -121,5 +121,32 @@
     {"pr":286,"base":"4b8afa6d2fdc9918a742a81b7b1a620a1d597e54","head":"830bdd370ef88d3ddc12ad51deca7fcd1ed3c765","labels":[],"rejected":"CodeRabbit DAU guard claim was stale at this SHA"},
     {"pr":297,"base":"16f23aaa554af3034bf11c44c1344228f9f95b9a","head":"345cf9ae27ff96ad6703499eb4e4ea5e5152da24","labels":[],"rejected":"CodeRabbit live-preflight path and render claims were stale or withdrawn"},
     {"pr":299,"base":"548409639d8b97fa02676d0af399c230d1c93681","head":"964318fed1e6d075238e802ac08ac3d030f3ad85","labels":[],"rejected":"CodeRabbit OAuth sorting claim was stale at this SHA"}
+  ],
+  "holdoutCases": [
+    {"pr":236,"base":"ca9e0960fbf8de27c339dc3945448e2a60136cf7","head":"f816b46677bbe5d013c8e91567d2fdaf56181a5c","labels":[
+      {"file":"web/qr/800/verify.mjs","rootCause":"camera-pipeline ordering check scans the normalized whole source instead of the addCameraPipelineModules registration, so unrelated text can satisfy it","source":"CodeRabbit"}
+    ]},
+    {"pr":239,"base":"086172c729f31377de3f5d93bc1c27bbc74c1d6a","head":"a80196c0b96b89493a9b4893c8e86cf47a6730f4","labels":[
+      {"file":"web/qr/800/verify.mjs","rootCause":"entry-module gate accepts any experience version when index and disk agree, so jointly reverting both to an older version passes","source":"CodeRabbit"}
+    ]},
+    {"pr":240,"base":"0d3035e3c073b63e6c4d6f7abc6d6556658baadc","head":"18479bc61299904aab1b64d454b116fa975ed938","labels":[
+      {"file":"e2e/mixsim.mjs","rootCause":"membership verification silently substitutes English StoreKit metadata for supported non-English locales","source":"CodeRabbit"}
+    ]},
+    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","labels":[
+      {"file":"studio/ops/ads/reddit_ads.py","rootCause":"non-object JSON error responses raise AttributeError before the intended HTTP or provider error","source":"CodeRabbit"}
+    ]},
+    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"f363c4adf1970f1fc0c144e233b0f00b62d58b8d","labels":[
+      {"file":"e2e/nightly.sh","rootCause":"retention prune failure aborts every nightly E2E lane and suppresses the primary test signal","source":"CodeRabbit"},
+      {"file":"workbench/server/run_retention.py","rootCause":"a missing runs root produces a plan without cutoff that apply_retention rejects instead of treating as a no-op","source":"CodeRabbit"}
+    ]},
+    {"pr":245,"base":"5e66bc0d7305bfcb0971319a7157cf69593f3b13","head":"1157e033480ea3235c78512ee832e15e69080d0c","labels":[
+      {"file":"web/qr/800/experience-v5.mjs","rootCause":"directional and hemisphere lights are parented to the rotating bulb group, so illumination follows the model instead of remaining world-space","source":"CodeRabbit"}
+    ]}
+  ],
+  "holdoutNegativeControls": [
+    {"pr":235,"base":"8af51b083ee0048ef08f3082c4840b48513fc658","head":"0c4d35ccec4e0ff50e530cf47fc6e0e397cd94aa","labels":[],"rejected":["CodeRabbit fetch-timeout and camera-failure claim was stale at this SHA","CodeRabbit short-landscape scroll claim was stale at this SHA"]},
+    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","labels":[],"rejected":["CodeRabbit fixed-temp-file concurrency claim was stale at this SHA","CodeRabbit business_id validation ordering claim was stale at this SHA"]},
+    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"eb32f74370beba26f12adc11eebfd3b4fec7645c","labels":[],"rejected":["CodeRabbit quarantine retry claim was stale at this SHA"]},
+    {"pr":247,"base":"c813a4ad4ddb6491dde87fd5f5bda4930e06a5df","head":"ee6bf5e99e9b9e81973ac1b3b18dfaa28d58d39f","labels":[],"rejected":["CodeRabbit product-request timeout-task claim was stale at this SHA"]}
   ]
 }

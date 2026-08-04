@@ -98,7 +98,7 @@ export function publicContractSubjects(diff: string): string[] {
 }
 
 function isPublicHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (host === "localhost" || !host.includes(".") || /\.(?:internal|local|localhost|test|example|invalid)$/.test(host)) return false;
   if (isIP(host) === 4) {
     const [a, b] = host.split(".").map(Number);

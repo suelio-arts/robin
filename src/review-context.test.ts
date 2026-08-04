@@ -109,5 +109,8 @@ describe("buildFileContext", () => {
     expect(publicContractSubjects('+url = "https://jenkins.corp.internal./job/x"')).toEqual([]);
     expect(publicContractSubjects('+url = "https://localhost./"')).toEqual([]);
     expect(publicContractSubjects('+url = "https://127.0.0.1/private"')).toEqual([]);
+    expect(publicContractSubjects('+url = "https://[::ffff:10.0.0.5]/private"')).toEqual([]);
+    expect(publicContractSubjects('+url = "https://[::ffff:192.168.1.2]/private"')).toEqual([]);
+    expect(publicContractSubjects('+url = "https://[::ffff:8.8.8.8]/public"')).toEqual(["[::ffff:808:808]"]);
   });
 });

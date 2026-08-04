@@ -120,13 +120,20 @@ export function publicContractSubjects(diff: string): string[] {
 
 function isPublicHostname(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
-  if (host === "localhost" || !host.includes(".") || /\.(?:internal|local|localhost|test|example|invalid)$/.test(host)) return false;
-  if (isIP(host) === 4) {
-    const [a, b] = host.split(".").map(Number);
-    return !(a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
+  if (isIP(host) === 4) return isPublicIPv4(host);
+  const mapped = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mapped) {
+    const high = Number.parseInt(mapped[1], 16);
+    const low = Number.parseInt(mapped[2], 16);
+    return isPublicIPv4(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
   }
   if (isIP(host) === 6) return host !== "::1" && !host.startsWith("fc") && !host.startsWith("fd") && !host.startsWith("fe8") && !host.startsWith("fe9") && !host.startsWith("fea") && !host.startsWith("feb");
-  return true;
+  return host !== "localhost" && host.includes(".") && !/\.(?:internal|local|localhost|test|example|invalid)$/.test(host);
+}
+
+function isPublicIPv4(host: string): boolean {
+  const [a, b] = host.split(".").map(Number);
+  return !(a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
 }
 
 function pathAffinity(path: string, changedPaths: string[]): number {

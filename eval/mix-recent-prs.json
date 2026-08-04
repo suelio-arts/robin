@@ -10,8 +10,14 @@
       "base": "0fee7f042f59626762e8f417fd678e58549112ef",
       "head": "559d358245ef2157e01076c0745dcb58ab035562",
       "labels": [
-        {"file": "studio/ops/ads/google_ads.py", "rootCause": "update mask uses amount_micros while the API field is amountMicros"},
-        {"file": "studio/ops/ads/google_ads.py", "rootCause": "USD spend cap is applied without verifying the customer currency"}
+        {
+          "file": "studio/ops/ads/google_ads.py",
+          "rootCause": "update mask uses amount_micros while the API field is amountMicros"
+        },
+        {
+          "file": "studio/ops/ads/google_ads.py",
+          "rootCause": "USD spend cap is applied without verifying the customer currency"
+        }
       ]
     },
     {
@@ -19,8 +25,14 @@
       "base": "1a9c601fcfc52dce83a7397f6e3c612161b22f0c",
       "head": "e7e5f34c630750ef23640d5dc454cca4ecf40cde",
       "labels": [
-        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "valueless required world fields are persisted as the string true"},
-        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "world creation bypasses the canonical autopilot session or role check"}
+        {
+          "file": "studio/cli/mix-studio-cli.mjs",
+          "rootCause": "valueless required world fields are persisted as the string true"
+        },
+        {
+          "file": "studio/cli/mix-studio-cli.mjs",
+          "rootCause": "world creation bypasses the canonical autopilot session or role check"
+        }
       ]
     },
     {
@@ -28,8 +40,14 @@
       "base": "b6de35986b85e89fd0911dc153580883102d9196",
       "head": "0b7c270c9b918746e9550dcf92dd0523ad2ed446",
       "labels": [
-        {"file": "studio/ops/ads/cli.py", "rootCause": "Apple Ads client and token request happen before complete route validation"},
-        {"file": "ios/scripts/loops_backend.py", "rootCause": "automated Apple Ads commands do not assert the canonical autopilot session"}
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "Apple Ads client and token request happen before complete route validation"
+        },
+        {
+          "file": "ios/scripts/loops_backend.py",
+          "rootCause": "automated Apple Ads commands do not assert the canonical autopilot session"
+        }
       ]
     },
     {
@@ -37,11 +55,26 @@
       "base": "9556f8060441f2c882dfa8527fd833c57adaaf37",
       "head": "f39518403c93b692c2df380041663f3bcc0627ce",
       "labels": [
-        {"file": "backend/functions/src/endpoints/walk-beat.ts", "rootCause": "qualification scans remain on the hot path after the session is stamped"},
-        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "empty persisted milestone entry traps at parts[0]"},
-        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "concurrent read-modify-write of mirrored milestones can lose an entry"},
-        {"file": "ios/AR/MIX iOS/Model/Onboarding.swift", "rootCause": "repeated auth callbacks can start duplicate completion requests"},
-        {"file": "ios/AR/Shared/Services/SpatialStoriesAPIService.swift", "rootCause": "corrupt best-effort attribution state causes a permanent launch crash loop"}
+        {
+          "file": "backend/functions/src/endpoints/walk-beat.ts",
+          "rootCause": "qualification scans remain on the hot path after the session is stamped"
+        },
+        {
+          "file": "ios/AR/MIX iOS/Model/Analytics.swift",
+          "rootCause": "empty persisted milestone entry traps at parts[0]"
+        },
+        {
+          "file": "ios/AR/MIX iOS/Model/Analytics.swift",
+          "rootCause": "concurrent read-modify-write of mirrored milestones can lose an entry"
+        },
+        {
+          "file": "ios/AR/MIX iOS/Model/Onboarding.swift",
+          "rootCause": "repeated auth callbacks can start duplicate completion requests"
+        },
+        {
+          "file": "ios/AR/Shared/Services/SpatialStoriesAPIService.swift",
+          "rootCause": "corrupt best-effort attribution state causes a permanent launch crash loop"
+        }
       ]
     },
     {
@@ -49,132 +82,740 @@
       "base": "f9d9590bfb7d89fa28ab7f591f23dc2ed1030110",
       "head": "b59a27e103f138fb371483be557cdb33478db1ad",
       "labels": [
-        {"file": "studio/ops/appstore/release.py", "rootCause": "partial localization creation cannot be resumed safely"}
+        {
+          "file": "studio/ops/appstore/release.py",
+          "rootCause": "partial localization creation cannot be resumed safely"
+        }
       ]
     },
-    {"pr":253,"base":"7c18c229ff9e99ab547af6905554f6ada95d20f1","head":"7a01c604b869130a8668ed877aa8c07b05e41877","labels":[
-      {"file":"ios/AR/Shared/EightHundredRemoteContent.swift","rootCause":"streaming download has no wall-clock deadline so slow endless bytes prevent fallback","source":"Greptile"},
-      {"file":"ios/AR/Shared/UI/EightHundred/EightHundredScene.swift","rootCause":"remote USDZ complexity is unbounded beyond archive and entity counts","source":"Greptile"}
-    ]},
-    {"pr":262,"base":"20703acae2ce0e6cbf6ab3a7ffaa8add7a240757","head":"d690ffa5e9528bbf6b05e5dc5a743156ca8d573c","labels":[
-      {"file":"backend/functions/src/endpoints/walk-links.ts","rootCause":"first-stop fallback incorrectly treats node array order as display order","source":"Greptile"}
-    ]},
-    {"pr":268,"base":"1a9c601fcfc52dce83a7397f6e3c612161b22f0c","head":"cc20c46e15a5538ef5ee636e25f22a88c90c12cc","labels":[
-      {"file":"backend/functions/src/endpoints/walk-links.ts","rootCause":"rail remains open when viewport crosses from desktop to compact","source":"Greptile"}
-    ]},
-    {"pr":272,"base":"fb19bb00992b54529c30ceb3b8ddadab1768238f","head":"8a9bb28ab7b53f7b7435fefa6ac7765ae6af97f1","labels":[
-      {"file":"docs/subsystems/verification-matrix.md","rootCause":"manual Main Daily checklist does not require reviews on the final PR head","source":"CodeRabbit"},
-      {"file":"docs/subsystems/xcode-cloud-trigger.md","rootCause":"rejected review findings may remain unresolved despite branch conversation resolution","source":"CodeRabbit"},
-      {"file":"docs/subsystems/xcode-cloud-trigger.md","rootCause":"blanket backend-only exclusion contradicts user-visible iOS-effect trigger rule","source":"CodeRabbit"}
-    ]},
-    {"pr":276,"base":"b6de35986b85e89fd0911dc153580883102d9196","head":"1e8f1a8b190a7daf28b768525af670dd20131741","labels":[
-      {"file":"backend/functions/src/endpoints/attribution.ts","rootCause":"existing-install binding returns before Mixpanel install_attributed emission","source":"CodeRabbit"},
-      {"file":"backend/functions/src/endpoints/engagement-stats.ts","rootCause":"synthetic-install exclusion is unwindowed while adjacent funnel metrics are windowed","source":"CodeRabbit"},
-      {"file":"backend/functions/src/endpoints/engagement-stats.ts","rootCause":"install and account cohorts cannot join because install rows lack geography","source":"CodeRabbit"},
-      {"file":"backend/functions/src/utils/mixpanel.ts","rootCause":"telemetry transport failure propagates after business writes and fails the request","source":"CodeRabbit"},
-      {"file":"ios/AR/MIX iOS/ARApp.swift","rootCause":"fresh-install attribution network delivery blocks Remote Config and onboarding bootstrap","source":"CodeRabbit"},
-      {"file":"ios/AR/MIX iOS/Model/Analytics.swift","rootCause":"milestone dedupe no-op does not prevent duplicate directional analytics emission","source":"CodeRabbit"},
-      {"file":"ios/AR/MIX iOS/Model/Analytics.swift","rootCause":"malformed persisted milestone can crash at parts zero","source":"CodeRabbit"},
-      {"file":"ios/AR/Shared/Services/SpatialStoriesAPIService.swift","rootCause":"undecodable persisted attribution state hard-crashes every launch","source":"CodeRabbit"},
-      {"file":"ios/AR/Shared/UserDefaultsKeys.swift","rootCause":"session-scoped milestone set grows forever and is fully serialized per event","source":"CodeRabbit"},
-      {"file":"studio/ops/analytics/reconcile.mjs","rootCause":"Unix-second timestamps are compared directly with millisecond Date.now","source":"CodeRabbit"}
-    ]},
-    {"pr":283,"base":"4a6789068ee7d7cf05a46b871a5ef87197ad15d2","head":"1ef00b331c991fffc4d3078df414036becd78eb2","labels":[
-      {"file":"ios/AR/ci_scripts/check_attribution_privacy.sh","rootCause":"privacy gate greps tokens instead of executing ATT-state behavior","source":"CodeRabbit"},
-      {"file":"ios/AR/ci_scripts/check_privacy_manifest.sh","rootCause":"privacy checks allow extra domains and the wrong tracked data type","source":"CodeRabbit"},
-      {"file":"ios/AR/ci_scripts/check_privacy_manifest.sh","rootCause":"policy gate accepts any IDFA token including denial text","source":"CodeRabbit"},
-      {"file":"ios/AR/MIX iOS/ARApp.swift","rootCause":"ATT controls are not synchronized initially and on every active scene","source":"CodeRabbit"},
-      {"file":"ios/AR/Shared/InfoPlist.xcstrings","rootCause":"Chinese ATT strings do not clearly explain permission to measure completed walks","source":"CodeRabbit"}
-    ]},
-    {"pr":286,"base":"4b8afa6d2fdc9918a742a81b7b1a620a1d597e54","head":"dca02e4a08895d92e5c4794266d50e7ec841ea04","labels":[
-      {"file":"studio/web/js/engagement-analytics.js","rootCause":"incomplete dashboard guard and fallbacks convert missing data to real-looking zeros","source":"CodeRabbit"},
-      {"file":"studio/web/js/engagement-analytics.js","rootCause":"operator exclusion text pluralizes singular session and install incorrectly","source":"CodeRabbit"},
-      {"file":"studio/web/dashboard.html","rootCause":"channel and market second column is labeled Account instead of Installs","source":"CodeRabbit"},
-      {"file":"studio/web/dashboard.html","rootCause":"new button omits required type button","source":"CodeRabbit"}
-    ]},
-    {"pr":295,"base":"3728824f2b67592dc702d5895fbc3cc0c7e16da3","head":"d8dc79579c61b305b4b39e3289018d61dcc4b45e","rejected":"CodeRabbit requested registry schemas while the registry explicitly marked them optional during migration and sibling callables omitted them","labels":[
-      {"file":"backend/functions/src/endpoints/story-walks.ts","rootCause":"materialization resolves generated walks first but stamps authored walks first for colliding IDs","source":"Luna"},
-      {"file":"backend/functions/src/services/walk-node-clip.ts","rootCause":"materialization speaks an internal length-constraint instruction appended to dynamic prompts","source":"Luna"}
-    ]},
-    {"pr":297,"base":"16f23aaa554af3034bf11c44c1344228f9f95b9a","head":"2f06620d884b06f735482f21e55ec7207308bf64","labels":[
-      {"file":"studio/ops/ads/cli.py","rootCause":"activation mutates without validating live ownership hierarchy paused state and spend","source":"CodeRabbit"},
-      {"file":"studio/web/google-ads-api.html","rootCause":"published operating-control claims exceed the implementation","source":"CodeRabbit"}
-    ]},
-    {"pr":299,"base":"548409639d8b97fa02676d0af399c230d1c93681","head":"6b7b795c28af3833c1a27b1b7b6ee28223bcdf97","labels":[
-      {"file":"studio/ops/ads/x_ads.py","rootCause":"account listing discards next_cursor and omits accounts after the first page","source":"CodeRabbit"}
-    ]},
-    {"pr":236,"base":"ca9e0960fbf8de27c339dc3945448e2a60136cf7","head":"f816b46677bbe5d013c8e91567d2fdaf56181a5c","labels":[
-      {"file":"web/qr/800/verify.mjs","rootCause":"camera-pipeline ordering check scans the normalized whole source instead of the addCameraPipelineModules registration, so unrelated text can satisfy it","source":"CodeRabbit"},
-      {"file":"web/qr/800/experience-v1.mjs","rootCause":"FullWindowCanvas reparents the AR canvas to body while visibility CSS requires it to remain under the mode-ar container","source":"Luna"}
-    ]},
-    {"pr":239,"base":"086172c729f31377de3f5d93bc1c27bbc74c1d6a","head":"a80196c0b96b89493a9b4893c8e86cf47a6730f4","labels":[
-      {"file":"web/qr/800/verify.mjs","rootCause":"entry-module gate accepts any experience version when index and disk agree, so jointly reverting both to an older version passes","source":"CodeRabbit"},
-      {"file":"web/firebase.json","rootCause":"immutable-cache glob covers only v1 and v2 while index loads experience-v3","source":"Luna"}
-    ]},
-    {"pr":240,"base":"0d3035e3c073b63e6c4d6f7abc6d6556658baadc","head":"18479bc61299904aab1b64d454b116fa975ed938","labels":[
-      {"file":"e2e/mixsim.mjs","rootCause":"membership verification silently substitutes English StoreKit metadata for supported non-English locales","source":"CodeRabbit"},
-      {"file":"studio/ops/release/xcode-cloud.py","rootCause":"crash-alert path calls requests.post after requests became a function-local import","source":"Luna"}
-    ]},
-    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","labels":[
-      {"file":"studio/ops/ads/reddit_ads.py","rootCause":"non-object JSON error responses raise AttributeError before the intended HTTP or provider error","source":"CodeRabbit"}
-    ]},
-    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"f363c4adf1970f1fc0c144e233b0f00b62d58b8d","labels":[
-      {"file":"e2e/nightly.sh","rootCause":"retention prune failure aborts every nightly E2E lane and suppresses the primary test signal","source":"CodeRabbit"},
-      {"file":"workbench/server/run_retention.py","rootCause":"a missing runs root produces a plan without cutoff that apply_retention rejects instead of treating as a no-op","source":"CodeRabbit"},
-      {"file":"workbench/server/run_retention.py","rootCause":"quarantined runs have no crash or deletion-failure recovery path","source":"Luna"}
-    ]},
-    {"pr":245,"base":"5e66bc0d7305bfcb0971319a7157cf69593f3b13","head":"1157e033480ea3235c78512ee832e15e69080d0c","labels":[
-      {"file":"web/qr/800/experience-v5.mjs","rootCause":"directional and hemisphere lights are parented to the rotating bulb group, so illumination follows the model instead of remaining world-space","source":"CodeRabbit"}
-    ]}
+    {
+      "pr": 253,
+      "base": "7c18c229ff9e99ab547af6905554f6ada95d20f1",
+      "head": "7a01c604b869130a8668ed877aa8c07b05e41877",
+      "labels": [
+        {
+          "file": "ios/AR/Shared/EightHundredRemoteContent.swift",
+          "rootCause": "streaming download has no wall-clock deadline so slow endless bytes prevent fallback",
+          "source": "Greptile"
+        },
+        {
+          "file": "ios/AR/Shared/UI/EightHundred/EightHundredScene.swift",
+          "rootCause": "remote USDZ complexity is unbounded beyond archive and entity counts",
+          "source": "Greptile"
+        }
+      ]
+    },
+    {
+      "pr": 262,
+      "base": "20703acae2ce0e6cbf6ab3a7ffaa8add7a240757",
+      "head": "d690ffa5e9528bbf6b05e5dc5a743156ca8d573c",
+      "labels": [
+        {
+          "file": "backend/functions/src/endpoints/walk-links.ts",
+          "rootCause": "first-stop fallback incorrectly treats node array order as display order",
+          "source": "Greptile"
+        }
+      ]
+    },
+    {
+      "pr": 268,
+      "base": "1a9c601fcfc52dce83a7397f6e3c612161b22f0c",
+      "head": "cc20c46e15a5538ef5ee636e25f22a88c90c12cc",
+      "labels": [
+        {
+          "file": "backend/functions/src/endpoints/walk-links.ts",
+          "rootCause": "rail remains open when viewport crosses from desktop to compact",
+          "source": "Greptile"
+        }
+      ]
+    },
+    {
+      "pr": 272,
+      "base": "fb19bb00992b54529c30ceb3b8ddadab1768238f",
+      "head": "8a9bb28ab7b53f7b7435fefa6ac7765ae6af97f1",
+      "labels": [
+        {
+          "file": "docs/subsystems/verification-matrix.md",
+          "rootCause": "manual Main Daily checklist does not require reviews on the final PR head",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "docs/subsystems/xcode-cloud-trigger.md",
+          "rootCause": "rejected review findings may remain unresolved despite branch conversation resolution",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "docs/subsystems/xcode-cloud-trigger.md",
+          "rootCause": "blanket backend-only exclusion contradicts user-visible iOS-effect trigger rule",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 276,
+      "base": "b6de35986b85e89fd0911dc153580883102d9196",
+      "head": "1e8f1a8b190a7daf28b768525af670dd20131741",
+      "labels": [
+        {
+          "file": "backend/functions/src/endpoints/attribution.ts",
+          "rootCause": "existing-install binding returns before Mixpanel install_attributed emission",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "synthetic-install exclusion is unwindowed while adjacent funnel metrics are windowed",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "install and account cohorts cannot join because install rows lack geography",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/utils/mixpanel.ts",
+          "rootCause": "telemetry transport failure propagates after business writes and fails the request",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/MIX iOS/ARApp.swift",
+          "rootCause": "fresh-install attribution network delivery blocks Remote Config and onboarding bootstrap",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/MIX iOS/Model/Analytics.swift",
+          "rootCause": "milestone dedupe no-op does not prevent duplicate directional analytics emission",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/MIX iOS/Model/Analytics.swift",
+          "rootCause": "malformed persisted milestone can crash at parts zero",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/Shared/Services/SpatialStoriesAPIService.swift",
+          "rootCause": "undecodable persisted attribution state hard-crashes every launch",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/Shared/UserDefaultsKeys.swift",
+          "rootCause": "session-scoped milestone set grows forever and is fully serialized per event",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/analytics/reconcile.mjs",
+          "rootCause": "Unix-second timestamps are compared directly with millisecond Date.now",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 283,
+      "base": "4a6789068ee7d7cf05a46b871a5ef87197ad15d2",
+      "head": "1ef00b331c991fffc4d3078df414036becd78eb2",
+      "labels": [
+        {
+          "file": "ios/AR/ci_scripts/check_attribution_privacy.sh",
+          "rootCause": "privacy gate greps tokens instead of executing ATT-state behavior",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/ci_scripts/check_privacy_manifest.sh",
+          "rootCause": "privacy checks allow extra domains and the wrong tracked data type",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/ci_scripts/check_privacy_manifest.sh",
+          "rootCause": "policy gate accepts any IDFA token including denial text",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/MIX iOS/ARApp.swift",
+          "rootCause": "ATT controls are not synchronized initially and on every active scene",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/Shared/InfoPlist.xcstrings",
+          "rootCause": "Chinese ATT strings do not clearly explain permission to measure completed walks",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 286,
+      "base": "4b8afa6d2fdc9918a742a81b7b1a620a1d597e54",
+      "head": "dca02e4a08895d92e5c4794266d50e7ec841ea04",
+      "labels": [
+        {
+          "file": "studio/web/js/engagement-analytics.js",
+          "rootCause": "incomplete dashboard guard and fallbacks convert missing data to real-looking zeros",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/engagement-analytics.js",
+          "rootCause": "operator exclusion text pluralizes singular session and install incorrectly",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/dashboard.html",
+          "rootCause": "channel and market second column is labeled Account instead of Installs",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/dashboard.html",
+          "rootCause": "new button omits required type button",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 295,
+      "base": "3728824f2b67592dc702d5895fbc3cc0c7e16da3",
+      "head": "d8dc79579c61b305b4b39e3289018d61dcc4b45e",
+      "rejected": "CodeRabbit requested registry schemas while the registry explicitly marked them optional during migration and sibling callables omitted them",
+      "labels": [
+        {
+          "file": "backend/functions/src/endpoints/story-walks.ts",
+          "rootCause": "materialization resolves generated walks first but stamps authored walks first for colliding IDs",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/services/walk-node-clip.ts",
+          "rootCause": "materialization speaks an internal length-constraint instruction appended to dynamic prompts",
+          "source": "Luna"
+        }
+      ]
+    },
+    {
+      "pr": 297,
+      "base": "16f23aaa554af3034bf11c44c1344228f9f95b9a",
+      "head": "2f06620d884b06f735482f21e55ec7207308bf64",
+      "labels": [
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "activation mutates without validating live ownership hierarchy paused state and spend",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/google-ads-api.html",
+          "rootCause": "published operating-control claims exceed the implementation",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 299,
+      "base": "548409639d8b97fa02676d0af399c230d1c93681",
+      "head": "6b7b795c28af3833c1a27b1b7b6ee28223bcdf97",
+      "labels": [
+        {
+          "file": "studio/ops/ads/x_ads.py",
+          "rootCause": "account listing discards next_cursor and omits accounts after the first page",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 236,
+      "base": "ca9e0960fbf8de27c339dc3945448e2a60136cf7",
+      "head": "f816b46677bbe5d013c8e91567d2fdaf56181a5c",
+      "labels": [
+        {
+          "file": "web/qr/800/verify.mjs",
+          "rootCause": "camera-pipeline ordering check scans the normalized whole source instead of the addCameraPipelineModules registration, so unrelated text can satisfy it",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "web/qr/800/experience-v1.mjs",
+          "rootCause": "FullWindowCanvas reparents the AR canvas to body while visibility CSS requires it to remain under the mode-ar container",
+          "source": "Luna"
+        }
+      ]
+    },
+    {
+      "pr": 239,
+      "base": "086172c729f31377de3f5d93bc1c27bbc74c1d6a",
+      "head": "a80196c0b96b89493a9b4893c8e86cf47a6730f4",
+      "labels": [
+        {
+          "file": "web/qr/800/verify.mjs",
+          "rootCause": "entry-module gate accepts any experience version when index and disk agree, so jointly reverting both to an older version passes",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "web/firebase.json",
+          "rootCause": "immutable-cache glob covers only v1 and v2 while index loads experience-v3",
+          "source": "Luna"
+        }
+      ]
+    },
+    {
+      "pr": 240,
+      "base": "0d3035e3c073b63e6c4d6f7abc6d6556658baadc",
+      "head": "18479bc61299904aab1b64d454b116fa975ed938",
+      "labels": [
+        {
+          "file": "e2e/mixsim.mjs",
+          "rootCause": "membership verification silently substitutes English StoreKit metadata for supported non-English locales",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/release/xcode-cloud.py",
+          "rootCause": "crash-alert path calls requests.post after requests became a function-local import",
+          "source": "Luna"
+        }
+      ]
+    },
+    {
+      "pr": 242,
+      "base": "01e22e255c6e6da3efcdac56f4da44f87600cb31",
+      "head": "e1ab21f877a48e5d0132e0202a327c76a301ae96",
+      "labels": [
+        {
+          "file": "studio/ops/ads/reddit_ads.py",
+          "rootCause": "non-object JSON error responses raise AttributeError before the intended HTTP or provider error",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 243,
+      "base": "79e05d37ebcb550947f3fe95a7729ca7aff00965",
+      "head": "f363c4adf1970f1fc0c144e233b0f00b62d58b8d",
+      "labels": [
+        {
+          "file": "e2e/nightly.sh",
+          "rootCause": "retention prune failure aborts every nightly E2E lane and suppresses the primary test signal",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "workbench/server/run_retention.py",
+          "rootCause": "a missing runs root produces a plan without cutoff that apply_retention rejects instead of treating as a no-op",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "workbench/server/run_retention.py",
+          "rootCause": "quarantined runs have no crash or deletion-failure recovery path",
+          "source": "Luna"
+        }
+      ]
+    },
+    {
+      "pr": 245,
+      "base": "5e66bc0d7305bfcb0971319a7157cf69593f3b13",
+      "head": "1157e033480ea3235c78512ee832e15e69080d0c",
+      "labels": [
+        {
+          "file": "web/qr/800/experience-v5.mjs",
+          "rootCause": "directional and hemisphere lights are parented to the rotating bulb group, so illumination follows the model instead of remaining world-space",
+          "source": "CodeRabbit"
+        }
+      ]
+    }
   ],
   "negativeControls": [
-    {"pr":281,"base":"519529ee455cc557b804cb58e44d46d5c32a95ec","head":"0673e370a9b5d13f98203e79c54551062b9a39e6","labels":[],"rejected":"CodeRabbit confused macOS lockf(1) with lockf(3); the installed utility supports descriptor mode and -s means silent"},
-    {"pr": 254, "base": "23abe489578e18eb6287fe1df995e87ee52e18fa", "head": "3a77304197f92c6620e0eb3f9527f44b3c39683c", "labels": []},
-    {"pr": 255, "base": "22b9a01915a8c85caf18bf86d033024deca33906", "head": "9e526ef3c5110ca4e9a419d61d4110baf0574a07", "labels": []},
-    {"pr": 260, "base": "87c08a4266d55536dcd09cdadcc51bd7ebd532e6", "head": "4c6230b0b26d8691197cd87507c21fdf574df2c6", "labels": []},
-    {"pr": 261, "base": "df59821248ea27683575a700d811723da7aea270", "head": "93b815a1068f65c96140f4fd63b68ba8f41afae9", "labels": []},
-    {"pr": 269, "base": "968fb553c6c478c035e33c319ff2a0fb515ff32d", "head": "bfb8404aea4cc3edb428818d144963e6d299df1f", "labels": []},
-    {"pr": 271, "base": "52305556f3e379106893ca6332177bc63c45a483", "head": "390e2bb06e44913456f58d09aa7191c282671a16", "labels": []},
-    {"pr":259,"base":"a1f8c07b178bdd158d782bbe262dfc6621b4e9aa","head":"2a6b5685b6a847164065acc5bdfb2b15f5e83099","labels":[],"rejected":"Greptile branding round-trip claim was invalid and withdrawn"},
-    {"pr":263,"base":"20703acae2ce0e6cbf6ab3a7ffaa8add7a240757","head":"4232cf25827aafd40a9d98b029e81e23dfb14101","labels":[],"rejected":"Greptile release-hash claim was already fixed at this SHA"},
-    {"pr":264,"base":"7844c3fb31950c11430f5c9e5c9322bf5d9b4e68","head":"61a79002bb16d8243a1c8f81c4e0dedd66b91779","labels":[],"rejected":"Greptile immutable-cache claim was already fixed at this SHA"},
-    {"pr":266,"base":"559d358245ef2157e01076c0745dcb58ab035562","head":"eedc2a8825954e2410abb401a551fc0f955fa069","labels":[],"rejected":"Greptile target-update claim was already fixed at this SHA"},
-    {"pr":272,"base":"fb19bb00992b54529c30ceb3b8ddadab1768238f","head":"d99fb5eec8405b57fa7051b9d3e96a4caf390165","labels":[],"rejected":"Greptile documentation-conflict claims were stale at this SHA"},
-    {"pr":283,"base":"4a6789068ee7d7cf05a46b871a5ef87197ad15d2","head":"f5ac6173639d788131eed7681fcc17cd6b8d8074","labels":[],"rejected":"CodeRabbit Package.resolved claim was invalid and withdrawn"},
-    {"pr":286,"base":"4b8afa6d2fdc9918a742a81b7b1a620a1d597e54","head":"830bdd370ef88d3ddc12ad51deca7fcd1ed3c765","labels":[],"rejected":"CodeRabbit DAU guard claim was stale at this SHA"},
-    {"pr":297,"base":"16f23aaa554af3034bf11c44c1344228f9f95b9a","head":"345cf9ae27ff96ad6703499eb4e4ea5e5152da24","labels":[],"rejected":"CodeRabbit live-preflight path and render claims were stale or withdrawn"},
-    {"pr":299,"base":"548409639d8b97fa02676d0af399c230d1c93681","head":"964318fed1e6d075238e802ac08ac3d030f3ad85","labels":[],"rejected":"CodeRabbit OAuth sorting claim was stale at this SHA"}
+    {
+      "pr": 281,
+      "base": "519529ee455cc557b804cb58e44d46d5c32a95ec",
+      "head": "0673e370a9b5d13f98203e79c54551062b9a39e6",
+      "labels": [],
+      "rejected": "CodeRabbit confused macOS lockf(1) with lockf(3); the installed utility supports descriptor mode and -s means silent"
+    },
+    {
+      "pr": 254,
+      "base": "23abe489578e18eb6287fe1df995e87ee52e18fa",
+      "head": "3a77304197f92c6620e0eb3f9527f44b3c39683c",
+      "labels": []
+    },
+    {
+      "pr": 255,
+      "base": "22b9a01915a8c85caf18bf86d033024deca33906",
+      "head": "9e526ef3c5110ca4e9a419d61d4110baf0574a07",
+      "labels": []
+    },
+    {
+      "pr": 260,
+      "base": "87c08a4266d55536dcd09cdadcc51bd7ebd532e6",
+      "head": "4c6230b0b26d8691197cd87507c21fdf574df2c6",
+      "labels": []
+    },
+    {
+      "pr": 261,
+      "base": "df59821248ea27683575a700d811723da7aea270",
+      "head": "93b815a1068f65c96140f4fd63b68ba8f41afae9",
+      "labels": []
+    },
+    {
+      "pr": 269,
+      "base": "968fb553c6c478c035e33c319ff2a0fb515ff32d",
+      "head": "bfb8404aea4cc3edb428818d144963e6d299df1f",
+      "labels": []
+    },
+    {
+      "pr": 271,
+      "base": "52305556f3e379106893ca6332177bc63c45a483",
+      "head": "390e2bb06e44913456f58d09aa7191c282671a16",
+      "labels": []
+    },
+    {
+      "pr": 259,
+      "base": "a1f8c07b178bdd158d782bbe262dfc6621b4e9aa",
+      "head": "2a6b5685b6a847164065acc5bdfb2b15f5e83099",
+      "labels": [],
+      "rejected": "Greptile branding round-trip claim was invalid and withdrawn"
+    },
+    {
+      "pr": 263,
+      "base": "20703acae2ce0e6cbf6ab3a7ffaa8add7a240757",
+      "head": "4232cf25827aafd40a9d98b029e81e23dfb14101",
+      "labels": [],
+      "rejected": "Greptile release-hash claim was already fixed at this SHA"
+    },
+    {
+      "pr": 264,
+      "base": "7844c3fb31950c11430f5c9e5c9322bf5d9b4e68",
+      "head": "61a79002bb16d8243a1c8f81c4e0dedd66b91779",
+      "labels": [],
+      "rejected": "Greptile immutable-cache claim was already fixed at this SHA"
+    },
+    {
+      "pr": 266,
+      "base": "559d358245ef2157e01076c0745dcb58ab035562",
+      "head": "eedc2a8825954e2410abb401a551fc0f955fa069",
+      "labels": [],
+      "rejected": "Greptile target-update claim was already fixed at this SHA"
+    },
+    {
+      "pr": 272,
+      "base": "fb19bb00992b54529c30ceb3b8ddadab1768238f",
+      "head": "d99fb5eec8405b57fa7051b9d3e96a4caf390165",
+      "labels": [],
+      "rejected": "Greptile documentation-conflict claims were stale at this SHA"
+    },
+    {
+      "pr": 283,
+      "base": "4a6789068ee7d7cf05a46b871a5ef87197ad15d2",
+      "head": "f5ac6173639d788131eed7681fcc17cd6b8d8074",
+      "labels": [],
+      "rejected": "CodeRabbit Package.resolved claim was invalid and withdrawn"
+    },
+    {
+      "pr": 286,
+      "base": "4b8afa6d2fdc9918a742a81b7b1a620a1d597e54",
+      "head": "830bdd370ef88d3ddc12ad51deca7fcd1ed3c765",
+      "labels": [],
+      "rejected": "CodeRabbit DAU guard claim was stale at this SHA"
+    },
+    {
+      "pr": 297,
+      "base": "16f23aaa554af3034bf11c44c1344228f9f95b9a",
+      "head": "345cf9ae27ff96ad6703499eb4e4ea5e5152da24",
+      "labels": [],
+      "rejected": "CodeRabbit live-preflight path and render claims were stale or withdrawn"
+    },
+    {
+      "pr": 299,
+      "base": "548409639d8b97fa02676d0af399c230d1c93681",
+      "head": "964318fed1e6d075238e802ac08ac3d030f3ad85",
+      "labels": [],
+      "rejected": "CodeRabbit OAuth sorting claim was stale at this SHA"
+    }
   ],
   "holdoutCases": [
-    {"pr":95,"base":"0d98e743a18bbfcfa83873438cd1de1075a77c81","head":"ed65d0a4a2b41b16e0652dfa284d3600defa8954","labels":[
-      {"file":"AR/MIX iOS/Model/NarrativeService.swift","rootCause":"setupRemoteCommands runs for every playback and accumulates duplicate MPRemoteCommandCenter targets","source":"CodeRabbit"},
-      {"file":"AR/MIX iOS/Views/OnboardingView.swift","rootCause":"notification permission failure is discarded by an unhandled throwing Task with no user feedback","source":"CodeRabbit"}
-    ]},
-    {"pr":99,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"0dd8956495161691383687a7f6563b027c3b9b4e","labels":[
-      {"file":"AR/MIX iOS/Views/MIXView.swift","rootCause":"an opacity-hidden overlay remains hit-testable and blocks interaction","source":"CodeRabbit"},
-      {"file":"AR/MIX iOS/Views/RealityViewModel.swift","rootCause":"self retains a Task whose closure retains self, so deinit cancellation cannot break the cycle","source":"CodeRabbit"},
-      {"file":"AR/MIX iOS/Views/NearbyElementsListView.swift","rootCause":"the search field Binding getter always returns an empty string, so typed text cannot remain visible","source":"CodeRabbit"},
-      {"file":"AR/MIX iOS/Views/OnboardingView.swift","rootCause":"the camera permission screen reuses location accessibility identifiers","source":"CodeRabbit"},
-      {"file":"AR/MIX iOS/Views/LayerPermissionBlockerView.swift","rootCause":"a fixed delay unconditionally calls onPermissionsGranted without checking permission state","source":"CodeRabbit"}
-    ]},
-    {"pr":99,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"20f377050a49df50918c8681187bb7823141fe15","labels":[
-      {"file":"AR/MIX iOS/Tests/HistorianPlayerIntegrationTests.swift","rootCause":"tautological assertions always pass regardless of the behavior under test","source":"CodeRabbit"},
-      {"file":"AR/Tests iOS/AudioTourUITests.swift","rootCause":"UI assertions are weakened with or-true expressions and can never fail","source":"CodeRabbit"}
-    ]},
-    {"pr":99,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"495855de0c713b2cd09a700fc2ed5d1941ffd839","labels":[
-      {"file":"AR/MIX iOS/Views/SpatialStoriesExperienceView.swift","rootCause":"TabView selection uses a constant binding, so user selection cannot persist","source":"CodeRabbit"}
-    ]}
+    {
+      "pr": 95,
+      "base": "0d98e743a18bbfcfa83873438cd1de1075a77c81",
+      "head": "ed65d0a4a2b41b16e0652dfa284d3600defa8954",
+      "labels": [
+        {
+          "file": "AR/MIX iOS/Model/NarrativeService.swift",
+          "rootCause": "setupRemoteCommands runs for every playback and accumulates duplicate MPRemoteCommandCenter targets",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "AR/MIX iOS/Views/OnboardingView.swift",
+          "rootCause": "notification permission failure is discarded by an unhandled throwing Task with no user feedback",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 99,
+      "base": "f1cf3edf111a4255452f7149bec945e36e622ead",
+      "head": "0dd8956495161691383687a7f6563b027c3b9b4e",
+      "labels": [
+        {
+          "file": "AR/MIX iOS/Views/MIXView.swift",
+          "rootCause": "an opacity-hidden overlay remains hit-testable and blocks interaction",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "AR/MIX iOS/Views/RealityViewModel.swift",
+          "rootCause": "self retains a Task whose closure retains self, so deinit cancellation cannot break the cycle",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "AR/MIX iOS/Views/NearbyElementsListView.swift",
+          "rootCause": "the search field Binding getter always returns an empty string, so typed text cannot remain visible",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "AR/MIX iOS/Views/OnboardingView.swift",
+          "rootCause": "the camera permission screen reuses location accessibility identifiers",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "AR/MIX iOS/Views/LayerPermissionBlockerView.swift",
+          "rootCause": "a fixed delay unconditionally calls onPermissionsGranted without checking permission state",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 99,
+      "base": "f1cf3edf111a4255452f7149bec945e36e622ead",
+      "head": "20f377050a49df50918c8681187bb7823141fe15",
+      "labels": [
+        {
+          "file": "AR/MIX iOS/Tests/HistorianPlayerIntegrationTests.swift",
+          "rootCause": "tautological assertions always pass regardless of the behavior under test",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "AR/Tests iOS/AudioTourUITests.swift",
+          "rootCause": "UI assertions are weakened with or-true expressions and can never fail",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 99,
+      "base": "f1cf3edf111a4255452f7149bec945e36e622ead",
+      "head": "495855de0c713b2cd09a700fc2ed5d1941ffd839",
+      "labels": [
+        {
+          "file": "AR/MIX iOS/Views/SpatialStoriesExperienceView.swift",
+          "rootCause": "TabView selection uses a constant binding, so user selection cannot persist",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 258,
+      "base": "0505ccb89927655d9b7450915e16b9cbf3b80dfc",
+      "head": "f296746b6d3c9bc1f0c1986f73e422abc6d9e806",
+      "labels": [
+        {
+          "file": "studio/cli/mix-studio-cli.mjs",
+          "rootCause": "survival verification compares a trimmed persisted navigation title with the raw untrimmed requested title and falsely reports a failed save",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 278,
+      "base": "8e94cb734a9a35e6536debdfefd43259dc6087d6",
+      "head": "0f49524f474e594fa3973f73846d01e3c265e3c9",
+      "labels": [
+        {
+          "file": "e2e/mixsim.mjs",
+          "rootCause": "start-inside-first-node dereferences expectedEvents[0] when the route produces no expected events",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 279,
+      "base": "4a6789068ee7d7cf05a46b871a5ef87197ad15d2",
+      "head": "e0edcf5a89d097617aac1e4016d009b9e8e5bca0",
+      "labels": [
+        {
+          "file": "backend/functions/src/endpoints/radio-beat.ts",
+          "rootCause": "the new Places reverse-geocode call runs unconditionally and bypasses the existing external-context feature toggle",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/services/locationStoreAdapters.ts",
+          "rootCause": "city-context matching omits administrative area so same-named cities can select unrelated context",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 288,
+      "base": "abbc49e3759c6fbd98db6a70ba3cc6ca0a746f87",
+      "head": "e4715d488c7efab70fd4685e928acd8e1eacc0fd",
+      "labels": [
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "invalid budget input escapes as a raw ValueError instead of the CLI's UsageError contract",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 294,
+      "base": "3728824f2b67592dc702d5895fbc3cc0c7e16da3",
+      "head": "0d72d5b57ef6913e27b3ca332edf5dd819a478f8",
+      "labels": [
+        {
+          "file": "studio/web/js/constants.mjs",
+          "rootCause": "GET_ACTIVE_WALK_SESSION is used by Walk Manager but omitted from the required-callables preflight set",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "catalog loading queries almost the entire planet instead of a bounded relevant region",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "Wikipedia search ignores the entered query and always performs a fixed Harvard-area geosearch",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "generation polling allows only twenty 50ms waits, timing out normal asynchronous jobs after roughly one second",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "visited progress keys nodes by elementId, collapsing multiple navigational nodes whose elementId is undefined",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "generateBeat sets audioBusy before calling playWalkAudio, so playWalkAudio's busy guard cannot distinguish concurrent playback correctly",
+          "source": "CodeRabbit"
+        }
+      ]
+    }
   ],
   "holdoutNegativeControls": [
-    {"pr":91,"base":"3789e69d424655f2ac26b9c34ff10e605b582bb2","head":"ccdc0046cbb711560e3bbbe6d06aca1bdee370f0","rejectedCandidates":[
-      {"file":"AR/MIX iOS/ReusableViews/MKMap.swift","rootCause":"annotation synchronization removes the user location and keys annotations only by title","reason":"false: synchronization filters the user location and keys annotations with latitude, longitude, and title"},
-      {"file":"AR/MIX iOS/Views/LayerMapViewModel.swift","rootCause":"region observation uses polling","reason":"false: it uses an observation continuation"},
-      {"file":"AR/MIX iOS/Views/LayerMapViewModel.swift","rootCause":"visibleElementsStream uses polling","reason":"false: the stream is observation-driven"},
-      {"file":"AR/MIX iOS/Views/LayerMapViewModel.swift","rootCause":"processSelectedAnnotation uses polling","reason":"false: selection processing is observation-driven"}
-    ]},
-    {"pr":103,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"9fc792f68fdff8cd2f6bdaf1d0c17736d41ab426","rejectedCandidates":[
-      {"file":"AR/MIX iOS/Model/NotificationRepromptManager.swift","rootCause":"permission migration runs only from recordSession","reason":"false: migration runs during initialization and every public operation"},
-      {"file":"AR/MIX iOS/Views/OnboardingView.swift","rootCause":"eligibility records a reprompt before the UI is shown","reason":"false: the record is written only from the UI onAppear path"}
-    ]}
+    {
+      "pr": 91,
+      "base": "3789e69d424655f2ac26b9c34ff10e605b582bb2",
+      "head": "ccdc0046cbb711560e3bbbe6d06aca1bdee370f0",
+      "rejectedCandidates": [
+        {
+          "file": "AR/MIX iOS/ReusableViews/MKMap.swift",
+          "rootCause": "annotation synchronization removes the user location and keys annotations only by title",
+          "reason": "false: synchronization filters the user location and keys annotations with latitude, longitude, and title"
+        },
+        {
+          "file": "AR/MIX iOS/Views/LayerMapViewModel.swift",
+          "rootCause": "region observation uses polling",
+          "reason": "false: it uses an observation continuation"
+        },
+        {
+          "file": "AR/MIX iOS/Views/LayerMapViewModel.swift",
+          "rootCause": "visibleElementsStream uses polling",
+          "reason": "false: the stream is observation-driven"
+        },
+        {
+          "file": "AR/MIX iOS/Views/LayerMapViewModel.swift",
+          "rootCause": "processSelectedAnnotation uses polling",
+          "reason": "false: selection processing is observation-driven"
+        }
+      ]
+    },
+    {
+      "pr": 103,
+      "base": "f1cf3edf111a4255452f7149bec945e36e622ead",
+      "head": "9fc792f68fdff8cd2f6bdaf1d0c17736d41ab426",
+      "rejectedCandidates": [
+        {
+          "file": "AR/MIX iOS/Model/NotificationRepromptManager.swift",
+          "rootCause": "permission migration runs only from recordSession",
+          "reason": "false: migration runs during initialization and every public operation"
+        },
+        {
+          "file": "AR/MIX iOS/Views/OnboardingView.swift",
+          "rootCause": "eligibility records a reprompt before the UI is shown",
+          "reason": "false: the record is written only from the UI onAppear path"
+        }
+      ]
+    },
+    {
+      "pr": 256,
+      "base": "2e2b909aadc29fa1e426a5118aba92aba0ef9471",
+      "head": "2e1b22975eec1267cde05c598d71e6c2d953b2ac",
+      "rejectedCandidates": [
+        {
+          "file": "studio/cli/mix-studio-cli.mjs",
+          "rootCause": "missing edited visible stops still normalize to AI and pass survival verification",
+          "reason": "false at exact head: verification preserves missing as undefined and the exact test removes stop-a and requires a failed check"
+        }
+      ]
+    },
+    {
+      "pr": 258,
+      "base": "0505ccb89927655d9b7450915e16b9cbf3b80dfc",
+      "head": "563c040946d7e2704f54709103c3fccd3aeab855",
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/src/endpoints/studio-simulator.ts",
+          "rootCause": "Studio projection drops authored navigational titles",
+          "reason": "stale at exact head: projectStudioNode includes the resolved node title"
+        }
+      ]
+    },
+    {
+      "pr": 273,
+      "base": "065ff57c7d1e344cb0d1ebdfa49f9e691300e3b3",
+      "head": "7e92f672ee98a26d0541329c67bead0f7b0b2561",
+      "rejectedCandidates": [
+        {
+          "file": "docs/coderabbit.md",
+          "rootCause": "documentation omits the repository-root-only CodeRabbit configuration rule",
+          "reason": "stale at exact head: lines 8-10 explicitly document root-only config, no nested merge, and request_changes_workflow"
+        }
+      ]
+    },
+    {
+      "pr": 278,
+      "base": "8e94cb734a9a35e6536debdfefd43259dc6087d6",
+      "head": "7d429370a89f3f1f9d1c7d9da41d160619c1b6f8",
+      "rejectedCandidates": [
+        {
+          "file": "e2e/mixsim.mjs",
+          "rootCause": "first-beat assertion is not scoped to the current walk",
+          "reason": "stale at exact head: the baseline log count is captured after selecting the requested walk and assertions slice from that baseline"
+        },
+        {
+          "file": "e2e/nightly.sh",
+          "rootCause": "nightly lanes run without required autopilot authentication",
+          "reason": "stale at exact head: final script contains the authentication prerequisite introduced by the response commit"
+        }
+      ]
+    },
+    {
+      "pr": 282,
+      "base": "b9603ca15f8a490e3bdda5d08fd65281e64670a1",
+      "head": "13201e72730330d7683d311399e31227b6e762b1",
+      "rejectedCandidates": [
+        {
+          "file": "ios/AR/ci_scripts/ci_pre_xcodebuild.sh",
+          "rootCause": "archive builds do not inject required Singular credentials",
+          "reason": "stale at exact head: archive path requires both variables and writes them into the plist before xcodebuild"
+        }
+      ]
+    },
+    {
+      "pr": 294,
+      "base": "3728824f2b67592dc702d5895fbc3cc0c7e16da3",
+      "head": "0d72d5b57ef6913e27b3ca332edf5dd819a478f8",
+      "rejectedCandidates": [
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "walk data is interpolated into HTML without escaping",
+          "reason": "stale at exact head: catalog, stops, feed, and search result interpolation use escapeHtml"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "load paths leave busy state stuck after failures",
+          "reason": "stale at exact head: loadCatalog and openWalk use finally to clear busy state"
+        }
+      ]
+    }
   ]
 }

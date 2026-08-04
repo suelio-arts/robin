@@ -29,8 +29,16 @@ describe("GitUtils tree paths", () => {
       .mockResolvedValueOnce({data: {items: [{path: "src/a.ts"}]}});
     const git = new GitUtils({rest: {search: {code}}} as never);
 
-    await expect(git.searchPaths("o", "r", "thing")).rejects.toThrow("temporary");
     await expect(git.searchPaths("o", "r", "thing")).resolves.toEqual(["src/a.ts"]);
     expect(code).toHaveBeenCalledTimes(2);
+  });
+
+  it("fails closed and evicts a search after three failures", async () => {
+    const code = jest.fn().mockRejectedValue(new Error("unavailable"));
+    const git = new GitUtils({rest: {search: {code}}} as never);
+
+    await expect(git.searchPaths("o", "r", "thing")).rejects.toThrow("unavailable");
+    await expect(git.searchPaths("o", "r", "thing")).rejects.toThrow("unavailable");
+    expect(code).toHaveBeenCalledTimes(6);
   });
 });

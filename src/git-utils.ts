@@ -58,16 +58,29 @@ export class GitUtils {
   async searchPaths(owner: string, repo: string, query: string): Promise<string[]> {
     const key = `${owner}/${repo}:${query}`;
     if (!this.searches.has(key)) {
-      const pending = this.octokit.rest.search.code({
-        q: `${query} repo:${owner}/${repo}`,
-        per_page: 10,
-      }).then(({data}) => data.items.map(({path}) => path)).catch((error) => {
+      const pending = this.fetchSearchPaths(owner, repo, query).catch((error) => {
         this.searches.delete(key);
         throw error;
       });
       this.searches.set(key, pending);
     }
     return this.searches.get(key) as Promise<string[]>;
+  }
+
+  private async fetchSearchPaths(owner: string, repo: string, query: string): Promise<string[]> {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const {data} = await this.octokit.rest.search.code({
+          q: `${query} repo:${owner}/${repo}`,
+          per_page: 10,
+        });
+        return data.items.map(({path}) => path);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
   }
 
   private async fetchTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {

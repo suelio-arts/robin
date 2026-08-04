@@ -346,16 +346,29 @@ class GitUtils {
     async searchPaths(owner, repo, query) {
         const key = `${owner}/${repo}:${query}`;
         if (!this.searches.has(key)) {
-            const pending = this.octokit.rest.search.code({
-                q: `${query} repo:${owner}/${repo}`,
-                per_page: 10,
-            }).then(({ data }) => data.items.map(({ path }) => path)).catch((error) => {
+            const pending = this.fetchSearchPaths(owner, repo, query).catch((error) => {
                 this.searches.delete(key);
                 throw error;
             });
             this.searches.set(key, pending);
         }
         return this.searches.get(key);
+    }
+    async fetchSearchPaths(owner, repo, query) {
+        let lastError;
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+            try {
+                const { data } = await this.octokit.rest.search.code({
+                    q: `${query} repo:${owner}/${repo}`,
+                    per_page: 10,
+                });
+                return data.items.map(({ path }) => path);
+            }
+            catch (error) {
+                lastError = error;
+            }
+        }
+        throw lastError;
     }
     async fetchTreePaths(owner, repo, ref) {
         const { data } = await this.octokit.rest.git.getTree({ owner, repo, tree_sha: ref, recursive: "true" });
@@ -2188,15 +2201,21 @@ function publicContractSubjects(diff) {
 }
 function isPublicHostname(hostname) {
     const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
-    if (host === "localhost" || !host.includes(".") || /\.(?:internal|local|localhost|test|example|invalid)$/.test(host))
-        return false;
-    if ((0, net_1.isIP)(host) === 4) {
-        const [a, b] = host.split(".").map(Number);
-        return !(a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
+    if ((0, net_1.isIP)(host) === 4)
+        return isPublicIPv4(host);
+    const mapped = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (mapped) {
+        const high = Number.parseInt(mapped[1], 16);
+        const low = Number.parseInt(mapped[2], 16);
+        return isPublicIPv4(`${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`);
     }
     if ((0, net_1.isIP)(host) === 6)
         return host !== "::1" && !host.startsWith("fc") && !host.startsWith("fd") && !host.startsWith("fe8") && !host.startsWith("fe9") && !host.startsWith("fea") && !host.startsWith("feb");
-    return true;
+    return host !== "localhost" && host.includes(".") && !/\.(?:internal|local|localhost|test|example|invalid)$/.test(host);
+}
+function isPublicIPv4(host) {
+    const [a, b] = host.split(".").map(Number);
+    return !(a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
 }
 function pathAffinity(path, changedPaths) {
     return Math.max(0, ...changedPaths.map((changed) => {

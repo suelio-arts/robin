@@ -11,4 +11,15 @@ describe("GitUtils tree paths", () => {
     await expect(git.getTreePaths("o", "r", "head")).resolves.toEqual(["src/a.ts"]);
     expect(getTree).toHaveBeenCalledTimes(2);
   });
+
+  it("coalesces repository code searches", async () => {
+    const code = jest.fn().mockResolvedValue({data: {items: [{path: "src/a.ts"}]}});
+    const git = new GitUtils({rest: {search: {code}}} as never);
+
+    await expect(Promise.all([
+      git.searchPaths("o", "r", "thing"),
+      git.searchPaths("o", "r", "thing"),
+    ])).resolves.toEqual([["src/a.ts"], ["src/a.ts"]]);
+    expect(code).toHaveBeenCalledTimes(1);
+  });
 });

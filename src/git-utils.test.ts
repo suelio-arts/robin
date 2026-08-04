@@ -22,4 +22,15 @@ describe("GitUtils tree paths", () => {
     ])).resolves.toEqual([["src/a.ts"], ["src/a.ts"]]);
     expect(code).toHaveBeenCalledTimes(1);
   });
+
+  it("retries a failed repository code search", async () => {
+    const code = jest.fn()
+      .mockRejectedValueOnce(new Error("temporary"))
+      .mockResolvedValueOnce({data: {items: [{path: "src/a.ts"}]}});
+    const git = new GitUtils({rest: {search: {code}}} as never);
+
+    await expect(git.searchPaths("o", "r", "thing")).rejects.toThrow("temporary");
+    await expect(git.searchPaths("o", "r", "thing")).resolves.toEqual(["src/a.ts"]);
+    expect(code).toHaveBeenCalledTimes(2);
+  });
 });

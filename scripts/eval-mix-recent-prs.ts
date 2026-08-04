@@ -162,8 +162,15 @@ async function main() {
       try {
         approved = selectApprovedCandidates(precisionCandidates, precision.choices[0]?.message.content || "", verified.summary || "");
       } catch (error) {
-        console.warn(`Precision gate failed for PR ${testCase.pr} chunk ${index + 1}: ${error}`);
-        approved = {summary: "", high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
+        const reason = `Precision gate failed for PR ${testCase.pr} chunk ${index + 1}: ${error}`;
+        console.warn(reason);
+        responses.push({
+          kind: "review-error",
+          error: reason,
+          candidates,
+          usage: [...discovery.map(({ usage }) => usage), verification.usage, precision.usage],
+        });
+        continue;
       }
       responses.push({
         candidates,
@@ -215,12 +222,27 @@ async function main() {
           headFile,
           "</EVIDENCE_DATA>",
         ].join("\n\n"));
-        let parsedDecision = {approved: false, reason: "Invalid precision response"};
+        let parsedDecision: {approved: boolean; reason: string} | undefined;
         try {
           const parsed = JSON.parse(decision.choices[0]?.message.content || "") as {approved?: unknown; reason?: unknown};
-          if (typeof parsed.approved === "boolean" && typeof parsed.reason === "string") parsedDecision = parsed as typeof parsedDecision;
+          if (typeof parsed.approved === "boolean" && typeof parsed.reason === "string") {
+            parsedDecision = {approved: parsed.approved, reason: parsed.reason};
+          }
         } catch {
-          // Preserve a deterministic rejection for an unusable precision response.
+          // Recorded as unevaluated below.
+        }
+        if (!parsedDecision) {
+          const reason = "Invalid precision response";
+          results.push({
+            pr: testCase.pr,
+            head: testCase.head,
+            kind: "candidate-error",
+            candidate,
+            error: reason,
+            usage: decision.usage,
+          });
+          writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
+          continue;
         }
         results.push({
           pr: testCase.pr,

@@ -36,6 +36,11 @@ describe("LLMClient", () => {
         "https://api.openai.com/v1/responses",
         expect.objectContaining({method: "POST"})
       );
+      const request = (global.fetch as jest.Mock).mock.calls[0][1];
+      expect(JSON.parse(request.body)).toMatchObject({
+        tools: [{type: "web_search", search_context_size: "low"}],
+        input: [{role: "system", content: "system"}, {role: "user", content: "user"}],
+      });
       expect(new LLMClient("https://openrouter.ai/api/v1", "test-key", "model").supportsWebSearch()).toBe(false);
     } finally {
       global.fetch = originalFetch;

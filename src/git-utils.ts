@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import * as core from "@actions/core";
 
 export class GitUtils {
   private octokit: Octokit;
@@ -42,16 +43,20 @@ export class GitUtils {
 
   async getTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {
     const key = `${owner}/${repo}@${ref}`;
-    if (!this.treePaths.has(key)) this.treePaths.set(key, this.fetchTreePaths(owner, repo, ref));
+    if (!this.treePaths.has(key)) {
+      const pending = this.fetchTreePaths(owner, repo, ref).catch((error) => {
+        this.treePaths.delete(key);
+        core.warning(`Tree listing failed for ${owner}/${repo}@${ref}; later chunks will retry: ${error}`);
+        return [];
+      });
+      this.treePaths.set(key, pending);
+    }
     return this.treePaths.get(key) as Promise<string[]>;
   }
 
   private async fetchTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {
-    try {
-      const { data } = await this.octokit.rest.git.getTree({owner, repo, tree_sha: ref, recursive: "true"});
-      return data.tree.filter((item) => item.type === "blob" && item.path).map((item) => item.path as string);
-    } catch {
-      return [];
-    }
+    const { data } = await this.octokit.rest.git.getTree({owner, repo, tree_sha: ref, recursive: "true"});
+    if (data.truncated) core.warning(`Tree listing for ${owner}/${repo}@${ref} was truncated`);
+    return data.tree.filter((item) => item.type === "blob" && item.path).map((item) => item.path as string);
   }
 }

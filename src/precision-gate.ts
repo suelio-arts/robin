@@ -9,13 +9,14 @@ export type PrecisionCandidate = {
   finding: ReviewFinding;
 };
 
-export function buildPrecisionCandidates(reviews: StructuredReview[]): PrecisionCandidate[] {
+export function buildPrecisionCandidates(reviews: Partial<StructuredReview>[]): PrecisionCandidate[] {
   const candidates: PrecisionCandidate[] = [];
   const seen = new Set<string>();
 
   for (const review of reviews) {
     for (const severity of SEVERITIES) {
-      for (const finding of review[severity]) {
+      for (const finding of review[severity] || []) {
+        if (typeof finding.description !== "string") continue;
         const root = finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
         const key = `${finding.file}:${finding.line ?? 0}:${severity}:${root}`;
         if (seen.has(key)) continue;
@@ -29,7 +30,8 @@ export function buildPrecisionCandidates(reviews: StructuredReview[]): Precision
 
 export function selectApprovedCandidates(
   candidates: PrecisionCandidate[],
-  response: string
+  response: string,
+  summary = ""
 ): StructuredReview {
   const json = response.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
   const parsed = JSON.parse(json) as { approved?: unknown };
@@ -39,7 +41,7 @@ export function selectApprovedCandidates(
 
   const approved = new Set(parsed.approved);
   const result: StructuredReview = {
-    summary: "Evidence-verified review findings.",
+    summary,
     high: [],
     medium: [],
     low: [],

@@ -7,7 +7,7 @@ const CONTEXT_LIMIT = 50000;
 const FILE_LIMIT = 20000;
 const RELATED_LIMIT = 12000;
 const RELATED_REQUEST_LIMIT = 24;
-type ReviewContextGit = Pick<GitUtils, "getFileContent" | "getTreePaths">;
+type ReviewContextGit = Pick<GitUtils, "getFileContent" | "getTreePaths" | "searchPaths">;
 
 function excerpt(content: string, limit: number): string {
   if (content.length <= limit) return content;
@@ -42,7 +42,10 @@ export async function buildFileContext(
       const content = await git.getFileContent(owner, repo, path, ref);
       if (!content) continue;
       fetched.add(`${ref}:${path}`);
-      const value = excerpt(content, Math.min(FILE_LIMIT, remaining));
+      const valueLimit = Math.min(FILE_LIMIT, remaining);
+      const value = label === "HEAD" && content.length > valueLimit
+        ? matchingNeighborhoods(content, terms, valueLimit) || excerpt(content, valueLimit)
+        : excerpt(content, valueLimit);
       sections.push(`${label} FILE: ${path}\n${value}`);
       remaining -= value.length;
 
@@ -74,6 +77,24 @@ export async function buildFileContext(
       const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
       if (!focused) continue;
       sections.push(`HEAD CONVENTION FILE: ${path}\n${focused}`);
+      remaining -= focused.length;
+      if (remaining <= 0) break;
+    }
+  }
+
+  if (remaining > 0) {
+    const paths = [...new Set((await Promise.all(
+      terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term))
+    )).flat())].filter((path) => !changedPaths.includes(path));
+    for (const path of paths.slice(0, 12)) {
+      const key = `${head}:${path}`;
+      if (fetched.has(key)) continue;
+      fetched.add(key);
+      const content = await git.getFileContent(owner, repo, path, head);
+      if (!content) continue;
+      const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
+      if (!focused) continue;
+      sections.push(`HEAD REPOSITORY SEARCH MATCH: ${path}\n${focused}`);
       remaining -= focused.length;
       if (remaining <= 0) break;
     }
@@ -179,6 +200,7 @@ function matchingNeighborhoods(content: string, terms: string[], limit: number):
   if (terms.length === 0) return "";
   const lines = content.split("\n");
   const selected = new Set<number>();
+  let selectedLength = 0;
   const matches = lines
     .map((line, index) => ({
       index,
@@ -188,12 +210,16 @@ function matchingNeighborhoods(content: string, terms: string[], limit: number):
     .sort((left, right) => right.score - left.score || left.index - right.index);
   for (const { index } of matches) {
     for (let nearby = Math.max(0, index - 3); nearby <= Math.min(lines.length - 1, index + 3); nearby += 1) {
+      if (selected.has(nearby)) continue;
+      const lineLength = String(nearby + 1).length + 2 + lines[nearby].length + 1;
+      if (selectedLength + lineLength > limit) continue;
       selected.add(nearby);
+      selectedLength += lineLength;
     }
+    if (selectedLength >= limit) break;
   }
   return [...selected]
     .sort((left, right) => left - right)
     .map((index) => `${index + 1}: ${lines[index]}`)
-    .join("\n")
-    .slice(0, limit);
+    .join("\n");
 }

@@ -4,6 +4,7 @@ import * as core from "@actions/core";
 export class GitUtils {
   private octokit: Octokit;
   private treePaths = new Map<string, Promise<string[]>>();
+  private searches = new Map<string, Promise<string[]>>();
 
   constructor(octokit: Octokit) {
     this.octokit = octokit;
@@ -52,6 +53,21 @@ export class GitUtils {
       this.treePaths.set(key, pending);
     }
     return this.treePaths.get(key) as Promise<string[]>;
+  }
+
+  async searchPaths(owner: string, repo: string, query: string): Promise<string[]> {
+    const key = `${owner}/${repo}:${query}`;
+    if (!this.searches.has(key)) {
+      const pending = this.octokit.rest.search.code({
+        q: `${query} repo:${owner}/${repo}`,
+        per_page: 10,
+      }).then(({data}) => data.items.map(({path}) => path)).catch((error) => {
+        this.searches.delete(key);
+        throw error;
+      });
+      this.searches.set(key, pending);
+    }
+    return this.searches.get(key) as Promise<string[]>;
   }
 
   private async fetchTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {

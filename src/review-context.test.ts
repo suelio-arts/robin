@@ -10,6 +10,7 @@ describe("buildFileContext", () => {
     const git = {
       getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
       getTreePaths: async () => [],
+      searchPaths: async () => [],
     };
     const context = await buildFileContext(git, "o", "r", [
       "diff --git a/src/route.ts b/src/route.ts",
@@ -28,6 +29,7 @@ describe("buildFileContext", () => {
     const git = {
       getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
       getTreePaths: async () => ["backend/function-registry.ts"],
+      searchPaths: async () => [],
     };
     const context = await buildFileContext(git, "o", "r", [
       "diff --git a/backend/endpoints/new.ts b/backend/endpoints/new.ts",
@@ -48,6 +50,7 @@ describe("buildFileContext", () => {
     const git = {
       getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
       getTreePaths: async () => [],
+      searchPaths: async () => [],
     };
     const context = await buildFileContext(git, "o", "r", [
       "diff --git a/src/route.ts b/src/route.ts",
@@ -58,6 +61,25 @@ describe("buildFileContext", () => {
       .filter((line) => /^\d+: /.test(line))
       .map((line) => Number(line.split(":", 1)[0]));
     expect(lineNumbers).toEqual([...lineNumbers].sort((left, right) => left - right));
+  });
+
+  it("adds exact-head repository search matches", async () => {
+    const files: Record<string, string> = {
+      "head:src/route.ts": "const result = canonicalOperation(value);",
+      "head:src/contract.ts": "export function canonicalOperation(value: string) { return value.trim(); }",
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async (_owner: string, _repo: string, query: string) => query === "canonicalOperation" ? ["src/contract.ts"] : [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/src/route.ts b/src/route.ts",
+      "+++ b/src/route.ts",
+      "+const result = canonicalOperation(value);",
+    ].join("\n"), "base", "head");
+    expect(context).toContain("HEAD REPOSITORY SEARCH MATCH: src/contract.ts");
+    expect(context).toContain("value.trim()");
   });
 
   it("extracts only literal public hosts and system commands for web lookup", () => {

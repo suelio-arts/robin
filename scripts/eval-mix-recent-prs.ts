@@ -110,6 +110,18 @@ async function main() {
           encoding: "utf8",
           maxBuffer: 10 * 1024 * 1024,
         }).trim().split("\n"),
+        searchPaths: async (_owner: string, _repo: string, query: string) => {
+          try {
+            return execFileSync("git", ["grep", "-l", "-F", query, testCase.head], {
+              cwd: mixRepo,
+              encoding: "utf8",
+              maxBuffer: 10 * 1024 * 1024,
+            }).trim().split("\n").filter(Boolean);
+          } catch (error) {
+            if ((error as {status?: number}).status === 1) return [];
+            throw error;
+          }
+        },
       };
       const context = await buildFileContext(localGit, "", "", chunk, testCase.base, testCase.head);
       const reviewInput = [

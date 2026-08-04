@@ -82,6 +82,25 @@ describe("buildFileContext", () => {
     expect(context).toContain("value.trim()");
   });
 
+  it("focuses oversized changed files on matching code beyond the head and tail", async () => {
+    const lines = Array.from({length: 4000}, (_, index) => `const filler${index} = ${index};`);
+    lines[2000] = "function canonicalOperation() { return persistedValue.trim(); }";
+    const files: Record<string, string> = {
+      "head:src/large.ts": lines.join("\n"),
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async () => [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/src/large.ts b/src/large.ts",
+      "+++ b/src/large.ts",
+      "+canonicalOperation();",
+    ].join("\n"), "base", "head");
+    expect(context).toContain("persistedValue.trim()");
+  });
+
   it("extracts only literal public hosts and system commands for web lookup", () => {
     expect(publicContractSubjects('+API_BASE = "https://ads-api.x.com/12"\n+/usr/bin/lockf -s 9\n+privateThing()'))
       .toEqual(["ads-api.x.com", "system command lockf"]);

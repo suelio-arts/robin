@@ -10,10 +10,14 @@ This is a development corpus, not an untouched holdout: prompts and tools were
 tuned against some of these cases. Do not claim parity from it. Freeze the pipeline,
 then adjudicate and score unseen PRs as a separate holdout before promotion.
 
+`holdoutCases` and `holdoutNegativeControls` are the frozen unseen set. Do not use
+their results to tune the prompt or pipeline; replace them before another iteration.
+
 Run Luna at explicit high reasoning effort:
 
 ```bash
 OPENAI_API_KEY=... npm run eval:mix -- /tmp/mix-review-results.json
+EVAL_SET=holdout OPENAI_API_KEY=... npm run eval:mix -- /tmp/mix-holdout-results.json
 ```
 
 Score a finding only when it matches the PR, file, and root cause. Generic advice

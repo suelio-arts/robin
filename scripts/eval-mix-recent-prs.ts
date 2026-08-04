@@ -18,7 +18,12 @@ const mixRepo = process.env.MIX_REPO || "/Users/rolly/Build/mix/mix-mono";
 const output = resolve(process.argv[2] || "eval/mix-recent-prs-results.json");
 const manifest = JSON.parse(
   readFileSync(resolve("eval/mix-recent-prs.json"), "utf8")
-) as { developmentCases: EvalCase[]; negativeControls: EvalCase[] };
+) as {
+  developmentCases: EvalCase[];
+  negativeControls: EvalCase[];
+  holdoutCases: EvalCase[];
+  holdoutNegativeControls: EvalCase[];
+};
 const client = new OpenAI({ apiKey });
 const webClient = new LLMClient("https://api.openai.com/v1", apiKey, "gpt-5.6-luna", undefined, undefined, undefined, undefined, "high");
 const selectedPrs = new Set(
@@ -45,7 +50,14 @@ async function review(systemPrompt: string, userContent: string) {
 
 async function main() {
   const results = [];
-  for (const testCase of [...manifest.developmentCases, ...manifest.negativeControls].filter(
+  const evalSet = process.env.EVAL_SET || "development";
+  if (!['development', 'holdout'].includes(evalSet)) {
+    throw new Error("EVAL_SET must be development or holdout");
+  }
+  const cases = evalSet === "holdout"
+    ? [...manifest.holdoutCases, ...manifest.holdoutNegativeControls]
+    : [...manifest.developmentCases, ...manifest.negativeControls];
+  for (const testCase of cases.filter(
     (candidate) =>
       (selectedPrs.size === 0 || selectedPrs.has(candidate.pr))
       && (selectedHeads.size === 0 || selectedHeads.has(candidate.head))

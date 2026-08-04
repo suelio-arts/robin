@@ -42,6 +42,8 @@ describe("buildFileContext", () => {
       .toEqual(["ads-api.x.com", "system command lockf"]);
     expect(publicContractSubjects('+url = "https://user:token@internal.example/path"')).toEqual([]);
     expect(publicContractSubjects('+url = "https://jenkins.corp.internal/job/x"')).toEqual([]);
+    expect(publicContractSubjects('+url = "https://jenkins.corp.internal./job/x"')).toEqual([]);
+    expect(publicContractSubjects('+url = "https://localhost./"')).toEqual([]);
     expect(publicContractSubjects('+url = "https://127.0.0.1/private"')).toEqual([]);
   });
 });

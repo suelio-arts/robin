@@ -31,8 +31,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          head_sha="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)"
           for _ in {1..60}; do
+            head_sha="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)"
             reviews="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")"
             if jq -e --arg head "$head_sha" '
               any(.[][]; .user.login == "coderabbitai[bot]"
@@ -44,6 +44,8 @@ jobs:
             fi
             sleep 15
           done
+          head_sha="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)"
+          reviews="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")"
           echo "CodeRabbit did not approve current head $head_sha" >&2
           jq -r --arg head "$head_sha" '
             .[][] | select(.user.login == "coderabbitai[bot]" and .commit_id == $head)

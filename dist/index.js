@@ -2124,7 +2124,7 @@ function publicContractSubjects(diff) {
     return [...subjects].slice(0, 12);
 }
 function isPublicHostname(hostname) {
-    const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
     if (host === "localhost" || !host.includes(".") || /\.(?:internal|local|localhost|test|example|invalid)$/.test(host))
         return false;
     if ((0, net_1.isIP)(host) === 4) {

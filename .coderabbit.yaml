@@ -1,0 +1,14 @@
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  path_filters:
+    - "!dist/**"
+  tools:
+    eslint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    yamllint:
+      enabled: true
+    gitleaks:
+      enabled: true

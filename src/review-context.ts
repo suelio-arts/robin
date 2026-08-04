@@ -64,6 +64,20 @@ export async function buildFileContext(
 
   if (remaining > 0) {
     const paths = await git.getTreePaths(owner, repo, head);
+    const configurations = paths
+      .filter((path) => /(?:^|\/)(?:AGENTS\.md|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
+      .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+    for (const path of configurations.slice(0, 4)) {
+      const key = `${head}:${path}`;
+      if (fetched.has(key)) continue;
+      fetched.add(key);
+      const content = await git.getFileContent(owner, repo, path, head);
+      if (!content) continue;
+      const value = excerpt(content, Math.min(6000, remaining));
+      sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
+      remaining -= value.length;
+      if (remaining <= 0) break;
+    }
     const conventions = paths
       .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));

@@ -39,6 +39,25 @@ describe("buildFileContext", () => {
     expect(context).toContain("HEAD CONVENTION FILE: backend/function-registry.ts");
   });
 
+  it("adds repository lint configuration even without matching identifiers", async () => {
+    const files: Record<string, string> = {
+      "head:studio/task.py": "raise RuntimeError('long inline message')",
+      "head:pyproject.toml": "[tool.ruff.lint]\nselect = [\"ALL\"]",
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => ["pyproject.toml"],
+      searchPaths: async () => [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/studio/task.py b/studio/task.py",
+      "+++ b/studio/task.py",
+      "+raise RuntimeError('long inline message')",
+    ].join("\n"), "base", "head");
+    expect(context).toContain("HEAD REPOSITORY CONFIG: pyproject.toml");
+    expect(context).toContain('select = ["ALL"]');
+  });
+
   it("keeps matching neighborhoods in source order", async () => {
     const related = Array.from({length: 20}, (_, index) => index === 1
       ? "secondaryIdentifier"

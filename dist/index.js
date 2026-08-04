@@ -1794,7 +1794,7 @@ exports.DISCOVERY_PASSES = [
     "Audit only external API and persistence contracts: exact fields, masks, units, currency, pagination, mutation targets, partial success, idempotency, readback, recovery, and geographic or query bounds. Trace user-entered search/filter values into the actual provider request. Use supplied repository and public-documentation evidence; do not guess provider behavior.",
     "Audit only build/platform compatibility, repository-enforced static analysis, privacy disclosures, and changed tests or harnesses. Check required registries and preflight lists, lint rules, schemes, and fixtures against every newly used callable or capability. A required CI, pre-push, release, or stress harness is a product contract: report it when changed setup or timing makes the gate fail, or when its assertion can pass while the intended changed behavior is broken.",
     "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
-    "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
+    "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, viewport height, min-height, overflow, reachable scrolling, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace short-screen and dynamic-viewport layouts end to end; content below the viewport must remain reachable. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
 ];
 exports.VERIFICATION_INSTRUCTIONS = [
     "Final evidence pass: do not add findings. Keep only candidates whose trigger, changed line, failing path, and material impact are directly proven.",
@@ -2074,6 +2074,23 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     }
     if (remaining > 0) {
         const paths = await git.getTreePaths(owner, repo, head);
+        const configurations = paths
+            .filter((path) => /(?:^|\/)(?:AGENTS\.md|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
+            .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+        for (const path of configurations.slice(0, 4)) {
+            const key = `${head}:${path}`;
+            if (fetched.has(key))
+                continue;
+            fetched.add(key);
+            const content = await git.getFileContent(owner, repo, path, head);
+            if (!content)
+                continue;
+            const value = excerpt(content, Math.min(6000, remaining));
+            sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
+            remaining -= value.length;
+            if (remaining <= 0)
+                break;
+        }
         const conventions = paths
             .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));

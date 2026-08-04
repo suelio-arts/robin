@@ -78,6 +78,9 @@ export class GitUtils {
         return data.items.map(({path}) => path);
       } catch (error) {
         lastError = error;
+        const status = (error as {status?: number}).status;
+        if (status && ![403, 429, 500, 502, 503, 504].includes(status)) throw error;
+        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
       }
     }
     throw lastError;

@@ -1,7 +1,9 @@
 # MIX Recent-PR Evaluation
 
-`mix-recent-prs.json` freezes validated CodeRabbit and Greptile root causes from
-recent MIX pull requests plus rejected, stale, and withdrawn candidate comments.
+`mix-recent-prs.json` freezes validated CodeRabbit, Greptile, and Luna root causes
+from recent MIX pull requests plus rejected, stale, and withdrawn candidate comments.
+Luna-sourced labels are scored only after independent exact-SHA adjudication;
+model agreement alone never makes a candidate ground truth.
 Candidate comments are labels only after their failure path is verified at the
 reviewed SHA. Multi-commit snapshots use the PR merge base, not the reviewed
 commit's parent. `unscoredHistoricalNotes` preserves old whole-PR notes but is

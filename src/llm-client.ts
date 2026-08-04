@@ -32,6 +32,9 @@ export class LLMClient {
   private routerModel: boolean;
   private onProgress?: LlmProgressHandler;
   private reasoningEffort?: ReasoningEffort;
+  private baseUrl: string;
+  private apiKey: string;
+  private timeoutMs: number;
 
   constructor(
     baseUrl: string,
@@ -44,6 +47,8 @@ export class LLMClient {
     reasoningEffort?: ReasoningEffort
   ) {
     this.model = model;
+    this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.apiKey = apiKey;
     this.routerModel = isOpenRouterRouterModel(model);
     this.onProgress = onProgress;
     this.reasoningEffort = reasoningEffort;
@@ -53,6 +58,7 @@ export class LLMClient {
         : undefined;
     this.maxAttempts = getLlmCompletionAttemptCount(maxAttempts, model);
     const effectiveTimeoutMs = resolveLlmTimeoutMs(model, timeoutMs);
+    this.timeoutMs = effectiveTimeoutMs;
 
     core.info(
       `Initializing LLM client: baseUrl=${baseUrl}, model=${model}, timeout=${effectiveTimeoutMs} ms, maxAttempts=${this.maxAttempts}`
@@ -71,6 +77,59 @@ export class LLMClient {
         `OpenRouter router model — ${DEFAULT_LLM_ROUTER_FIRST_CHUNK_MS / 1000}s first-chunk stall detect, ${effectiveTimeoutMs / 1000}s stream cap, provider fallbacks.`
       );
     }
+  }
+
+  supportsWebSearch(): boolean {
+    return /^https:\/\/api\.openai\.com\/v1$/i.test(this.baseUrl) && Boolean(this.apiKey);
+  }
+
+  async webSearchCompletion(systemPrompt: string, userContent: string): Promise<ChatCompletionResult> {
+    if (!this.supportsWebSearch()) throw new Error("Web search requires the OpenAI Responses API");
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
+      try {
+        const response = await fetch(`${this.baseUrl}/responses`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: this.model,
+            tools: [{ type: "web_search", search_context_size: "low" }],
+            reasoning: this.reasoningEffort ? { effort: this.reasoningEffort } : undefined,
+            max_output_tokens: this.maxOutputTokens,
+            input: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userContent },
+            ],
+          }),
+          signal: AbortSignal.timeout(this.timeoutMs),
+        });
+        if (!response.ok) {
+          const error = new Error(`OpenAI Responses API failed (${response.status}): ${await response.text()}`) as Error & {status: number};
+          error.status = response.status;
+          throw error;
+        }
+        const payload = await response.json() as {
+          model?: string;
+          output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
+        };
+        const content = (payload.output || [])
+          .filter((item) => item.type === "message")
+          .flatMap((item) => item.content || [])
+          .filter((item) => item.type === "output_text")
+          .map((item) => item.text || "")
+          .join("");
+        if (content) return { content, model: payload.model || this.model };
+        throw new Error("Empty response from LLM web search");
+      } catch (error) {
+        lastError = error;
+        if (!isRetriableLlmError(error, this.retryContext()) || attempt === this.maxAttempts) throw error;
+        await delayMs(computeRetryDelayMs(attempt, this.retryContext()));
+      }
+    }
+    throw lastError;
   }
 
   private retryContext() {

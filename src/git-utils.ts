@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 
 export class GitUtils {
   private octokit: Octokit;
+  private treePaths = new Map<string, Promise<string[]>>();
 
   constructor(octokit: Octokit) {
     this.octokit = octokit;
@@ -36,6 +37,21 @@ export class GitUtils {
       return "";
     } catch {
       return "";
+    }
+  }
+
+  async getTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {
+    const key = `${owner}/${repo}@${ref}`;
+    if (!this.treePaths.has(key)) this.treePaths.set(key, this.fetchTreePaths(owner, repo, ref));
+    return this.treePaths.get(key) as Promise<string[]>;
+  }
+
+  private async fetchTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {
+    try {
+      const { data } = await this.octokit.rest.git.getTree({owner, repo, tree_sha: ref, recursive: "true"});
+      return data.tree.filter((item) => item.type === "blob" && item.path).map((item) => item.path as string);
+    } catch {
+      return [];
     }
   }
 }

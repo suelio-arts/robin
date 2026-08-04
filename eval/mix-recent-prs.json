@@ -4,7 +4,7 @@
     "match": "Same PR, file, and root cause; generic advice does not count.",
     "acceptance": "No high false positives; precision >= CodeRabbit; recall within 5 points of CodeRabbit. Surpasses only when recall and precision are both no worse and one is higher."
   },
-  "cases": [
+  "developmentCases": [
     {
       "pr": 265,
       "base": "0fee7f042f59626762e8f417fd678e58549112ef",
@@ -51,14 +51,75 @@
       "labels": [
         {"file": "studio/ops/appstore/release.py", "rootCause": "partial localization creation cannot be resumed safely"}
       ]
-    }
+    },
+    {"pr":253,"base":"7c18c229ff9e99ab547af6905554f6ada95d20f1","head":"7a01c604b869130a8668ed877aa8c07b05e41877","labels":[
+      {"file":"ios/AR/Shared/EightHundredRemoteContent.swift","rootCause":"streaming download has no wall-clock deadline so slow endless bytes prevent fallback","source":"Greptile"},
+      {"file":"ios/AR/Shared/UI/EightHundred/EightHundredScene.swift","rootCause":"remote USDZ complexity is unbounded beyond archive and entity counts","source":"Greptile"}
+    ]},
+    {"pr":262,"base":"20703acae2ce0e6cbf6ab3a7ffaa8add7a240757","head":"d690ffa5e9528bbf6b05e5dc5a743156ca8d573c","labels":[
+      {"file":"backend/functions/src/endpoints/walk-links.ts","rootCause":"first-stop fallback incorrectly treats node array order as display order","source":"Greptile"}
+    ]},
+    {"pr":268,"base":"1a9c601fcfc52dce83a7397f6e3c612161b22f0c","head":"cc20c46e15a5538ef5ee636e25f22a88c90c12cc","labels":[
+      {"file":"backend/functions/src/endpoints/walk-links.ts","rootCause":"rail remains open when viewport crosses from desktop to compact","source":"Greptile"}
+    ]},
+    {"pr":272,"base":"fb19bb00992b54529c30ceb3b8ddadab1768238f","head":"8a9bb28ab7b53f7b7435fefa6ac7765ae6af97f1","labels":[
+      {"file":"docs/subsystems/verification-matrix.md","rootCause":"manual Main Daily checklist does not require reviews on the final PR head","source":"CodeRabbit"},
+      {"file":"docs/subsystems/xcode-cloud-trigger.md","rootCause":"rejected review findings may remain unresolved despite branch conversation resolution","source":"CodeRabbit"},
+      {"file":"docs/subsystems/xcode-cloud-trigger.md","rootCause":"blanket backend-only exclusion contradicts user-visible iOS-effect trigger rule","source":"CodeRabbit"}
+    ]},
+    {"pr":276,"base":"b6de35986b85e89fd0911dc153580883102d9196","head":"1e8f1a8b190a7daf28b768525af670dd20131741","labels":[
+      {"file":"backend/functions/src/endpoints/attribution.ts","rootCause":"existing-install binding returns before Mixpanel install_attributed emission","source":"CodeRabbit"},
+      {"file":"backend/functions/src/endpoints/engagement-stats.ts","rootCause":"synthetic-install exclusion is unwindowed while adjacent funnel metrics are windowed","source":"CodeRabbit"},
+      {"file":"backend/functions/src/endpoints/engagement-stats.ts","rootCause":"install and account cohorts cannot join because install rows lack geography","source":"CodeRabbit"},
+      {"file":"backend/functions/src/utils/mixpanel.ts","rootCause":"telemetry transport failure propagates after business writes and fails the request","source":"CodeRabbit"},
+      {"file":"ios/AR/MIX iOS/ARApp.swift","rootCause":"fresh-install attribution network delivery blocks Remote Config and onboarding bootstrap","source":"CodeRabbit"},
+      {"file":"ios/AR/MIX iOS/Model/Analytics.swift","rootCause":"milestone dedupe no-op does not prevent duplicate directional analytics emission","source":"CodeRabbit"},
+      {"file":"ios/AR/MIX iOS/Model/Analytics.swift","rootCause":"malformed persisted milestone can crash at parts zero","source":"CodeRabbit"},
+      {"file":"ios/AR/Shared/Services/SpatialStoriesAPIService.swift","rootCause":"undecodable persisted attribution state hard-crashes every launch","source":"CodeRabbit"},
+      {"file":"ios/AR/Shared/UserDefaultsKeys.swift","rootCause":"session-scoped milestone set grows forever and is fully serialized per event","source":"CodeRabbit"},
+      {"file":"studio/ops/analytics/reconcile.mjs","rootCause":"Unix-second timestamps are compared directly with millisecond Date.now","source":"CodeRabbit"}
+    ]},
+    {"pr":283,"base":"4a6789068ee7d7cf05a46b871a5ef87197ad15d2","head":"1ef00b331c991fffc4d3078df414036becd78eb2","labels":[
+      {"file":"ios/AR/ci_scripts/check_attribution_privacy.sh","rootCause":"privacy gate greps tokens instead of executing ATT-state behavior","source":"CodeRabbit"},
+      {"file":"ios/AR/ci_scripts/check_privacy_manifest.sh","rootCause":"privacy checks allow extra domains and the wrong tracked data type","source":"CodeRabbit"},
+      {"file":"ios/AR/ci_scripts/check_privacy_manifest.sh","rootCause":"policy gate accepts any IDFA token including denial text","source":"CodeRabbit"},
+      {"file":"ios/AR/MIX iOS/ARApp.swift","rootCause":"ATT controls are not synchronized initially and on every active scene","source":"CodeRabbit"},
+      {"file":"ios/AR/Shared/InfoPlist.xcstrings","rootCause":"Chinese ATT strings do not clearly explain permission to measure completed walks","source":"CodeRabbit"}
+    ]},
+    {"pr":286,"base":"4b8afa6d2fdc9918a742a81b7b1a620a1d597e54","head":"dca02e4a08895d92e5c4794266d50e7ec841ea04","labels":[
+      {"file":"studio/web/js/engagement-analytics.js","rootCause":"incomplete dashboard guard and fallbacks convert missing data to real-looking zeros","source":"CodeRabbit"},
+      {"file":"studio/web/js/engagement-analytics.js","rootCause":"operator exclusion text pluralizes singular session and install incorrectly","source":"CodeRabbit"},
+      {"file":"studio/web/dashboard.html","rootCause":"channel and market second column is labeled Account instead of Installs","source":"CodeRabbit"},
+      {"file":"studio/web/dashboard.html","rootCause":"new button omits required type button","source":"CodeRabbit"}
+    ]},
+    {"pr":295,"base":"3728824f2b67592dc702d5895fbc3cc0c7e16da3","head":"d8dc79579c61b305b4b39e3289018d61dcc4b45e","rejected":"CodeRabbit requested registry schemas while the registry explicitly marked them optional during migration and sibling callables omitted them","labels":[
+      {"file":"backend/functions/src/endpoints/story-walks.ts","rootCause":"materialization resolves generated walks first but stamps authored walks first for colliding IDs","source":"Luna"},
+      {"file":"backend/functions/src/services/walk-node-clip.ts","rootCause":"materialization speaks an internal length-constraint instruction appended to dynamic prompts","source":"Luna"}
+    ]},
+    {"pr":297,"base":"16f23aaa554af3034bf11c44c1344228f9f95b9a","head":"2f06620d884b06f735482f21e55ec7207308bf64","labels":[
+      {"file":"studio/ops/ads/cli.py","rootCause":"activation mutates without validating live ownership hierarchy paused state and spend","source":"CodeRabbit"},
+      {"file":"studio/web/google-ads-api.html","rootCause":"published operating-control claims exceed the implementation","source":"CodeRabbit"}
+    ]},
+    {"pr":299,"base":"548409639d8b97fa02676d0af399c230d1c93681","head":"6b7b795c28af3833c1a27b1b7b6ee28223bcdf97","labels":[
+      {"file":"studio/ops/ads/x_ads.py","rootCause":"account listing discards next_cursor and omits accounts after the first page","source":"CodeRabbit"}
+    ]}
   ],
   "negativeControls": [
+    {"pr":281,"base":"519529ee455cc557b804cb58e44d46d5c32a95ec","head":"0673e370a9b5d13f98203e79c54551062b9a39e6","labels":[],"rejected":"CodeRabbit confused macOS lockf(1) with lockf(3); the installed utility supports descriptor mode and -s means silent"},
     {"pr": 254, "base": "23abe489578e18eb6287fe1df995e87ee52e18fa", "head": "3a77304197f92c6620e0eb3f9527f44b3c39683c", "labels": []},
     {"pr": 255, "base": "22b9a01915a8c85caf18bf86d033024deca33906", "head": "9e526ef3c5110ca4e9a419d61d4110baf0574a07", "labels": []},
     {"pr": 260, "base": "87c08a4266d55536dcd09cdadcc51bd7ebd532e6", "head": "4c6230b0b26d8691197cd87507c21fdf574df2c6", "labels": []},
     {"pr": 261, "base": "df59821248ea27683575a700d811723da7aea270", "head": "93b815a1068f65c96140f4fd63b68ba8f41afae9", "labels": []},
     {"pr": 269, "base": "968fb553c6c478c035e33c319ff2a0fb515ff32d", "head": "bfb8404aea4cc3edb428818d144963e6d299df1f", "labels": []},
-    {"pr": 271, "base": "52305556f3e379106893ca6332177bc63c45a483", "head": "390e2bb06e44913456f58d09aa7191c282671a16", "labels": []}
+    {"pr": 271, "base": "52305556f3e379106893ca6332177bc63c45a483", "head": "390e2bb06e44913456f58d09aa7191c282671a16", "labels": []},
+    {"pr":259,"base":"a1f8c07b178bdd158d782bbe262dfc6621b4e9aa","head":"2a6b5685b6a847164065acc5bdfb2b15f5e83099","labels":[],"rejected":"Greptile branding round-trip claim was invalid and withdrawn"},
+    {"pr":263,"base":"20703acae2ce0e6cbf6ab3a7ffaa8add7a240757","head":"4232cf25827aafd40a9d98b029e81e23dfb14101","labels":[],"rejected":"Greptile release-hash claim was already fixed at this SHA"},
+    {"pr":264,"base":"7844c3fb31950c11430f5c9e5c9322bf5d9b4e68","head":"61a79002bb16d8243a1c8f81c4e0dedd66b91779","labels":[],"rejected":"Greptile immutable-cache claim was already fixed at this SHA"},
+    {"pr":266,"base":"559d358245ef2157e01076c0745dcb58ab035562","head":"eedc2a8825954e2410abb401a551fc0f955fa069","labels":[],"rejected":"Greptile target-update claim was already fixed at this SHA"},
+    {"pr":272,"base":"fb19bb00992b54529c30ceb3b8ddadab1768238f","head":"d99fb5eec8405b57fa7051b9d3e96a4caf390165","labels":[],"rejected":"Greptile documentation-conflict claims were stale at this SHA"},
+    {"pr":283,"base":"4a6789068ee7d7cf05a46b871a5ef87197ad15d2","head":"f5ac6173639d788131eed7681fcc17cd6b8d8074","labels":[],"rejected":"CodeRabbit Package.resolved claim was invalid and withdrawn"},
+    {"pr":286,"base":"4b8afa6d2fdc9918a742a81b7b1a620a1d597e54","head":"830bdd370ef88d3ddc12ad51deca7fcd1ed3c765","labels":[],"rejected":"CodeRabbit DAU guard claim was stale at this SHA"},
+    {"pr":297,"base":"16f23aaa554af3034bf11c44c1344228f9f95b9a","head":"345cf9ae27ff96ad6703499eb4e4ea5e5152da24","labels":[],"rejected":"CodeRabbit live-preflight path and render claims were stale or withdrawn"},
+    {"pr":299,"base":"548409639d8b97fa02676d0af399c230d1c93681","head":"964318fed1e6d075238e802ac08ac3d030f3ad85","labels":[],"rejected":"CodeRabbit OAuth sorting claim was stale at this SHA"}
   ]
 }

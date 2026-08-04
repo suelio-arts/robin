@@ -1,11 +1,44 @@
-import { focusedContext } from "./review-context";
+import { buildFileContext, publicContractSubjects } from "./review-context";
 
-describe("focusedContext", () => {
-  it("keeps nearby contract evidence and drops unrelated bulk", () => {
-    const context = ["a", "b", "c", "d", "setRuntime(failed, message)", "e", "f", "g", "h", "unrelated"].join("\n");
-    const focused = focusedContext(context);
+describe("buildFileContext", () => {
+  it("adds identifier neighborhoods from direct relative imports at the PR head", async () => {
+    const files: Record<string, string> = {
+      "head:src/route.ts": 'import { Walk } from "./types";\nconst first = walk.orderedElementIds?.[0] ?? walk.nodes[0].elementId;',
+      "base:src/route.ts": "",
+      "head:src/types.ts": ["unrelated", "elementId?: string; // semantic linkage, NOT display order", "orderedElementIds?: string[]"].join("\n"),
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+    };
+    const context = await buildFileContext(git as never, "o", "r", [
+      "diff --git a/src/route.ts b/src/route.ts",
+      "+++ b/src/route.ts",
+      "+const first = walk.orderedElementIds?.[0] ?? walk.nodes[0].elementId;",
+    ].join("\n"), "base", "head");
+    expect(context).toContain("HEAD RELATED FILE: src/types.ts");
+    expect(context).toContain("NOT display order");
+  });
 
-    expect(focused).toContain("setRuntime");
-    expect(focused).not.toContain("unrelated");
+  it("adds exact-head convention files without relying on default-branch search", async () => {
+    const files: Record<string, string> = {
+      "head:backend/endpoints/new.ts": "export const createThing = callable(() => true);",
+      "head:backend/function-registry.ts": 'register({ name: "createThing", requestSchema: "CreateThingRequestSchema" });',
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => ["backend/function-registry.ts"],
+    };
+    const context = await buildFileContext(git as never, "o", "r", [
+      "diff --git a/backend/endpoints/new.ts b/backend/endpoints/new.ts",
+      "+++ b/backend/endpoints/new.ts",
+      "+export const createThing = callable(() => true);",
+    ].join("\n"), "base", "head");
+    expect(context).toContain("HEAD CONVENTION FILE: backend/function-registry.ts");
+  });
+
+  it("extracts only literal public hosts and system commands for web lookup", () => {
+    expect(publicContractSubjects('+API_BASE = "https://ads-api.x.com/12"\n+/usr/bin/lockf -s 9\n+privateThing()'))
+      .toEqual(["ads-api.x.com", "system command lockf"]);
   });
 });

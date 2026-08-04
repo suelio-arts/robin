@@ -1,7 +1,6 @@
 import { splitDiffIntoFiles } from "./diff-filter";
 import { GitUtils } from "./git-utils";
 import { posix } from "path";
-import { isIP } from "net";
 
 const CONTEXT_LIMIT = 50000;
 const FILE_LIMIT = 20000;
@@ -66,7 +65,7 @@ export async function buildFileContext(
   if (remaining > 0) {
     const paths = await git.getTreePaths(owner, repo, head);
     const conventions = paths
-      .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest)(?:[-_./]|$)/i.test(path))
+      .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
     for (const path of conventions.slice(0, 12)) {
       const key = `${head}:${path}`;
@@ -74,7 +73,8 @@ export async function buildFileContext(
       fetched.add(key);
       const content = await git.getFileContent(owner, repo, path, head);
       if (!content) continue;
-      const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
+      const limit = Math.min(RELATED_LIMIT, remaining);
+      const focused = matchingNeighborhoods(content, terms, limit) || excerpt(content, limit);
       if (!focused) continue;
       sections.push(`HEAD CONVENTION FILE: ${path}\n${focused}`);
       remaining -= focused.length;
@@ -102,51 +102,6 @@ export async function buildFileContext(
 
 
   return sections.join("\n\n");
-}
-
-export function publicContractSubjects(diff: string): string[] {
-  const subjects = new Set<string>();
-  for (const match of diff.matchAll(/https:\/\/[^\s"'<>]+/g)) {
-    try {
-      const url = new URL(match[0]);
-      if (!url.username && !url.password && isPublicHostname(url.hostname)) subjects.add(url.hostname);
-    } catch {
-      // Ignore malformed literals.
-    }
-  }
-  for (const match of diff.matchAll(/\/usr\/bin\/([A-Za-z0-9._+-]+)/g)) subjects.add(`system command ${match[1]}`);
-  return [...subjects].slice(0, 12);
-}
-
-function isPublicHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
-  if (isIP(host) === 4) return isPublicIPv4(host);
-  if (isIP(host) === 6) {
-    const embedded = embeddedIPv4(host);
-    if (embedded) return isPublicIPv4(embedded);
-    return host !== "::" && host !== "::1" && !host.startsWith("fc") && !host.startsWith("fd")
-      && !/^fe[89abcf]/.test(host) && !host.startsWith("ff") && !host.startsWith("2001:db8:");
-  }
-  return host !== "localhost" && host.includes(".") && !/\.(?:internal|local|localhost|test|example|invalid)$/.test(host);
-}
-
-function isPublicIPv4(host: string): boolean {
-  const [a, b] = host.split(".").map(Number);
-  return !(a === 0 || a === 10 || a === 127 || a >= 224
-    || (a === 100 && b >= 64 && b <= 127)
-    || (a === 169 && b === 254)
-    || (a === 172 && b >= 16 && b <= 31)
-    || (a === 192 && [0, 2, 168].includes(b))
-    || (a === 198 && [18, 19, 51].includes(b))
-    || (a === 203 && b === 0));
-}
-
-function embeddedIPv4(host: string): string | undefined {
-  const match = host.match(/^::(?:(?:ffff:)?0:|ffff:)?([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
-  if (!match) return undefined;
-  const high = Number.parseInt(match[1], 16);
-  const low = Number.parseInt(match[2], 16);
-  return `${high >> 8}.${high & 255}.${low >> 8}.${low & 255}`;
 }
 
 function pathAffinity(path: string, changedPaths: string[]): number {

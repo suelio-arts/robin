@@ -79,63 +79,6 @@ export class LLMClient {
     }
   }
 
-  supportsWebSearch(): boolean {
-    return /^https:\/\/api\.openai\.com\/v1$/i.test(this.baseUrl) && Boolean(this.apiKey);
-  }
-
-  async webSearchCompletion(systemPrompt: string, userContent: string): Promise<ChatCompletionResult> {
-    if (!this.supportsWebSearch()) throw new Error("Web search requires the OpenAI Responses API");
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= this.maxAttempts; attempt += 1) {
-      try {
-        const response = await fetch(`${this.baseUrl}/responses`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${this.apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: this.model,
-            tools: [{ type: "web_search", search_context_size: "low" }],
-            max_output_tokens: this.maxOutputTokens,
-            input: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userContent },
-            ],
-          }),
-          signal: AbortSignal.timeout(this.timeoutMs),
-        });
-        if (!response.ok) {
-          const error = new Error(`OpenAI Responses API failed (${response.status}): ${await response.text()}`) as Error & {status: number};
-          error.status = response.status;
-          throw error;
-        }
-        const payload = await response.json() as {
-          model?: string;
-          status?: string;
-          incomplete_details?: { reason?: string };
-          output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
-        };
-        if (payload.status === "incomplete" && payload.incomplete_details?.reason === "max_output_tokens") {
-          throw new Error("OpenAI Responses API incomplete: max_output_tokens");
-        }
-        const content = (payload.output || [])
-          .filter((item) => item.type === "message")
-          .flatMap((item) => item.content || [])
-          .filter((item) => item.type === "output_text")
-          .map((item) => item.text || "")
-          .join("");
-        if (content) return { content, model: payload.model || this.model };
-        throw new Error("Empty response from LLM web search");
-      } catch (error) {
-        lastError = error;
-        if (!isRetriableLlmError(error, this.retryContext()) || attempt === this.maxAttempts) throw error;
-        await delayMs(computeRetryDelayMs(attempt, this.retryContext()));
-      }
-    }
-    throw lastError;
-  }
-
   private retryContext() {
     return { model: this.model };
   }

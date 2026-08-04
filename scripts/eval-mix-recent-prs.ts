@@ -186,7 +186,11 @@ async function main() {
     writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
   }
   if (evalSet === "holdout") {
-    for (const testCase of manifest.holdoutNegativeControls) {
+    for (const testCase of manifest.holdoutNegativeControls.filter(
+      (candidate) =>
+        (selectedPrs.size === 0 || selectedPrs.has(candidate.pr))
+        && (selectedHeads.size === 0 || selectedHeads.has(candidate.head))
+    )) {
       for (const candidate of testCase.rejectedCandidates) {
         const diff = execFileSync(
           "git",

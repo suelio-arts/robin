@@ -1,53 +1,61 @@
 name: CodeRabbit Approval
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, synchronize, ready_for_review]
-  workflow_dispatch:
-    inputs:
-      pr:
-        description: Pull request number
-        required: true
-        type: number
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: coderabbit-approval-${{ github.event.pull_request.number || inputs.pr }}
+  group: coderabbit-approval-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   approval:
     runs-on: ubuntu-latest
-    timeout-minutes: 16
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
-      PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
       REPOSITORY: ${{ github.repository }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Require current-head CodeRabbit approval
         shell: bash
         run: |
           set -euo pipefail
-          for _ in {1..60}; do
-            head_sha="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)"
-            reviews="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")"
-            if jq -e --arg head "$head_sha" '
+
+          reviews_for_pr() {
+            local reviews
+            for delay in 1 2 3; do
+              if reviews="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")"; then
+                printf '%s' "$reviews"
+                return 0
+              fi
+              sleep "$delay"
+            done
+            return 1
+          }
+
+          for attempt in {1..60}; do
+            if ! reviews="$(reviews_for_pr)"; then
+              echo "Could not read pull-request reviews after 3 attempts" >&2
+              exit 1
+            fi
+            if jq -e --arg head "$HEAD_SHA" '
               any(.[][]; .user.login == "coderabbitai[bot]"
                 and .commit_id == $head
                 and .state == "APPROVED")
             ' <<<"$reviews" >/dev/null; then
-              echo "CodeRabbit approved $head_sha"
+              echo "CodeRabbit approved $HEAD_SHA"
               exit 0
             fi
-            sleep 15
+            (( attempt == 60 )) || sleep 15
           done
-          head_sha="$(gh api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)"
-          reviews="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")"
-          echo "CodeRabbit did not approve current head $head_sha" >&2
-          jq -r --arg head "$head_sha" '
+          echo "CodeRabbit did not approve current head $HEAD_SHA" >&2
+          jq -r --arg head "$HEAD_SHA" '
             .[][] | select(.user.login == "coderabbitai[bot]" and .commit_id == $head)
             | "state=\(.state) submitted_at=\(.submitted_at)"
           ' <<<"$reviews" >&2

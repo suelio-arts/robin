@@ -1,8 +1,10 @@
 import { splitDiffIntoFiles } from "./diff-filter";
 import { GitUtils } from "./git-utils";
+import { posix } from "path";
 
 const CONTEXT_LIMIT = 50000;
 const FILE_LIMIT = 20000;
+const RELATED_LIMIT = 12000;
 
 function excerpt(content: string, limit: number): string {
   if (content.length <= limit) return content;
@@ -19,6 +21,9 @@ export async function buildFileContext(
 ): Promise<string> {
   let remaining = CONTEXT_LIMIT;
   const sections: string[] = [];
+  const fetched = new Set<string>();
+  const terms = changedIdentifiers(chunk);
+  const changedPaths = splitDiffIntoFiles(chunk).map((file) => file.path);
 
   for (const file of splitDiffIntoFiles(chunk)) {
     const prior = file.path.replace(/-v(\d+)(?=\.[^.]+$)/, (_, value) => `-v${Number(value) - 1}`);
@@ -32,30 +37,137 @@ export async function buildFileContext(
       if (remaining <= 0) return sections.join("\n\n");
       const content = await git.getFileContent(owner, repo, path, ref);
       if (!content) continue;
+      fetched.add(`${ref}:${path}`);
       const value = excerpt(content, Math.min(FILE_LIMIT, remaining));
       sections.push(`${label} FILE: ${path}\n${value}`);
       remaining -= value.length;
+
+      if (label === "HEAD" && remaining > 0) {
+        for (const relatedPath of relativeImports(content, path)) {
+          const related = await resolveRelatedFile(git, owner, repo, relatedPath, head, fetched);
+          if (!related) continue;
+          const focused = matchingNeighborhoods(related.content, terms, Math.min(RELATED_LIMIT, remaining));
+          if (!focused) continue;
+          sections.push(`HEAD RELATED FILE: ${related.path}\n${focused}`);
+          remaining -= focused.length;
+          if (remaining <= 0) break;
+        }
+      }
     }
   }
+
+  if (remaining > 0) {
+    const paths = await git.getTreePaths(owner, repo, head);
+    const conventions = paths
+      .filter((path) => /(?:^|[-_.\/])(registry|schema|schemas|contract|contracts|manifest)(?:[-_.\/]|$)/i.test(path))
+      .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+    for (const path of conventions.slice(0, 12)) {
+      const key = `${head}:${path}`;
+      if (fetched.has(key)) continue;
+      fetched.add(key);
+      const content = await git.getFileContent(owner, repo, path, head);
+      if (!content) continue;
+      const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
+      if (!focused) continue;
+      sections.push(`HEAD CONVENTION FILE: ${path}\n${focused}`);
+      remaining -= focused.length;
+      if (remaining <= 0) break;
+    }
+  }
+
 
   return sections.join("\n\n");
 }
 
-export function focusedContext(context: string): string {
-  const lines = context.split("\n");
-  const selected = new Set<number>();
-  const pattern = /setRuntime|errorLabel|split\(|parts\[0\]|UserDefaults|qualifiedAt|make_client|assert-autopilot|localization|create_version|pending|mirrored/i;
+export function publicContractSubjects(diff: string): string[] {
+  const subjects = new Set<string>();
+  for (const match of diff.matchAll(/https:\/\/([A-Za-z0-9.-]+)(?:[/:"'\s]|$)/g)) subjects.add(match[1]);
+  for (const match of diff.matchAll(/\/usr\/bin\/([A-Za-z0-9._+-]+)/g)) subjects.add(`system command ${match[1]}`);
+  return [...subjects].slice(0, 12);
+}
 
-  lines.forEach((line, index) => {
-    if (!pattern.test(line)) return;
-    for (let nearby = Math.max(0, index - 4); nearby <= Math.min(lines.length - 1, index + 4); nearby += 1) {
+function pathAffinity(path: string, changedPaths: string[]): number {
+  return Math.max(0, ...changedPaths.map((changed) => {
+    const left = path.split("/");
+    const right = changed.split("/");
+    let shared = 0;
+    while (left[shared] && left[shared] === right[shared]) shared += 1;
+    return shared;
+  }));
+}
+
+function changedIdentifiers(diff: string): string[] {
+  const counts = new Map<string, number>();
+  for (const line of diff.split("\n")) {
+    if (!line.startsWith("+") || line.startsWith("+++")) continue;
+    for (const term of line.match(/[A-Za-z_$][A-Za-z0-9_$]{4,}/g) || []) {
+      if (/^(const|return|function|async|await|false|true|undefined|interface|import|from)$/.test(term)) continue;
+      counts.set(term, (counts.get(term) || 0) + 1);
+    }
+  }
+  const ordered = [...counts.entries()]
+    .sort((left, right) => right[0].length - left[0].length || right[1] - left[1])
+    .map(([term]) => term);
+  const expanded = new Set<string>();
+  for (const term of ordered) {
+    expanded.add(term);
+    const boundaries = [...term.matchAll(/[A-Z]/g)].map((match) => match.index || 0).filter((index) => index > 0);
+    for (const index of boundaries) {
+      const suffix = term.slice(index);
+      if (suffix.length >= 7) expanded.add(suffix[0].toLowerCase() + suffix.slice(1));
+    }
+  }
+  return [...expanded].slice(0, 50);
+}
+
+function relativeImports(content: string, sourcePath: string): string[] {
+  const paths = new Set<string>();
+  const pattern = /(?:from\s+|require\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g;
+  for (const match of content.matchAll(pattern)) {
+    paths.add(posix.normalize(posix.join(posix.dirname(sourcePath), match[1])));
+  }
+  return [...paths].slice(0, 12);
+}
+
+async function resolveRelatedFile(
+  git: GitUtils,
+  owner: string,
+  repo: string,
+  importPath: string,
+  head: string,
+  fetched: Set<string>
+): Promise<{ path: string; content: string } | undefined> {
+  const candidates = posix.extname(importPath)
+    ? [importPath]
+    : [importPath + ".ts", importPath + ".tsx", importPath + ".js", importPath + ".mjs", posix.join(importPath, "index.ts")];
+  for (const path of candidates) {
+    const key = `${head}:${path}`;
+    if (fetched.has(key)) continue;
+    fetched.add(key);
+    const content = await git.getFileContent(owner, repo, path, head);
+    if (content) return { path, content };
+  }
+  return undefined;
+}
+
+function matchingNeighborhoods(content: string, terms: string[], limit: number): string {
+  if (terms.length === 0) return "";
+  const lines = content.split("\n");
+  const selected = new Set<number>();
+  const matches = lines
+    .map((line, index) => ({
+      index,
+      score: Math.max(0, ...terms.map((term, termIndex) => line.includes(term) ? terms.length - termIndex : 0)),
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  for (const { index } of matches) {
+    for (let nearby = Math.max(0, index - 3); nearby <= Math.min(lines.length - 1, index + 3); nearby += 1) {
       selected.add(nearby);
     }
-  });
-
+  }
   return [...selected]
-    .sort((left, right) => left - right)
-    .map((index) => lines[index])
+    .map((index) => `${index + 1}: ${lines[index]}`)
     .join("\n")
-    .slice(0, FILE_LIMIT);
+    .slice(0, limit);
 }

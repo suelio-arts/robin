@@ -102,6 +102,29 @@
     ]},
     {"pr":299,"base":"548409639d8b97fa02676d0af399c230d1c93681","head":"6b7b795c28af3833c1a27b1b7b6ee28223bcdf97","labels":[
       {"file":"studio/ops/ads/x_ads.py","rootCause":"account listing discards next_cursor and omits accounts after the first page","source":"CodeRabbit"}
+    ]},
+    {"pr":236,"base":"ca9e0960fbf8de27c339dc3945448e2a60136cf7","head":"f816b46677bbe5d013c8e91567d2fdaf56181a5c","labels":[
+      {"file":"web/qr/800/verify.mjs","rootCause":"camera-pipeline ordering check scans the normalized whole source instead of the addCameraPipelineModules registration, so unrelated text can satisfy it","source":"CodeRabbit"},
+      {"file":"web/qr/800/experience-v1.mjs","rootCause":"FullWindowCanvas reparents the AR canvas to body while visibility CSS requires it to remain under the mode-ar container","source":"Luna"}
+    ]},
+    {"pr":239,"base":"086172c729f31377de3f5d93bc1c27bbc74c1d6a","head":"a80196c0b96b89493a9b4893c8e86cf47a6730f4","labels":[
+      {"file":"web/qr/800/verify.mjs","rootCause":"entry-module gate accepts any experience version when index and disk agree, so jointly reverting both to an older version passes","source":"CodeRabbit"},
+      {"file":"web/firebase.json","rootCause":"immutable-cache glob covers only v1 and v2 while index loads experience-v3","source":"Luna"}
+    ]},
+    {"pr":240,"base":"0d3035e3c073b63e6c4d6f7abc6d6556658baadc","head":"18479bc61299904aab1b64d454b116fa975ed938","labels":[
+      {"file":"e2e/mixsim.mjs","rootCause":"membership verification silently substitutes English StoreKit metadata for supported non-English locales","source":"CodeRabbit"},
+      {"file":"studio/ops/release/xcode-cloud.py","rootCause":"crash-alert path calls requests.post after requests became a function-local import","source":"Luna"}
+    ]},
+    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","labels":[
+      {"file":"studio/ops/ads/reddit_ads.py","rootCause":"non-object JSON error responses raise AttributeError before the intended HTTP or provider error","source":"CodeRabbit"}
+    ]},
+    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"f363c4adf1970f1fc0c144e233b0f00b62d58b8d","labels":[
+      {"file":"e2e/nightly.sh","rootCause":"retention prune failure aborts every nightly E2E lane and suppresses the primary test signal","source":"CodeRabbit"},
+      {"file":"workbench/server/run_retention.py","rootCause":"a missing runs root produces a plan without cutoff that apply_retention rejects instead of treating as a no-op","source":"CodeRabbit"},
+      {"file":"workbench/server/run_retention.py","rootCause":"quarantined runs have no crash or deletion-failure recovery path","source":"Luna"}
+    ]},
+    {"pr":245,"base":"5e66bc0d7305bfcb0971319a7157cf69593f3b13","head":"1157e033480ea3235c78512ee832e15e69080d0c","labels":[
+      {"file":"web/qr/800/experience-v5.mjs","rootCause":"directional and hemisphere lights are parented to the rotating bulb group, so illumination follows the model instead of remaining world-space","source":"CodeRabbit"}
     ]}
   ],
   "negativeControls": [
@@ -123,40 +146,35 @@
     {"pr":299,"base":"548409639d8b97fa02676d0af399c230d1c93681","head":"964318fed1e6d075238e802ac08ac3d030f3ad85","labels":[],"rejected":"CodeRabbit OAuth sorting claim was stale at this SHA"}
   ],
   "holdoutCases": [
-    {"pr":236,"base":"ca9e0960fbf8de27c339dc3945448e2a60136cf7","head":"f816b46677bbe5d013c8e91567d2fdaf56181a5c","labels":[
-      {"file":"web/qr/800/verify.mjs","rootCause":"camera-pipeline ordering check scans the normalized whole source instead of the addCameraPipelineModules registration, so unrelated text can satisfy it","source":"CodeRabbit"}
+    {"pr":95,"base":"0d98e743a18bbfcfa83873438cd1de1075a77c81","head":"ed65d0a4a2b41b16e0652dfa284d3600defa8954","labels":[
+      {"file":"AR/MIX iOS/Model/NarrativeService.swift","rootCause":"setupRemoteCommands runs for every playback and accumulates duplicate MPRemoteCommandCenter targets","source":"CodeRabbit"},
+      {"file":"AR/MIX iOS/Views/OnboardingView.swift","rootCause":"notification permission failure is discarded by an unhandled throwing Task with no user feedback","source":"CodeRabbit"}
     ]},
-    {"pr":239,"base":"086172c729f31377de3f5d93bc1c27bbc74c1d6a","head":"a80196c0b96b89493a9b4893c8e86cf47a6730f4","labels":[
-      {"file":"web/qr/800/verify.mjs","rootCause":"entry-module gate accepts any experience version when index and disk agree, so jointly reverting both to an older version passes","source":"CodeRabbit"}
+    {"pr":99,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"0dd8956495161691383687a7f6563b027c3b9b4e","labels":[
+      {"file":"AR/MIX iOS/Views/MIXView.swift","rootCause":"an opacity-hidden overlay remains hit-testable and blocks interaction","source":"CodeRabbit"},
+      {"file":"AR/MIX iOS/Views/RealityViewModel.swift","rootCause":"self retains a Task whose closure retains self, so deinit cancellation cannot break the cycle","source":"CodeRabbit"},
+      {"file":"AR/MIX iOS/Views/NearbyElementsListView.swift","rootCause":"the search field Binding getter always returns an empty string, so typed text cannot remain visible","source":"CodeRabbit"},
+      {"file":"AR/MIX iOS/Views/OnboardingView.swift","rootCause":"the camera permission screen reuses location accessibility identifiers","source":"CodeRabbit"},
+      {"file":"AR/MIX iOS/Views/LayerPermissionBlockerView.swift","rootCause":"a fixed delay unconditionally calls onPermissionsGranted without checking permission state","source":"CodeRabbit"}
     ]},
-    {"pr":240,"base":"0d3035e3c073b63e6c4d6f7abc6d6556658baadc","head":"18479bc61299904aab1b64d454b116fa975ed938","labels":[
-      {"file":"e2e/mixsim.mjs","rootCause":"membership verification silently substitutes English StoreKit metadata for supported non-English locales","source":"CodeRabbit"}
+    {"pr":99,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"20f377050a49df50918c8681187bb7823141fe15","labels":[
+      {"file":"AR/MIX iOS/Tests/HistorianPlayerIntegrationTests.swift","rootCause":"tautological assertions always pass regardless of the behavior under test","source":"CodeRabbit"},
+      {"file":"AR/Tests iOS/AudioTourUITests.swift","rootCause":"UI assertions are weakened with or-true expressions and can never fail","source":"CodeRabbit"}
     ]},
-    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","labels":[
-      {"file":"studio/ops/ads/reddit_ads.py","rootCause":"non-object JSON error responses raise AttributeError before the intended HTTP or provider error","source":"CodeRabbit"}
-    ]},
-    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"f363c4adf1970f1fc0c144e233b0f00b62d58b8d","labels":[
-      {"file":"e2e/nightly.sh","rootCause":"retention prune failure aborts every nightly E2E lane and suppresses the primary test signal","source":"CodeRabbit"},
-      {"file":"workbench/server/run_retention.py","rootCause":"a missing runs root produces a plan without cutoff that apply_retention rejects instead of treating as a no-op","source":"CodeRabbit"}
-    ]},
-    {"pr":245,"base":"5e66bc0d7305bfcb0971319a7157cf69593f3b13","head":"1157e033480ea3235c78512ee832e15e69080d0c","labels":[
-      {"file":"web/qr/800/experience-v5.mjs","rootCause":"directional and hemisphere lights are parented to the rotating bulb group, so illumination follows the model instead of remaining world-space","source":"CodeRabbit"}
+    {"pr":99,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"495855de0c713b2cd09a700fc2ed5d1941ffd839","labels":[
+      {"file":"AR/MIX iOS/Views/SpatialStoriesExperienceView.swift","rootCause":"TabView selection uses a constant binding, so user selection cannot persist","source":"CodeRabbit"}
     ]}
   ],
   "holdoutNegativeControls": [
-    {"pr":235,"base":"8af51b083ee0048ef08f3082c4840b48513fc658","head":"0c4d35ccec4e0ff50e530cf47fc6e0e397cd94aa","rejectedCandidates":[
-      {"file":"web/qr/800/experience-v1.mjs","rootCause":"layout and target fetches lack timeouts and camera failures are unhandled","reason":"stale: both fetches use AbortSignal.timeout and camera callbacks enter preview fallback"},
-      {"file":"web/qr/800/styles-v1.css","rootCause":"a short landscape viewport makes Enter AR unreachable because the intro cannot scroll","reason":"stale: intro is capped at 100svh with overflow-y auto and safe centering"}
+    {"pr":91,"base":"3789e69d424655f2ac26b9c34ff10e605b582bb2","head":"ccdc0046cbb711560e3bbbe6d06aca1bdee370f0","rejectedCandidates":[
+      {"file":"AR/MIX iOS/Views/Map/MKMapViewRepresentable.swift","rootCause":"annotation synchronization removes the user location and keys annotations only by title","reason":"false: synchronization filters the user location and keys annotations with latitude, longitude, and title"},
+      {"file":"AR/MIX iOS/Views/Map/LayerMapView.swift","rootCause":"region observation uses polling","reason":"false: it uses an observation continuation"},
+      {"file":"AR/MIX iOS/Views/Map/LayerMapView.swift","rootCause":"visibleElementsStream uses polling","reason":"false: the stream is observation-driven"},
+      {"file":"AR/MIX iOS/Views/Map/LayerMapView.swift","rootCause":"processSelectedAnnotation uses polling","reason":"false: selection processing is observation-driven"}
     ]},
-    {"pr":242,"base":"01e22e255c6e6da3efcdac56f4da44f87600cb31","head":"e1ab21f877a48e5d0132e0202a327c76a301ae96","rejectedCandidates":[
-      {"file":"studio/ops/ads/reddit_ads.py","rootCause":"a fixed temporary filename corrupts concurrent token and state writes","reason":"stale: exact head uses a random O_EXCL temporary file and atomic replace"},
-      {"file":"studio/ops/ads/cli.py","rootCause":"missing business_id is checked only after network-backed client construction","reason":"stale: the route validates business_id before constructing RedditAdsClient"}
-    ]},
-    {"pr":243,"base":"79e05d37ebcb550947f3fe95a7729ca7aff00965","head":"eb32f74370beba26f12adc11eebfd3b4fec7645c","rejectedCandidates":[
-      {"file":"workbench/server/run_retention.py","rootCause":"failed quarantine deletion has no later cleanup path","reason":"stale: apply_retention sweeps prior quarantine entries before processing the current plan"}
-    ]},
-    {"pr":247,"base":"c813a4ad4ddb6491dde87fd5f5bda4930e06a5df","head":"ee6bf5e99e9b9e81973ac1b3b18dfaa28d58d39f","rejectedCandidates":[
-      {"file":"ios/AR/Shared/Store/Store.swift","rootCause":"a completed product request leaves its timeout task running for twelve seconds","reason":"stale: success, catch, replacement, and deinit all cancel the timeout task"}
+    {"pr":103,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"9fc792f68fdff8cd2f6bdaf1d0c17736d41ab426","rejectedCandidates":[
+      {"file":"AR/MIX iOS/Model/LayerPermissionManager.swift","rootCause":"permission migration runs only from recordSession","reason":"false: migration runs during initialization and every public operation"},
+      {"file":"AR/MIX iOS/Model/LayerPermissionManager.swift","rootCause":"eligibility records a reprompt before the UI is shown","reason":"false: the record is written only from the UI onAppear path"}
     ]}
   ]
 }

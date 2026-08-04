@@ -701,7 +701,7 @@ const DISCOVERY_INSTRUCTIONS = [
 
 const DISCOVERY_PASSES = [
   ...DISCOVERY_INSTRUCTIONS,
-  "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale.",
+  "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
 ];
 
 async function runReviewPipeline(

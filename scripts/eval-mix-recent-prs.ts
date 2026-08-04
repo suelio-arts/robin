@@ -114,7 +114,7 @@ async function main() {
         "Audit only build/platform compatibility and changed tests. Report a test only when its assertion can pass while the intended changed behavior is broken.",
         "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
       ];
-      discoveryPrompts.push("Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale.");
+      discoveryPrompts.push("Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.");
       const discovery = await Promise.all(discoveryPrompts.map((instructions) =>
         review(getReviewPrompt(instructions), reviewInput)
       ));

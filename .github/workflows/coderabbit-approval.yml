@@ -5,7 +5,7 @@ on:
     types: [opened, reopened, synchronize, ready_for_review]
 
 permissions:
-  contents: read
+  # Read CodeRabbit's review state for this pull request.
   pull-requests: read
 
 concurrency:
@@ -15,7 +15,7 @@ concurrency:
 jobs:
   approval:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 65
     env:
       GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -27,32 +27,42 @@ jobs:
         run: |
           set -euo pipefail
 
-          reviews_for_pr() {
-            local reviews
-            for delay in 1 2 3; do
-              if reviews="$(gh api --paginate --slurp "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")"; then
-                printf '%s' "$reviews"
+          github_api() {
+            local response
+            for attempt in 1 2 3; do
+              if response="$(gh api "$@")"; then
+                printf '%s' "$response"
                 return 0
               fi
-              sleep "$delay"
+              (( attempt == 3 )) || sleep "$attempt"
             done
             return 1
           }
 
-          for attempt in {1..60}; do
-            if ! reviews="$(reviews_for_pr)"; then
+          for attempt in {1..240}; do
+            if ! reviews="$(github_api --paginate --slurp "repos/$REPOSITORY/pulls/$PR_NUMBER/reviews")"; then
               echo "Could not read pull-request reviews after 3 attempts" >&2
               exit 1
             fi
             if jq -e --arg head "$HEAD_SHA" '
-              any(.[][]; .user.login == "coderabbitai[bot]"
-                and .commit_id == $head
-                and .state == "APPROVED")
+              reduce (.[][] | select(.user.login == "coderabbitai[bot]" and .commit_id == $head)) as $review
+                (false;
+                  if $review.state == "APPROVED" then true
+                  elif $review.state == "CHANGES_REQUESTED" or $review.state == "DISMISSED" then false
+                  else . end)
             ' <<<"$reviews" >/dev/null; then
+              if ! current_head="$(github_api "repos/$REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)"; then
+                echo "Could not recheck the pull-request head after 3 attempts" >&2
+                exit 1
+              fi
+              if [[ "$current_head" != "$HEAD_SHA" ]]; then
+                echo "Pull-request head changed from $HEAD_SHA to $current_head" >&2
+                exit 1
+              fi
               echo "CodeRabbit approved $HEAD_SHA"
               exit 0
             fi
-            (( attempt == 60 )) || sleep 15
+            (( attempt == 240 )) || sleep 15
           done
           echo "CodeRabbit did not approve current head $HEAD_SHA" >&2
           jq -r --arg head "$HEAD_SHA" '

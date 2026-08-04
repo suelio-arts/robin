@@ -1,10 +1,11 @@
 # MIX Recent-PR Evaluation
 
 `mix-recent-prs.json` freezes validated CodeRabbit and Greptile root causes from
-recent MIX pull requests plus rejected, stale, and withdrawn comments as negative
-controls. Candidate comments are labels only after their failure path is verified
-at the reviewed SHA. Multi-commit snapshots use the PR merge base, not the reviewed
-commit's parent.
+recent MIX pull requests plus rejected, stale, and withdrawn candidate comments.
+Candidate comments are labels only after their failure path is verified at the
+reviewed SHA. Multi-commit snapshots use the PR merge base, not the reviewed
+commit's parent. `unscoredHistoricalNotes` preserves old whole-PR notes but is
+never evaluated because those records do not identify an exact candidate.
 
 This is a development corpus, not an untouched holdout: prompts and tools were
 tuned against some of these cases. Do not claim parity from it. Freeze the pipeline,

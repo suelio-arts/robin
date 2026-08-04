@@ -41,7 +41,27 @@ describe("LLMClient", () => {
         tools: [{type: "web_search", search_context_size: "low"}],
         input: [{role: "system", content: "system"}, {role: "user", content: "user"}],
       });
+      expect(JSON.parse(request.body)).not.toHaveProperty("reasoning");
       expect(new LLMClient("https://openrouter.ai/api/v1", "test-key", "model").supportsWebSearch()).toBe(false);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("fails once on token-limited web-search responses", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "incomplete",
+        incomplete_details: {reason: "max_output_tokens"},
+        output: [{type: "message", content: [{type: "output_text", text: "partial"}]}],
+      }),
+    }) as typeof fetch;
+    try {
+      const client = new LLMClient("https://api.openai.com/v1", "test-key", "gpt-5.6-luna");
+      await expect(client.webSearchCompletion("system", "user")).rejects.toThrow(/max_output_tokens/);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     } finally {
       global.fetch = originalFetch;
     }

@@ -192,6 +192,7 @@ function matchingNeighborhoods(content: string, terms: string[], limit: number):
     }
   }
   return [...selected]
+    .sort((left, right) => left - right)
     .map((index) => `${index + 1}: ${lines[index]}`)
     .join("\n")
     .slice(0, limit);

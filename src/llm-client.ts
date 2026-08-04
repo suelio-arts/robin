@@ -97,7 +97,6 @@ export class LLMClient {
           body: JSON.stringify({
             model: this.model,
             tools: [{ type: "web_search", search_context_size: "low" }],
-            reasoning: this.reasoningEffort ? { effort: this.reasoningEffort } : undefined,
             max_output_tokens: this.maxOutputTokens,
             input: [
               { role: "system", content: systemPrompt },
@@ -113,8 +112,13 @@ export class LLMClient {
         }
         const payload = await response.json() as {
           model?: string;
+          status?: string;
+          incomplete_details?: { reason?: string };
           output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
         };
+        if (payload.status === "incomplete" && payload.incomplete_details?.reason === "max_output_tokens") {
+          throw new Error("OpenAI Responses API incomplete: max_output_tokens");
+        }
         const content = (payload.output || [])
           .filter((item) => item.type === "message")
           .flatMap((item) => item.content || [])

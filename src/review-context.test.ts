@@ -37,6 +37,29 @@ describe("buildFileContext", () => {
     expect(context).toContain("HEAD CONVENTION FILE: backend/function-registry.ts");
   });
 
+  it("keeps matching neighborhoods in source order", async () => {
+    const related = Array.from({length: 20}, (_, index) => index === 1
+      ? "secondaryIdentifier"
+      : index === 15 ? "primaryIdentifier" : `line ${index + 1}`).join("\n");
+    const files: Record<string, string> = {
+      "head:src/route.ts": 'import { value } from "./related";\nprimaryIdentifier primaryIdentifier secondaryIdentifier',
+      "head:src/related.ts": related,
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/src/route.ts b/src/route.ts",
+      "+++ b/src/route.ts",
+      "+primaryIdentifier primaryIdentifier secondaryIdentifier",
+    ].join("\n"), "base", "head");
+    const lineNumbers = context.split("\n")
+      .filter((line) => /^\d+: /.test(line))
+      .map((line) => Number(line.split(":", 1)[0]));
+    expect(lineNumbers).toEqual([...lineNumbers].sort((left, right) => left - right));
+  });
+
   it("extracts only literal public hosts and system commands for web lookup", () => {
     expect(publicContractSubjects('+API_BASE = "https://ads-api.x.com/12"\n+/usr/bin/lockf -s 9\n+privateThing()'))
       .toEqual(["ads-api.x.com", "system command lockf"]);

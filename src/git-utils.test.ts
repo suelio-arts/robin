@@ -1,6 +1,10 @@
 import { GitUtils } from "./git-utils";
 
 describe("GitUtils tree paths", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("retries a failed tree fetch instead of caching the failure", async () => {
     const getTree = jest.fn()
       .mockRejectedValueOnce(new Error("temporary"))
@@ -34,7 +38,6 @@ describe("GitUtils tree paths", () => {
     await jest.advanceTimersByTimeAsync(1000);
     await expect(search).resolves.toEqual(["src/a.ts"]);
     expect(code).toHaveBeenCalledTimes(2);
-    jest.useRealTimers();
   });
 
   it("fails closed and evicts a search after three failures", async () => {
@@ -51,7 +54,6 @@ describe("GitUtils tree paths", () => {
     await jest.advanceTimersByTimeAsync(3000);
     await secondFailure;
     expect(code).toHaveBeenCalledTimes(6);
-    jest.useRealTimers();
   });
 
   it("does not retry a non-transient repository search failure", async () => {

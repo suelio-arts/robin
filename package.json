@@ -27,7 +27,8 @@
     "clean": "node scripts/clean-dist.js",
     "dev": "ts-node src/main.ts",
     "lint": "eslint src/**/*.ts",
-    "test": "jest",
+    "test": "jest && npm run typecheck:eval",
+    "typecheck:eval": "tsc -p tsconfig.eval.json",
     "eval:mix": "ts-node scripts/eval-mix-recent-prs.ts",
     "package": "ncc build dist/index.js -o dist --license licenses.txt && npm run clean"
   },

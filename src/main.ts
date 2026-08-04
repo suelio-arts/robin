@@ -17,7 +17,7 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
+import { DISCOVERY_PASSES, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext, publicContractSubjects } from "./review-context";
@@ -698,19 +698,6 @@ async function runReview(
   core.info("Getting full code review...");
   return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
 }
-
-const DISCOVERY_INSTRUCTIONS = [
-  "Audit only inputs, parsing, validation, authorization, identity, roles, route dispatch, and collection semantics. Trace each changed boundary end to end; verify ordering, identity, joins, and fallbacks preserve the domain meaning rather than array or map implementation order. When canonical order metadata is optional, accept a collection-order fallback only if the supplied contract defines that collection as ordered.",
-  "Audit only lifecycle and mutable state across success, failure, retry, duplicate callback, concurrency, cancellation, relaunch, corrupt persisted data, and viewport or media-query transitions. Trace every early-return state or plan shape into its consumer, and verify maintenance failures do not suppress the primary operation. Verify responsive UI state is reconciled when layout modes change.",
-  "Audit only external API and persistence contracts: exact fields, masks, units, currency, pagination, mutation targets, partial success, idempotency, readback, and recovery. Use supplied repository and public-documentation evidence; do not guess provider behavior.",
-  "Audit only build/platform compatibility and changed tests. Report a test only when its assertion can pass while the intended changed behavior is broken.",
-  "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
-];
-
-const DISCOVERY_PASSES = [
-  ...DISCOVERY_INSTRUCTIONS,
-  "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
-];
 
 async function runReviewPipeline(
   llm: LLMClient,

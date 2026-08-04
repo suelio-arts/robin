@@ -776,10 +776,14 @@ async function runReviewPipeline(
   let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
   let precise: StructuredReview;
   try {
-    precise = selectApprovedCandidates(precisionCandidates, verdict.content);
+    precise = selectApprovedCandidates(precisionCandidates, verdict.content, verified.summary);
   } catch {
-    verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
-    precise = selectApprovedCandidates(precisionCandidates, verdict.content);
+    try {
+      verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
+      precise = selectApprovedCandidates(precisionCandidates, verdict.content, verified.summary);
+    } catch (error) {
+      throw new Error(`Precision gate failed twice; refusing an unverified review: ${error}`);
+    }
   }
 
   deduplicateFindings(precise);

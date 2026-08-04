@@ -167,14 +167,14 @@
   ],
   "holdoutNegativeControls": [
     {"pr":91,"base":"3789e69d424655f2ac26b9c34ff10e605b582bb2","head":"ccdc0046cbb711560e3bbbe6d06aca1bdee370f0","rejectedCandidates":[
-      {"file":"AR/MIX iOS/Views/Map/MKMapViewRepresentable.swift","rootCause":"annotation synchronization removes the user location and keys annotations only by title","reason":"false: synchronization filters the user location and keys annotations with latitude, longitude, and title"},
-      {"file":"AR/MIX iOS/Views/Map/LayerMapView.swift","rootCause":"region observation uses polling","reason":"false: it uses an observation continuation"},
-      {"file":"AR/MIX iOS/Views/Map/LayerMapView.swift","rootCause":"visibleElementsStream uses polling","reason":"false: the stream is observation-driven"},
-      {"file":"AR/MIX iOS/Views/Map/LayerMapView.swift","rootCause":"processSelectedAnnotation uses polling","reason":"false: selection processing is observation-driven"}
+      {"file":"AR/MIX iOS/ReusableViews/MKMap.swift","rootCause":"annotation synchronization removes the user location and keys annotations only by title","reason":"false: synchronization filters the user location and keys annotations with latitude, longitude, and title"},
+      {"file":"AR/MIX iOS/Views/LayerMapViewModel.swift","rootCause":"region observation uses polling","reason":"false: it uses an observation continuation"},
+      {"file":"AR/MIX iOS/Views/LayerMapViewModel.swift","rootCause":"visibleElementsStream uses polling","reason":"false: the stream is observation-driven"},
+      {"file":"AR/MIX iOS/Views/LayerMapViewModel.swift","rootCause":"processSelectedAnnotation uses polling","reason":"false: selection processing is observation-driven"}
     ]},
     {"pr":103,"base":"f1cf3edf111a4255452f7149bec945e36e622ead","head":"9fc792f68fdff8cd2f6bdaf1d0c17736d41ab426","rejectedCandidates":[
-      {"file":"AR/MIX iOS/Model/LayerPermissionManager.swift","rootCause":"permission migration runs only from recordSession","reason":"false: migration runs during initialization and every public operation"},
-      {"file":"AR/MIX iOS/Model/LayerPermissionManager.swift","rootCause":"eligibility records a reprompt before the UI is shown","reason":"false: the record is written only from the UI onAppear path"}
+      {"file":"AR/MIX iOS/Model/NotificationRepromptManager.swift","rootCause":"permission migration runs only from recordSession","reason":"false: migration runs during initialization and every public operation"},
+      {"file":"AR/MIX iOS/Views/OnboardingView.swift","rootCause":"eligibility records a reprompt before the UI is shown","reason":"false: the record is written only from the UI onAppear path"}
     ]}
   ]
 }

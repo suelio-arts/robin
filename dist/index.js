@@ -256,12 +256,46 @@ function isPullRequestReviewEvent(eventName) {
 /***/ }),
 
 /***/ 8529:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
 
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.GitUtils = void 0;
+const core = __importStar(__nccwpck_require__(7484));
 class GitUtils {
     octokit;
     treePaths = new Map();
@@ -298,18 +332,21 @@ class GitUtils {
     }
     async getTreePaths(owner, repo, ref) {
         const key = `${owner}/${repo}@${ref}`;
-        if (!this.treePaths.has(key))
-            this.treePaths.set(key, this.fetchTreePaths(owner, repo, ref));
+        if (!this.treePaths.has(key)) {
+            const pending = this.fetchTreePaths(owner, repo, ref).catch((error) => {
+                this.treePaths.delete(key);
+                core.warning(`Tree listing failed for ${owner}/${repo}@${ref}; later chunks will retry: ${error}`);
+                return [];
+            });
+            this.treePaths.set(key, pending);
+        }
         return this.treePaths.get(key);
     }
     async fetchTreePaths(owner, repo, ref) {
-        try {
-            const { data } = await this.octokit.rest.git.getTree({ owner, repo, tree_sha: ref, recursive: "true" });
-            return data.tree.filter((item) => item.type === "blob" && item.path).map((item) => item.path);
-        }
-        catch {
-            return [];
-        }
+        const { data } = await this.octokit.rest.git.getTree({ owner, repo, tree_sha: ref, recursive: "true" });
+        if (data.truncated)
+            core.warning(`Tree listing for ${owner}/${repo}@${ref} was truncated`);
+        return data.tree.filter((item) => item.type === "blob" && item.path).map((item) => item.path);
     }
 }
 exports.GitUtils = GitUtils;
@@ -1656,11 +1693,16 @@ async function runReviewPipeline(llm, diff, context, reviewInstructions, jsonRes
     let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
     let precise;
     try {
-        precise = (0, precision_gate_1.selectApprovedCandidates)(precisionCandidates, verdict.content);
+        precise = (0, precision_gate_1.selectApprovedCandidates)(precisionCandidates, verdict.content, verified.summary);
     }
     catch {
-        verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
-        precise = (0, precision_gate_1.selectApprovedCandidates)(precisionCandidates, verdict.content);
+        try {
+            verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
+            precise = (0, precision_gate_1.selectApprovedCandidates)(precisionCandidates, verdict.content, verified.summary);
+        }
+        catch (error) {
+            throw new Error(`Precision gate failed twice; refusing an unverified review: ${error}`);
+        }
     }
     deduplicateFindings(precise);
     return precise;
@@ -1733,7 +1775,9 @@ function buildPrecisionCandidates(reviews) {
     const seen = new Set();
     for (const review of reviews) {
         for (const severity of SEVERITIES) {
-            for (const finding of review[severity]) {
+            for (const finding of review[severity] || []) {
+                if (typeof finding.description !== "string")
+                    continue;
                 const root = finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
                 const key = `${finding.file}:${finding.line ?? 0}:${severity}:${root}`;
                 if (seen.has(key))
@@ -1745,7 +1789,7 @@ function buildPrecisionCandidates(reviews) {
     }
     return candidates;
 }
-function selectApprovedCandidates(candidates, response) {
+function selectApprovedCandidates(candidates, response, summary = "") {
     const json = response.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const parsed = JSON.parse(json);
     if (!Array.isArray(parsed.approved) || !parsed.approved.every((id) => typeof id === "string")) {
@@ -1753,7 +1797,7 @@ function selectApprovedCandidates(candidates, response) {
     }
     const approved = new Set(parsed.approved);
     const result = {
-        summary: "Evidence-verified review findings.",
+        summary,
         high: [],
         medium: [],
         low: [],
@@ -1988,9 +2032,11 @@ exports.buildFileContext = buildFileContext;
 exports.publicContractSubjects = publicContractSubjects;
 const diff_filter_1 = __nccwpck_require__(7561);
 const path_1 = __nccwpck_require__(6928);
+const net_1 = __nccwpck_require__(9278);
 const CONTEXT_LIMIT = 50000;
 const FILE_LIMIT = 20000;
 const RELATED_LIMIT = 12000;
+const RELATED_REQUEST_LIMIT = 24;
 function excerpt(content, limit) {
     if (content.length <= limit)
         return content;
@@ -2002,6 +2048,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     const fetched = new Set();
     const terms = changedIdentifiers(chunk);
     const changedPaths = (0, diff_filter_1.splitDiffIntoFiles)(chunk).map((file) => file.path);
+    const relatedBudget = { remaining: RELATED_REQUEST_LIMIT };
     for (const file of (0, diff_filter_1.splitDiffIntoFiles)(chunk)) {
         const prior = file.path.replace(/-v(\d+)(?=\.[^.]+$)/, (_, value) => `-v${Number(value) - 1}`);
         const sources = [
@@ -2022,7 +2069,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
             remaining -= value.length;
             if (label === "HEAD" && remaining > 0) {
                 for (const relatedPath of relativeImports(content, path)) {
-                    const related = await resolveRelatedFile(git, owner, repo, relatedPath, head, fetched);
+                    const related = await resolveRelatedFile(git, owner, repo, relatedPath, head, fetched, relatedBudget);
                     if (!related)
                         continue;
                     const focused = matchingNeighborhoods(related.content, terms, Math.min(RELATED_LIMIT, remaining));
@@ -2039,7 +2086,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     if (remaining > 0) {
         const paths = await git.getTreePaths(owner, repo, head);
         const conventions = paths
-            .filter((path) => /(?:^|[-_.\/])(registry|schema|schemas|contract|contracts|manifest)(?:[-_.\/]|$)/i.test(path))
+            .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest)(?:[-_./]|$)/i.test(path))
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
         for (const path of conventions.slice(0, 12)) {
             const key = `${head}:${path}`;
@@ -2062,11 +2109,31 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
 }
 function publicContractSubjects(diff) {
     const subjects = new Set();
-    for (const match of diff.matchAll(/https:\/\/([A-Za-z0-9.-]+)(?:[/:"'\s]|$)/g))
-        subjects.add(match[1]);
+    for (const match of diff.matchAll(/https:\/\/[^\s"'<>]+/g)) {
+        try {
+            const url = new URL(match[0]);
+            if (!url.username && !url.password && isPublicHostname(url.hostname))
+                subjects.add(url.hostname);
+        }
+        catch {
+            // Ignore malformed literals.
+        }
+    }
     for (const match of diff.matchAll(/\/usr\/bin\/([A-Za-z0-9._+-]+)/g))
         subjects.add(`system command ${match[1]}`);
     return [...subjects].slice(0, 12);
+}
+function isPublicHostname(hostname) {
+    const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    if (host === "localhost" || !host.includes(".") || /\.(?:internal|local|localhost|test|example|invalid)$/.test(host))
+        return false;
+    if ((0, net_1.isIP)(host) === 4) {
+        const [a, b] = host.split(".").map(Number);
+        return !(a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
+    }
+    if ((0, net_1.isIP)(host) === 6)
+        return host !== "::1" && !host.startsWith("fc") && !host.startsWith("fd") && !host.startsWith("fe8") && !host.startsWith("fe9") && !host.startsWith("fea") && !host.startsWith("feb");
+    return true;
 }
 function pathAffinity(path, changedPaths) {
     return Math.max(0, ...changedPaths.map((changed) => {
@@ -2112,20 +2179,22 @@ function relativeImports(content, sourcePath) {
     }
     return [...paths].slice(0, 12);
 }
-async function resolveRelatedFile(git, owner, repo, importPath, head, fetched) {
+async function resolveRelatedFile(git, owner, repo, importPath, head, fetched, budget) {
     const candidates = path_1.posix.extname(importPath)
         ? [importPath]
         : [importPath + ".ts", importPath + ".tsx", importPath + ".js", importPath + ".mjs", path_1.posix.join(importPath, "index.ts")];
+    const pending = [];
     for (const path of candidates) {
+        if (budget.remaining <= 0)
+            break;
         const key = `${head}:${path}`;
         if (fetched.has(key))
             continue;
         fetched.add(key);
-        const content = await git.getFileContent(owner, repo, path, head);
-        if (content)
-            return { path, content };
+        budget.remaining -= 1;
+        pending.push(git.getFileContent(owner, repo, path, head).then((content) => ({ path, content })));
     }
-    return undefined;
+    return (await Promise.all(pending)).find(({ content }) => content) || undefined;
 }
 function matchingNeighborhoods(content, terms, limit) {
     if (terms.length === 0)

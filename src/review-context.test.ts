@@ -11,7 +11,7 @@ describe("buildFileContext", () => {
       getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
       getTreePaths: async () => [],
     };
-    const context = await buildFileContext(git as never, "o", "r", [
+    const context = await buildFileContext(git, "o", "r", [
       "diff --git a/src/route.ts b/src/route.ts",
       "+++ b/src/route.ts",
       "+const first = walk.orderedElementIds?.[0] ?? walk.nodes[0].elementId;",
@@ -29,7 +29,7 @@ describe("buildFileContext", () => {
       getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
       getTreePaths: async () => ["backend/function-registry.ts"],
     };
-    const context = await buildFileContext(git as never, "o", "r", [
+    const context = await buildFileContext(git, "o", "r", [
       "diff --git a/backend/endpoints/new.ts b/backend/endpoints/new.ts",
       "+++ b/backend/endpoints/new.ts",
       "+export const createThing = callable(() => true);",
@@ -40,5 +40,8 @@ describe("buildFileContext", () => {
   it("extracts only literal public hosts and system commands for web lookup", () => {
     expect(publicContractSubjects('+API_BASE = "https://ads-api.x.com/12"\n+/usr/bin/lockf -s 9\n+privateThing()'))
       .toEqual(["ads-api.x.com", "system command lockf"]);
+    expect(publicContractSubjects('+url = "https://user:token@internal.example/path"')).toEqual([]);
+    expect(publicContractSubjects('+url = "https://jenkins.corp.internal/job/x"')).toEqual([]);
+    expect(publicContractSubjects('+url = "https://127.0.0.1/private"')).toEqual([]);
   });
 });

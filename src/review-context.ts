@@ -1,10 +1,13 @@
 import { splitDiffIntoFiles } from "./diff-filter";
 import { GitUtils } from "./git-utils";
 import { posix } from "path";
+import { isIP } from "net";
 
 const CONTEXT_LIMIT = 50000;
 const FILE_LIMIT = 20000;
 const RELATED_LIMIT = 12000;
+const RELATED_REQUEST_LIMIT = 24;
+type ReviewContextGit = Pick<GitUtils, "getFileContent" | "getTreePaths">;
 
 function excerpt(content: string, limit: number): string {
   if (content.length <= limit) return content;
@@ -12,7 +15,7 @@ function excerpt(content: string, limit: number): string {
 }
 
 export async function buildFileContext(
-  git: GitUtils,
+  git: ReviewContextGit,
   owner: string,
   repo: string,
   chunk: string,
@@ -24,6 +27,7 @@ export async function buildFileContext(
   const fetched = new Set<string>();
   const terms = changedIdentifiers(chunk);
   const changedPaths = splitDiffIntoFiles(chunk).map((file) => file.path);
+  const relatedBudget = { remaining: RELATED_REQUEST_LIMIT };
 
   for (const file of splitDiffIntoFiles(chunk)) {
     const prior = file.path.replace(/-v(\d+)(?=\.[^.]+$)/, (_, value) => `-v${Number(value) - 1}`);
@@ -44,7 +48,7 @@ export async function buildFileContext(
 
       if (label === "HEAD" && remaining > 0) {
         for (const relatedPath of relativeImports(content, path)) {
-          const related = await resolveRelatedFile(git, owner, repo, relatedPath, head, fetched);
+          const related = await resolveRelatedFile(git, owner, repo, relatedPath, head, fetched, relatedBudget);
           if (!related) continue;
           const focused = matchingNeighborhoods(related.content, terms, Math.min(RELATED_LIMIT, remaining));
           if (!focused) continue;
@@ -59,7 +63,7 @@ export async function buildFileContext(
   if (remaining > 0) {
     const paths = await git.getTreePaths(owner, repo, head);
     const conventions = paths
-      .filter((path) => /(?:^|[-_.\/])(registry|schema|schemas|contract|contracts|manifest)(?:[-_.\/]|$)/i.test(path))
+      .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest)(?:[-_./]|$)/i.test(path))
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
     for (const path of conventions.slice(0, 12)) {
       const key = `${head}:${path}`;
@@ -81,9 +85,27 @@ export async function buildFileContext(
 
 export function publicContractSubjects(diff: string): string[] {
   const subjects = new Set<string>();
-  for (const match of diff.matchAll(/https:\/\/([A-Za-z0-9.-]+)(?:[/:"'\s]|$)/g)) subjects.add(match[1]);
+  for (const match of diff.matchAll(/https:\/\/[^\s"'<>]+/g)) {
+    try {
+      const url = new URL(match[0]);
+      if (!url.username && !url.password && isPublicHostname(url.hostname)) subjects.add(url.hostname);
+    } catch {
+      // Ignore malformed literals.
+    }
+  }
   for (const match of diff.matchAll(/\/usr\/bin\/([A-Za-z0-9._+-]+)/g)) subjects.add(`system command ${match[1]}`);
   return [...subjects].slice(0, 12);
+}
+
+function isPublicHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || !host.includes(".") || /\.(?:internal|local|localhost|test|example|invalid)$/.test(host)) return false;
+  if (isIP(host) === 4) {
+    const [a, b] = host.split(".").map(Number);
+    return !(a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168));
+  }
+  if (isIP(host) === 6) return host !== "::1" && !host.startsWith("fc") && !host.startsWith("fd") && !host.startsWith("fe8") && !host.startsWith("fe9") && !host.startsWith("fea") && !host.startsWith("feb");
+  return true;
 }
 
 function pathAffinity(path: string, changedPaths: string[]): number {
@@ -130,24 +152,27 @@ function relativeImports(content: string, sourcePath: string): string[] {
 }
 
 async function resolveRelatedFile(
-  git: GitUtils,
+  git: ReviewContextGit,
   owner: string,
   repo: string,
   importPath: string,
   head: string,
-  fetched: Set<string>
+  fetched: Set<string>,
+  budget: { remaining: number }
 ): Promise<{ path: string; content: string } | undefined> {
   const candidates = posix.extname(importPath)
     ? [importPath]
     : [importPath + ".ts", importPath + ".tsx", importPath + ".js", importPath + ".mjs", posix.join(importPath, "index.ts")];
+  const pending = [];
   for (const path of candidates) {
+    if (budget.remaining <= 0) break;
     const key = `${head}:${path}`;
     if (fetched.has(key)) continue;
     fetched.add(key);
-    const content = await git.getFileContent(owner, repo, path, head);
-    if (content) return { path, content };
+    budget.remaining -= 1;
+    pending.push(git.getFileContent(owner, repo, path, head).then((content) => ({ path, content })));
   }
-  return undefined;
+  return (await Promise.all(pending)).find(({ content }) => content) || undefined;
 }
 
 function matchingNeighborhoods(content: string, terms: string[], limit: number): string {

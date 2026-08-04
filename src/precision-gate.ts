@@ -34,12 +34,24 @@ export function selectApprovedCandidates(
   summary = ""
 ): StructuredReview {
   const json = response.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const parsed = JSON.parse(json) as { approved?: unknown };
+  const parsed = JSON.parse(json) as { approved?: unknown; rejected?: unknown };
   if (!Array.isArray(parsed.approved) || !parsed.approved.every((id) => typeof id === "string")) {
     throw new Error("Precision gate response must contain an approved string array");
   }
+  if (!parsed.rejected || typeof parsed.rejected !== "object" || Array.isArray(parsed.rejected)
+    || !Object.values(parsed.rejected).every((reason) => typeof reason === "string")) {
+    throw new Error("Precision gate response must contain a rejected reason object");
+  }
 
   const approved = new Set(parsed.approved);
+  const rejected = Object.keys(parsed.rejected);
+  const dispositions = [...parsed.approved, ...rejected];
+  const candidateIds = new Set(candidates.map(({ id }) => id));
+  if (new Set(dispositions).size !== dispositions.length
+    || dispositions.some((id) => !candidateIds.has(id))
+    || dispositions.length !== candidateIds.size) {
+    throw new Error("Precision gate must disposition every candidate ID exactly once");
+  }
   const result: StructuredReview = {
     summary,
     high: [],

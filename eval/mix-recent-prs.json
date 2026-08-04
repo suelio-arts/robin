@@ -271,7 +271,6 @@
       "pr": 295,
       "base": "3728824f2b67592dc702d5895fbc3cc0c7e16da3",
       "head": "d8dc79579c61b305b4b39e3289018d61dcc4b45e",
-      "rejected": "CodeRabbit requested registry schemas while the registry explicitly marked them optional during migration and sibling callables omitted them",
       "labels": [
         {
           "file": "backend/functions/src/endpoints/story-walks.ts",
@@ -412,7 +411,7 @@
       ]
     }
   ],
-  "negativeControls": [
+  "unscoredHistoricalNotes": [
     {
       "pr": 281,
       "base": "519529ee455cc557b804cb58e44d46d5c32a95ec",

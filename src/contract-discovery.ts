@@ -49,6 +49,10 @@ export function completeContractSearchPlan(content: string, chunk: string): stri
   return [...new Set([...projectionQueries, ...planned])].slice(0, MAX_QUERIES);
 }
 
+export function changedHeadPaths(diff: string): string[] {
+  return [...diff.matchAll(/^diff --git a\/.+? b\/(.+)$/gm)].map((match) => match[1]);
+}
+
 export async function buildContractSearchEvidence(
   git: ContractSearchGit,
   owner: string,

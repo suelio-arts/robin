@@ -1,4 +1,4 @@
-import { buildContractSearchEvidence, completeContractSearchPlan, parseContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
+import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, parseContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
 
 describe("contract discovery", () => {
   it("parses bounded literal queries", () => {
@@ -20,6 +20,11 @@ describe("contract discovery", () => {
       "diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts\n+title: localizedTitle"
     );
     expect(queries).toEqual(["OverridesById", "buildStoryWalk", "localizedTitle", "schema"]);
+  });
+
+  it("uses HEAD-side paths for renamed files", () => {
+    expect(changedHeadPaths("diff --git a/old/place.ts b/studio/new/place.ts"))
+      .toEqual(["studio/new/place.ts"]);
   });
 
   it("builds bounded exact-head evidence and survives failed searches", async () => {

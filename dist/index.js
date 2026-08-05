@@ -82,6 +82,7 @@ function parseLLMTimeout(input) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.parseContractSearchPlan = parseContractSearchPlan;
 exports.completeContractSearchPlan = completeContractSearchPlan;
+exports.changedHeadPaths = changedHeadPaths;
 exports.buildContractSearchEvidence = buildContractSearchEvidence;
 exports.wrapContractSearchEvidence = wrapContractSearchEvidence;
 const MAX_QUERIES = 4;
@@ -128,6 +129,9 @@ function completeContractSearchPlan(content, chunk) {
         ? ["OverridesById", "buildStoryWalk"]
         : [];
     return [...new Set([...projectionQueries, ...planned])].slice(0, MAX_QUERIES);
+}
+function changedHeadPaths(diff) {
+    return [...diff.matchAll(/^diff --git a\/.+? b\/(.+)$/gm)].map((match) => match[1]);
 }
 async function buildContractSearchEvidence(git, owner, repo, head, queries, changedPaths = []) {
     const seen = new Set();
@@ -1744,7 +1748,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     }
     if ((0, review_prompts_1.isContractChunk)(diff)) {
         const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
-        const changedPaths = [...diff.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
+        const changedPaths = (0, contract_discovery_1.changedHeadPaths)(diff);
         const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff), changedPaths);
         discovery.push(await discover([
             review_prompts_1.CONTRACT_SEARCH_DISCOVERY_PASS,

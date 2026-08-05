@@ -28,11 +28,13 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("privacy text with the actual data and capability use");
     expect(DISCOVERY_PASSES.join("\n")).toContain("canonical release documentation");
     expect(DISCOVERY_PASSES.join("\n")).toContain("server handler and persistence serializer");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("one entity's display name or title");
     expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("server handler and persistence serializer");
     expect(DISCOVERY_PASSES.join("\n")).toContain("refresh only part of its transform");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("cross-entity identity mismatch");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("same-diff comment or test");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("A helper parameter is not a trust boundary");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("not seeing an entry is not evidence");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("arbitrarily huge caller-controlled");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("mixed-frame transform");

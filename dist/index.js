@@ -1612,26 +1612,30 @@ async function postHelpComment(octokit, payload) {
     });
     core.info("Posted help comment.");
 }
-async function runReview(llm, diff, reviewInstructions, jsonResponseMode, context = "") {
+async function runReview(llm, diff, reviewInstructions, jsonResponseMode, context = "", focusInstructions = "") {
     const systemPrompt = (0, review_prompts_1.getReviewPrompt)(reviewInstructions);
-    const userContent = buildReviewInput(diff, context);
+    const userContent = [
+        buildReviewInput(diff, context),
+        focusInstructions && `REVIEW FOCUS:\n${focusInstructions}`,
+    ].filter(Boolean).join("\n\n");
     core.info("Getting full code review...");
     return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
 }
 async function runReviewPipeline(llm, diff, context, reviewInstructions, jsonResponseMode) {
-    const discovery = await Promise.all(review_prompts_1.DISCOVERY_PASSES.map(async (instructions) => {
-        const response = await runReview(llm, diff, [reviewInstructions, instructions].filter(Boolean).join("\n\n"), jsonResponseMode, context);
+    const discover = async (instructions) => {
+        const response = await runReview(llm, diff, reviewInstructions, jsonResponseMode, context, instructions);
         const parsed = review_parser_1.ReviewParser.parseDetailed(response.content);
         if (!(0, review_retry_1.shouldRetryStructuredReview)(parsed.findings, parsed.usedJson))
             return parsed.findings;
-        return review_parser_1.ReviewParser.parse((await runReview(llm, diff, `${reviewInstructions}\n\n${instructions}\n\nReturn ONLY a single valid JSON object.`, true, context)).content);
-    }));
+        return review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
+    };
+    const [firstPass, ...remainingPasses] = review_prompts_1.DISCOVERY_PASSES;
+    const discovery = [
+        await discover(firstPass),
+        ...await Promise.all(remainingPasses.map(discover)),
+    ];
     const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
-    const input = `${buildReviewInput(diff, context)}\n\nCANDIDATE FINDINGS:\n${candidates}`;
-    const verified = review_parser_1.ReviewParser.parse((await llm.chatCompletion((0, review_prompts_1.getReviewPrompt)([
-        reviewInstructions,
-        ...review_prompts_1.VERIFICATION_INSTRUCTIONS,
-    ].filter(Boolean).join("\n\n")), input, true)).content);
+    const verified = review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, [`CANDIDATE FINDINGS:\n${candidates}`, ...review_prompts_1.VERIFICATION_INSTRUCTIONS].join("\n\n"))).content);
     const precisionCandidates = (0, precision_gate_1.buildPrecisionCandidates)([...discovery, verified]);
     const precisionPrompt = [
         reviewInstructions,
@@ -1790,9 +1794,9 @@ exports.getSummaryPrompt = getSummaryPrompt;
 exports.getHelpMessage = getHelpMessage;
 exports.DISCOVERY_PASSES = [
     "Audit only inputs, parsing, validation, authorization, identity, roles, route dispatch, and collection semantics. Trace each changed boundary end to end; verify ordering, identity, joins, fallbacks, and normalized readback comparisons preserve domain meaning rather than implementation order. Accept collection-order fallback only when its supplied contract defines that collection as ordered. Check empty collections before indexing and require CLI failures to use the established user-facing error contract.",
-    "Audit only lifecycle and mutable state across success, empty, failure, retry, duplicate callback, concurrency, cancellation, relaunch, corrupt persisted data, and viewport or media-query transitions. Trace every early-return state or plan shape into its consumer, and verify maintenance failures do not suppress the primary operation. Verify responsive UI state is reconciled when layout modes change.",
+    "Audit only lifecycle and mutable state across success, empty, failure, retry, duplicate callback, concurrency, cancellation, relaunch, corrupt persisted data, and viewport or media-query transitions. Trace every early-return state or plan shape into its consumer, and verify maintenance failures do not suppress the primary operation. For raced work, verify every losing timeout or operation is cancelled on success, failure, retry, and teardown. Verify responsive UI state is reconciled when layout modes change.",
     "Audit only external API and persistence contracts: exact fields, masks, units, currency, pagination, mutation targets, partial success, idempotency, readback, recovery, and geographic or query bounds. Trace user-entered search/filter values into the actual provider request. Use supplied repository and public-documentation evidence; do not guess provider behavior.",
-    "Audit only build/platform compatibility, repository-enforced static analysis, privacy disclosures, and changed tests or harnesses. Check required registries and preflight lists, lint rules, schemes, and fixtures against every newly used callable or capability. A required CI, pre-push, release, or stress harness is a product contract: report it when changed setup or timing makes the gate fail, or when its assertion can pass while the intended changed behavior is broken.",
+    "Audit only build/platform compatibility, repository-enforced static analysis, privacy disclosures, and changed tests or harnesses. Check required registries and preflight lists, lint rules, schemes, and fixtures against every newly used callable or capability. Compare privacy text with the actual data and capability use. A required CI, pre-push, release, or stress harness is a product contract: verify aggregate commands invoke its canonical contract gates, async scenarios wait for the observable system to settle before judging recovery, and validators reject transient pending or generating states when the contract requires ready. Report changed setup or timing that makes the gate fail, or an assertion that can pass while the intended changed behavior is broken.",
     "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
     "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, viewport height, min-height, overflow, reachable scrolling, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace short-screen and dynamic-viewport layouts end to end; content below the viewport must remain reachable. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
 ];

@@ -60,6 +60,7 @@ describe("getReviewPrompt", () => {
     const trackingPasses = getDiscoveryPasses("diff --git a/web/ar.mjs b/web/ar.mjs\n+anchor.position.copy(next.position);\n+ImageTargetEvent.UPDATED");
     expect(trackingPasses).toHaveLength(6);
     expect(trackingPasses[0]).toContain("mixed-frame transform");
+    expect(trackingPasses[2]).toContain("state table");
     const overlappingPasses = getDiscoveryPasses("diff --git a/e2e/ar.mjs b/e2e/ar.mjs\n+anchor.position.copy(next.position);\n+validator");
     expect(overlappingPasses[0]).toContain("mixed-frame transform");
     expect(overlappingPasses[5]).toContain("repository-contract gaps");

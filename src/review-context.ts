@@ -68,7 +68,9 @@ export async function buildFileContext(
   if (remaining > 0) {
     const paths = [...new Set((await Promise.all(
       terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term))
-    )).flat())].filter((path) => !changedPaths.includes(path));
+    )).flat())]
+      .filter((path) => !changedPaths.includes(path))
+      .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
     for (const path of paths.slice(0, 12)) {
       const key = `${head}:${path}`;
       if (fetched.has(key)) continue;

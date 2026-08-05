@@ -27,6 +27,8 @@ describe("contract discovery", () => {
       .toEqual(["studio/new/place.ts"]);
     expect(changedHeadPaths('diff --git "a/old/caf\\303\\251 name.ts" "b/studio/new/caf\\303\\251 name.ts"'))
       .toEqual(["studio/new/café name.ts"]);
+    expect(changedHeadPaths('diff --git "a/old/bell\\a.ts" "b/studio/new/bell\\a.ts"'))
+      .toEqual(["studio/new/bell\u0007.ts"]);
   });
 
   it("builds bounded exact-head evidence and survives failed searches", async () => {

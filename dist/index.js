@@ -149,7 +149,7 @@ function changedHeadPaths(diff) {
 }
 function decodeGitQuotedPath(value) {
     const bytes = [];
-    const escapes = { n: 10, r: 13, t: 9, b: 8, f: 12, v: 11 };
+    const escapes = { a: 7, n: 10, r: 13, t: 9, b: 8, f: 12, v: 11 };
     for (let index = 0; index < value.length; index += 1) {
         if (value[index] !== "\\") {
             bytes.push(...Buffer.from(value[index]));

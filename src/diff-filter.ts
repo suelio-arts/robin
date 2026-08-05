@@ -109,7 +109,10 @@ function chunkOversizedFile(content: string, maxChunkSize: number): string[] {
   const bodies = firstHunk === -1
     ? [content]
     : content.slice(firstHunk).split(/(?=^@@ )/m).filter(Boolean);
-  const prefix = header.slice(0, Math.max(0, maxChunkSize - 1));
+  if (header && maxChunkSize <= header.length) {
+    throw new RangeError(`maxChunkSize must exceed the ${header.length}-character diff header`);
+  }
+  const prefix = header;
   const bodyLimit = Math.max(1, maxChunkSize - prefix.length);
   const pages: string[] = [];
   let page = prefix;

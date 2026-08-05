@@ -1,10 +1,12 @@
+import { changedHeadPaths } from "../contract-discovery";
+
 export const DISCOVERY_PASSES = [
   "Audit only inputs, parsing, validation, authorization, identity, roles, route dispatch, and collection semantics. Trace each changed boundary end to end; verify ordering, identity, joins, fallbacks, and normalized readback comparisons preserve domain meaning rather than implementation order. For a changed CLI usage or synopsis line, compare its option names with the command handler's actual option reads and canonical examples; report a supported option omitted from help when repository examples depend on it. Report changed records that combine one entity's display name or title with another entity's ID, provenance, geometry, or source when unchanged consumers use those fields together for enrichment, citation, lookup, or persistence. Accept collection-order fallback only when its supplied contract defines that collection as ordered. Check empty collections before indexing and require CLI failures to use the established user-facing error contract.",
   "Audit only lifecycle and mutable state across success, empty, failure, retry, duplicate callback, concurrency, cancellation, relaunch, corrupt persisted data, and viewport or media-query transitions. Trace every early-return state or plan shape into its consumer, and verify maintenance failures do not suppress the primary operation. Trace changed async functions into timer, event, startup, and other fire-and-forget callers; require rejections to be awaited or handled and recurring work to be cancelled on teardown. For raced work, verify every losing timeout or operation is cancelled on success, failure, retry, and teardown. Verify responsive UI state is reconciled when layout modes change.",
   "Audit only external API and persistence contracts: exact fields, masks, units, currency, pagination, mutation targets, partial success, idempotency, readback, recovery, and geographic or query bounds. Trace a changed client mutation through its server handler and persistence serializer; verify every claimed round-tripped field is actually stored. Trace user-entered search/filter values into the actual provider request. Use supplied repository and public-documentation evidence; do not guess provider behavior.",
   "Audit only build/platform compatibility, repository-enforced static analysis, privacy disclosures, and changed tests or harnesses. For changed hashes, versions, or asset pins, compare unchanged canonical release documentation and verification scripts; report stale operational instructions that validate or deploy the obsolete artifact. Check required registries and preflight lists, lint rules, schemes, and fixtures against every newly used callable or capability. Compare privacy text with the actual data and capability use. A required CI, pre-push, release, or stress harness is a product contract: verify aggregate commands invoke its canonical contract gates, async scenarios wait for the observable system to settle before judging recovery, and validators reject transient pending or generating states when the contract requires ready. Report changed setup or timing that makes the gate fail, or an assertion that can pass while the intended changed behavior is broken.",
   "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
-  "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, viewport height, min-height, overflow, reachable scrolling, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace short-screen and dynamic-viewport layouts end to end; content below the viewport must remain reachable. Trace which objects inherit every changed position, rotation, quaternion, and scale. When placement should become world-fixed, verify tracking updates do not refresh only part of its transform while leaving other components frozen. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
+  "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, viewport height, min-height, overflow, reachable scrolling, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. For a viewport-height container, calculate the minimum vertical stack from fixed font sizes, line heights, margins, gaps, and padding; if it can exceed a short viewport, verify one ancestor actually scrolls and no outer overflow rule clips that scroll range. Trace short-screen and dynamic-viewport layouts end to end; content below the viewport must remain reachable. Trace which objects inherit every changed position, rotation, quaternion, and scale. When placement should become world-fixed, verify tracking updates do not refresh only part of its transform while leaving other components frozen. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
 ];
 
 export const CONTRACT_SEARCH_PLANNER_INSTRUCTIONS = [
@@ -45,7 +47,7 @@ export function getDiscoveryPasses(chunk: string): string[] {
   const passes = isContractChunk(chunk)
     ? [...DISCOVERY_PASSES.slice(0, -1), CONTRACT_SEARCH_DISCOVERY_PASS]
     : DISCOVERY_PASSES;
-  if (/^diff --git a\/[^ ]+\.py b\/[^ ]+\.py/m.test(chunk)) {
+  if (hasChangedPythonPath(chunk)) {
     return [passes[0], passes[1], passes[2], PYTHON_LINT_DISCOVERY_PASS, ...passes.slice(4)];
   }
   if (/^diff --git a\/(?:docs\/[^ ]+|(?:[^/]+\/)*README(?:\.[^/]+)?) /m.test(chunk)) {
@@ -69,9 +71,13 @@ export function getInitialDiscoveryPasses(chunk: string): string[] {
 }
 
 export function getContractSearchDiscoveryPass(chunk: string): string {
-  return /^diff --git a\/[^ ]+\.py b\/[^ ]+\.py/m.test(chunk)
+  return hasChangedPythonPath(chunk)
     ? `${CONTRACT_SEARCH_DISCOVERY_PASS}\n\n${PYTHON_LINT_DISCOVERY_PASS}`
     : CONTRACT_SEARCH_DISCOVERY_PASS;
+}
+
+function hasChangedPythonPath(chunk: string): boolean {
+  return changedHeadPaths(chunk).some((path) => path.endsWith(".py"));
 }
 
 export const VERIFICATION_INSTRUCTIONS = [

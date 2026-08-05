@@ -4,7 +4,7 @@ import { resolve } from "path";
 import OpenAI from "openai";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
-import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
+import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
@@ -97,7 +97,7 @@ async function main() {
     const reviewChunks = splitDiffIntoFiles(diff)
       .filter(({ path }) => selectedFiles.size === 0 || selectedFiles.has(path))
       .flatMap(({ content }) => chunkDiffByFile(content, 50000));
-    const reviewedPaths = splitDiffIntoFiles(diff).map(({path}) => path);
+    const reviewedPaths = changedHeadPaths(diff);
     const responses = [];
     console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
     for (const [index, chunk] of reviewChunks.entries()) {
@@ -172,7 +172,7 @@ async function main() {
           {reviewedPaths}
         );
         discovery.push(await discover([
-          CONTRACT_SEARCH_DISCOVERY_PASS,
+          getContractSearchDiscoveryPass(chunk),
           "CONTRACT SEARCH EVIDENCE:",
           wrapContractSearchEvidence(contractEvidence),
         ].join("\n\n")));
@@ -198,7 +198,12 @@ async function main() {
           reviewInput,
         ].join("\n\n"));
         toolUsage.push(plan.usage);
-        precisionQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk, context);
+        precisionQueries = completeContractSearchPlan(
+          plan.choices[0]?.message.content || "",
+          chunk,
+          context,
+          {prioritizePlanned: true}
+        );
         precisionEvidence = await buildContractSearchEvidence(
           localGit,
           "",

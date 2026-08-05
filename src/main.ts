@@ -237,6 +237,7 @@ async function run(): Promise<void> {
       );
       return;
     }
+    const reviewedPaths = changedHeadPaths(reviewDiff);
 
     const reviewChunks = splitDiffIntoFiles(reviewDiff).flatMap(({ content }) =>
       chunkDiffByFile(content, maxDiffSize)
@@ -315,7 +316,7 @@ async function run(): Promise<void> {
               headRef,
               queries,
               changedPaths,
-              {counterevidence, reviewedPaths: diffFiles.map(({path}) => path)}
+              {counterevidence, reviewedPaths}
             ),
             chunk,
             context,
@@ -775,7 +776,11 @@ async function runReviewPipeline(
       [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"),
       true
     );
-    precisionEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff, context), changedHeadPaths(diff), true);
+    precisionEvidence = await searchContracts(
+      completeContractSearchPlan(plan.content, diff, context, {prioritizePlanned: true}),
+      changedHeadPaths(diff),
+      true
+    );
   }
   const precisionPrompt = [
     reviewInstructions,

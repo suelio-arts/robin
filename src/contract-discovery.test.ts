@@ -42,6 +42,29 @@ describe("contract discovery", () => {
     ].join("\n"))).toEqual(["loadGeneratedStory", "assembleWalkEditPayload", "handler"]);
   });
 
+  it("prioritizes model-planned queries only for precision evidence", () => {
+    const chunk = [
+      "diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts",
+      "+title: localizedTitle",
+      "+validatePayload(payload);",
+      "+serializePayload(payload);",
+    ].join("\n");
+    const plan = '{"queries":["candidateCounterevidence","schemaAuthority"]}';
+
+    expect(completeContractSearchPlan(plan, chunk)).toEqual([
+      "OverridesById",
+      "buildStoryWalk",
+      "validatePayload",
+      "serializePayload",
+    ]);
+    expect(completeContractSearchPlan(plan, chunk, "", {prioritizePlanned: true})).toEqual([
+      "candidateCounterevidence",
+      "schemaAuthority",
+      "OverridesById",
+      "buildStoryWalk",
+    ]);
+  });
+
   it("extracts bounded changed contract identifiers and async callers", () => {
     const chunk = [
       "diff --git a/src/dashboard.ts b/src/dashboard.ts",

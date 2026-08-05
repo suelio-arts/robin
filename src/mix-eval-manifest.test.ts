@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import manifest from "../eval/mix-recent-prs.json";
 
 describe("MIX review benchmark", () => {
@@ -28,5 +30,12 @@ describe("MIX review benchmark", () => {
     }
     const developmentHeads = new Set(manifest.developmentCases.map(({head}) => head));
     expect([...manifest.holdoutCases, ...manifest.holdoutNegativeControls].every(({ head }) => !developmentHeads.has(head))).toBe(true);
+  });
+
+  it("keeps evaluation contract and precision discovery aligned with production", () => {
+    const source = readFileSync(resolve("scripts/eval-mix-recent-prs.ts"), "utf8");
+    expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
+    expect(source).toContain("{prioritizePlanned: true}");
+    expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");
   });
 });

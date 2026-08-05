@@ -86,7 +86,12 @@ export function parseContractSearchPlan(content: string): string[] {
   )].slice(0, MAX_QUERIES);
 }
 
-export function completeContractSearchPlan(content: string, chunk: string, context = ""): string[] {
+export function completeContractSearchPlan(
+  content: string,
+  chunk: string,
+  context = "",
+  options: {prioritizePlanned?: boolean} = {}
+): string[] {
   const planned = parseContractSearchPlan(content);
   const changedContractQueries = extractChangedContractQueries(chunk);
   const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+.*\btitle\s*:/m.test(chunk)
@@ -100,7 +105,9 @@ export function completeContractSearchPlan(content: string, chunk: string, conte
     .map((match) => match[1] || match[2])
     .filter((option) => changedCliUsage && !documentedOptions.has(option)))]
     .sort((left, right) => Number(right.includes("-")) - Number(left.includes("-")) || left.localeCompare(right));
-  return [...new Set([...projectionQueries, ...missingCliOptions, ...changedContractQueries, ...helperQueries, ...planned])].slice(0, MAX_QUERIES);
+  const inferred = [...projectionQueries, ...missingCliOptions, ...changedContractQueries, ...helperQueries];
+  return [...new Set(options.prioritizePlanned ? [...planned, ...inferred] : [...inferred, ...planned])]
+    .slice(0, MAX_QUERIES);
 }
 
 export function changedHeadPaths(diff: string): string[] {

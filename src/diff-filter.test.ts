@@ -96,4 +96,14 @@ describe("chunkDiffByFile", () => {
     expect(chunks.join("\n")).toContain("last-change");
     expect(chunks.every((chunk) => chunk.startsWith("diff --git a/large.ts b/large.ts"))).toBe(true);
   });
+
+  it("rejects a chunk limit that cannot preserve the complete file header", () => {
+    const header = "diff --git a/large.ts b/large.ts\n+++ b/large.ts\n";
+    const diff = `${header}@@ -1 +1 @@\n+change\n`;
+
+    expect(() => chunkDiffByFile(diff, header.length)).toThrow(/must exceed.*diff header/);
+    const chunks = chunkDiffByFile(diff, header.length + 1);
+    expect(chunks.every((chunk) => chunk.startsWith(header))).toBe(true);
+    expect(chunks.every((chunk) => chunk.length <= header.length + 1)).toBe(true);
+  });
 });

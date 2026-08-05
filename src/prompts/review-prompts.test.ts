@@ -36,6 +36,7 @@ describe("getReviewPrompt", () => {
     expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("server handler and persistence serializer");
     expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("unchanged hydration, edit state, and save serializers");
     expect(DISCOVERY_PASSES.join("\n")).toContain("refresh only part of its transform");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("calculate the minimum vertical stack");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("cross-entity identity mismatch");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("same-diff comment or test");
@@ -111,6 +112,12 @@ describe("getReviewPrompt", () => {
     expect(pythonPasses[3]).toContain("per-file ignores");
     expect(pythonPasses[3]).toContain("anchored to a changed line");
     expect(getContractSearchDiscoveryPass("diff --git a/tools/check.py b/tools/check.py")).toContain("repository-enforced Python static analysis");
+    const quotedPython = 'diff --git "a/tools/check name.py" "b/tools/check name.py"';
+    expect(getDiscoveryPasses(quotedPython)[3]).toContain("repository-enforced Python static analysis");
+    expect(getContractSearchDiscoveryPass(quotedPython)).toContain("repository-enforced Python static analysis");
+    const quotedUnicodePython = 'diff --git "a/tools/caf\\303\\251.py" "b/tools/caf\\303\\251.py"';
+    expect(getDiscoveryPasses(quotedUnicodePython)[3]).toContain("repository-enforced Python static analysis");
+    expect(getContractSearchDiscoveryPass(quotedUnicodePython)).toContain("repository-enforced Python static analysis");
     expect(getContractSearchDiscoveryPass("diff --git a/tools/check.ts b/tools/check.ts")).toBe(CONTRACT_SEARCH_DISCOVERY_PASS);
   });
 });

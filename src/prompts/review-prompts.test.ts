@@ -30,10 +30,19 @@ describe("getReviewPrompt", () => {
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {
-    const passes = getDiscoveryPasses("diff --git a/e2e/mixsim.mjs b/e2e/mixsim.mjs");
-    expect(passes).toHaveLength(6);
-    expect(passes[5]).toContain("enumerate every rejection guard and state");
-    expect(passes[5]).toContain("canonical preflight or contract checks");
+    for (const path of [
+      "e2e/mixsim.mjs",
+      "scripts/validator.ts",
+      "scripts/release-gate.sh",
+      ".github/workflows/ci.yml",
+      "scripts/preflight-check.sh",
+    ]) {
+      const passes = getDiscoveryPasses(`diff --git a/${path} b/${path}`);
+      expect(passes).toHaveLength(6);
+      expect(passes[5]).toContain("enumerate every rejection guard and state");
+      expect(passes[5]).toContain("canonical preflight or contract checks");
+    }
+    expect(getDiscoveryPasses("diff --git a/src/latest.ts b/src/latest.ts")).toEqual(DISCOVERY_PASSES);
     expect(getDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
   });
 });

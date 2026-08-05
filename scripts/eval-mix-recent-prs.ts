@@ -4,7 +4,7 @@ import { resolve } from "path";
 import OpenAI from "openai";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
-import { DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getReviewPrompt } from "../src/prompts/review-prompts";
+import { PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getDiscoveryPasses, getReviewPrompt } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
@@ -147,7 +147,7 @@ async function main() {
         reviewPrompt,
         `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
       );
-      const [firstPass, ...remainingPasses] = DISCOVERY_PASSES;
+      const [firstPass, ...remainingPasses] = getDiscoveryPasses(chunk);
       const discovery = [await discover(firstPass)];
       for (let pass = 0; pass < remainingPasses.length; pass += 2) {
         discovery.push(...await Promise.all(remainingPasses.slice(pass, pass + 2).map(discover)));

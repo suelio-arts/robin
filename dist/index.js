@@ -1623,7 +1623,7 @@ async function runReviewPipeline(llm, diff, context, reviewInstructions, jsonRes
             return parsed.findings;
         return review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
     };
-    const [firstPass, ...remainingPasses] = review_prompts_1.DISCOVERY_PASSES;
+    const [firstPass, ...remainingPasses] = (0, review_prompts_1.getDiscoveryPasses)(diff);
     const discovery = [await discover(firstPass)];
     for (let index = 0; index < remainingPasses.length; index += 2) {
         discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
@@ -1786,6 +1786,7 @@ function selectApprovedCandidates(candidates, response, summary = "") {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.PRECISION_INSTRUCTIONS = exports.VERIFICATION_INSTRUCTIONS = exports.DISCOVERY_PASSES = void 0;
+exports.getDiscoveryPasses = getDiscoveryPasses;
 exports.getReviewPrompt = getReviewPrompt;
 exports.getSummaryPrompt = getSummaryPrompt;
 exports.getHelpMessage = getHelpMessage;
@@ -1797,6 +1798,13 @@ exports.DISCOVERY_PASSES = [
     "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
     "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, viewport height, min-height, overflow, reachable scrolling, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace short-screen and dynamic-viewport layouts end to end; content below the viewport must remain reachable. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
 ];
+const CONTRACT_DISCOVERY_PASS = "Audit only false-passing validators, gates, fixtures, harnesses, and aggregate CLI commands. Treat changed test infrastructure as product code. For each imported predicate, use its supplied implementation to enumerate every rejection guard and state, then map each to the changed assertions; report any omitted reachable state, including pending or generating. For each new aggregate or UI-test path, compare supplied repository conventions and sibling entry points for canonical preflight or contract checks, and report a bypass. Anchor an omission to the changed case list or invocation block.";
+function getDiscoveryPasses(chunk) {
+    if (!/(?:test|spec|fixture|harness|validate|verify|check|e2e|ci[_/-]|workflow|\.github\/workflows)/i.test(chunk)) {
+        return exports.DISCOVERY_PASSES;
+    }
+    return [...exports.DISCOVERY_PASSES.slice(0, -1), CONTRACT_DISCOVERY_PASS];
+}
 exports.VERIFICATION_INSTRUCTIONS = [
     "Final evidence pass: do not add findings. Keep only candidates whose trigger, changed line, failing path, and material impact are directly proven.",
     "Reject pre-existing or copied behavior, unsupported callers, build targets, configurations, provider-contract hypotheticals, and concurrency contradicted by a serialized caller.",

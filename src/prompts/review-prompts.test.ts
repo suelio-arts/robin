@@ -26,6 +26,7 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("transient pending or generating states");
     expect(DISCOVERY_PASSES.join("\n")).toContain("losing timeout or operation is cancelled");
     expect(DISCOVERY_PASSES.join("\n")).toContain("privacy text with the actual data and capability use");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("canonical release documentation");
     expect(DISCOVERY_PASSES.join("\n")).toContain("server handler and persistence serializer");
     expect(DISCOVERY_PASSES.join("\n")).toContain("refresh only part of its transform");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");

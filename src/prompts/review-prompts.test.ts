@@ -11,7 +11,9 @@ describe("getReviewPrompt", () => {
     expect(prompt).toContain("repository registries and sibling entry points");
     expect(prompt).toContain("Never report standalone requests for more tests");
     expect(prompt).toContain("compare every imported predicate and canonical preflight");
+    expect(prompt).toContain("An added or changed required validator, gate, fixture, or harness that claims a contract");
     expect(prompt).toContain("omits a reachable changed state or canonical preflight");
+    expect(prompt).toContain("anchor it to the changed assertion or invocation block");
   });
 
   it("keeps repository-wide contract checks in the fixed-cost discovery passes", () => {

@@ -35,9 +35,9 @@ export interface ChatCompletionResult {
 
 export type LlmProgressHandler = (detail: string) => void | Promise<void>;
 export type ReasoningEffort = "low" | "medium" | "high";
+export type LocalAgentCaller = "github" | "codex";
 
 export class LLMClient {
-  private static localQueue: Promise<void> = Promise.resolve();
   private client: OpenAI;
   private model: string;
   private maxOutputTokens?: number;
@@ -47,6 +47,7 @@ export class LLMClient {
   private reasoningEffort?: ReasoningEffort;
   private localAgent: boolean;
   private timeoutMs: number;
+  private localAgentCaller: LocalAgentCaller;
 
   constructor(
     baseUrl: string,
@@ -56,13 +57,15 @@ export class LLMClient {
     timeoutMs = DEFAULT_LLM_TIMEOUT_MS,
     maxAttempts = DEFAULT_LLM_COMPLETION_ATTEMPTS,
     onProgress?: LlmProgressHandler,
-    reasoningEffort?: ReasoningEffort
+    reasoningEffort?: ReasoningEffort,
+    localAgentCaller: LocalAgentCaller = "github"
   ) {
     this.model = model;
     this.localAgent = baseUrl === ROLLY_AGENT_URL;
     this.routerModel = isOpenRouterRouterModel(model);
     this.onProgress = onProgress;
     this.reasoningEffort = reasoningEffort;
+    this.localAgentCaller = localAgentCaller;
     this.maxOutputTokens =
       maxOutputTokens && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
         ? maxOutputTokens
@@ -173,11 +176,6 @@ export class LLMClient {
     systemPrompt: string,
     userContent: string
   ): Promise<ChatCompletionResult> {
-    let release!: () => void;
-    const previous = LLMClient.localQueue;
-    LLMClient.localQueue = new Promise<void>((resolve) => { release = resolve; });
-    await previous;
-
     let root: string | undefined;
     try {
       root = await mkdtemp(join(process.env.RUNNER_TEMP || tmpdir(), "robin-agent-"));
@@ -190,7 +188,7 @@ export class LLMClient {
         "agent", "run",
         "--agent", this.model,
         "--mode", "read",
-        "--caller", "github",
+        "--caller", this.localAgentCaller,
         "--user", "deniz",
         "--workdir", workdir,
         "--prompt", prompt,
@@ -202,11 +200,7 @@ export class LLMClient {
       if (!content.trim()) throw new Error("Rolly agent returned an empty result");
       return { content, model: this.model };
     } finally {
-      try {
-        if (root) await rm(root, { recursive: true, force: true });
-      } finally {
-        release();
-      }
+      if (root) await rm(root, { recursive: true, force: true });
     }
   }
 

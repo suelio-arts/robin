@@ -1,7 +1,6 @@
 import { execFileSync } from "child_process";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
-import OpenAI from "openai";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
 import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
@@ -9,13 +8,11 @@ import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/preci
 import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
+import { LLMClient } from "../src/llm-client";
 
 type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
 type NegativeControl = EvalCase & { rejectedCandidates: RejectedCandidate[] };
-
-const apiKey = process.env.OPENAI_API_KEY;
-if (!apiKey) throw new Error("OPENAI_API_KEY is required");
 
 const mixRepo = process.env.MIX_REPO || "/Users/rolly/Build/mix/mix-mono";
 const output = resolve(process.argv[2] || "eval/mix-recent-prs-results.json");
@@ -26,7 +23,17 @@ const manifest = JSON.parse(
   holdoutCases: EvalCase[];
   holdoutNegativeControls: NegativeControl[];
 };
-const client = new OpenAI({ apiKey });
+const client = new LLMClient(
+  "rolly-agent",
+  "",
+  "luna-5-6-high-subscription",
+  undefined,
+  600_000,
+  1,
+  undefined,
+  "high",
+  "codex"
+);
 const selectedPrs = new Set(
   (process.env.EVAL_PRS || "").split(",").filter(Boolean).map(Number)
 );
@@ -66,15 +73,12 @@ function validateSnapshot(testCase: EvalCase): void {
 }
 
 async function review(systemPrompt: string, userContent: string) {
-  return client.chat.completions.create({
-    model: "gpt-5.6-luna",
-    reasoning_effort: "high",
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userContent },
-    ],
-  });
+  const response = await client.chatCompletion(systemPrompt, userContent, true);
+  return {
+    choices: [{message: {content: response.content}}],
+    model: response.model,
+    usage: {transport: "subscription"},
+  };
 }
 
 async function main() {

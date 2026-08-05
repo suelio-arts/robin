@@ -36,12 +36,18 @@ describe("LLMClient", () => {
       const response = await new LLMClient(
         "rolly-agent",
         "",
-        "luna-5-6-high-subscription"
+        "luna-5-6-high-subscription",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "codex"
       ).chatCompletion("system", "user", true);
       expect(response.content).toBe('{"summary":"clean"}');
       expect(execFile).toHaveBeenCalledWith(
         "/Users/rolly/.local/bin/rolly",
-        expect.arrayContaining(["--caller", "github", "--agent", "luna-5-6-high-subscription"]),
+        expect.arrayContaining(["--caller", "codex", "--agent", "luna-5-6-high-subscription"]),
         expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 }),
         expect.any(Function)
       );

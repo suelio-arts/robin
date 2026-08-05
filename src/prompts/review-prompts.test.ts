@@ -38,6 +38,9 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Exact-head repository context outranks");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Reject mutation-test wish lists");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("specific reachable state or boundary that it omits");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("value exists in the read projection");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("serializers may iterate only selected IDs");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("directly forwards the already validated input");
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {

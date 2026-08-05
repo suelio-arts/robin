@@ -8,7 +8,7 @@ describe("MIX review benchmark", () => {
     expect(new Set(snapshots).size).toBe(snapshots.length);
     expect(manifest.developmentCases.length).toBeGreaterThanOrEqual(5);
     expect(manifest.developmentCases.flatMap((testCase) => testCase.labels).length).toBeGreaterThanOrEqual(12);
-    expect(manifest.holdoutCases.flatMap((testCase) => testCase.labels)).toHaveLength(36);
+    expect(manifest.holdoutCases.flatMap((testCase) => testCase.labels)).toHaveLength(42);
     expect(manifest.holdoutNegativeControls.flatMap(({ rejectedCandidates }) => rejectedCandidates)).toHaveLength(21);
     for (const label of manifest.holdoutCases.flatMap((testCase) => testCase.labels)) {
       expect(label).toEqual(expect.objectContaining({

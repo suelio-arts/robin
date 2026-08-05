@@ -4,7 +4,7 @@ type ContractSearchGit = {
 };
 
 const MAX_QUERIES = 4;
-const MAX_PATHS_PER_QUERY = 4;
+const MAX_PATHS_PER_QUERY = 5;
 const MAX_PATHS = 10;
 const FILE_LIMIT = 6000;
 const TOTAL_LIMIT = 30000;
@@ -94,8 +94,9 @@ export function completeContractSearchPlan(
 ): string[] {
   const planned = parseContractSearchPlan(content);
   const changedContractQueries = extractChangedContractQueries(chunk);
+  const exactOverrideCollection = (chunk + "\n" + context).match(/\b[A-Za-z_$][\w$]*OverridesById\b/)?.[0];
   const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+.*\btitle\s*:/m.test(chunk)
-    ? ["OverridesById", "buildStoryWalk"]
+    ? [exactOverrideCollection ?? "OverridesById", "buildStoryWalk"]
     : [];
   const requiredCollectionQueries = [...chunk.matchAll(/\b([A-Za-z_$][\w$]*)\s*&&\s*([A-Za-z_$][\w$]*)\.length\s*===?\s*0/g)]
     .flatMap((match) => [match[1], match[2]]);
@@ -107,8 +108,16 @@ export function completeContractSearchPlan(
     .map((match) => match[1] || match[2])
     .filter((option) => changedCliUsage && !documentedOptions.has(option)))]
     .sort((left, right) => Number(right.includes("-")) - Number(left.includes("-")) || left.localeCompare(right));
-  const inferred = [...requiredCollectionQueries, ...projectionQueries, ...missingCliOptions, ...changedContractQueries, ...helperQueries];
-  return [...new Set(options.prioritizePlanned ? [...planned, ...inferred] : [...inferred, ...planned])]
+  const checkoutRepo = chunk.split(/\n(?=\s*(?:[+-]\s*)?-\s+uses:)/)
+    .find((step) => /^\+\s*ref:\s*[0-9a-f]{40}\s*$/m.test(step))
+    ?.match(/\brepository:\s*[A-Za-z0-9_.-]+\/([A-Za-z0-9_.-]+)/)?.[1];
+  const pinnedHeadQuery = checkoutRepo
+    ? `${checkoutRepo.replace(/[-_.]+(.)/g, (_match, char: string) => char.toUpperCase())}Head`
+    : undefined;
+  const inferred = [...requiredCollectionQueries, ...projectionQueries, ...(pinnedHeadQuery ? [pinnedHeadQuery] : []), ...missingCliOptions, ...helperQueries];
+  return [...new Set(options.prioritizePlanned
+    ? [...planned, ...inferred, ...changedContractQueries]
+    : [...inferred, ...planned, ...changedContractQueries])]
     .slice(0, MAX_QUERIES);
 }
 
@@ -155,7 +164,26 @@ export async function buildContractSearchEvidence(
   const seen = new Set<string>();
   const sections: string[] = [];
   let remaining = TOTAL_LIMIT;
+  const expandedQueries: string[] = [];
   for (const query of queries.slice(0, MAX_QUERIES)) {
+    let expanded = false;
+    if (query === "OverridesById") {
+      for (const path of [...new Set([...changedPaths, ...(options.reviewedPaths || [])])]) {
+        try {
+          const content = await git.getFileContent(owner, repo, path, head);
+          const exact = content.match(/\b[A-Za-z_$][\w$]*OverridesById\b/)?.[0];
+          if (exact) {
+            expandedQueries.push(exact);
+            expanded = true;
+          }
+        } catch {
+          // Keep the broad planned query when exact-head context is unavailable.
+        }
+      }
+    }
+    if (!expanded) expandedQueries.push(query);
+  }
+  for (const query of [...new Set(expandedQueries)].slice(0, MAX_QUERIES)) {
     let paths: string[];
     try {
       paths = await git.searchPaths(owner, repo, query);
@@ -171,10 +199,11 @@ export async function buildContractSearchEvidence(
       }
     }
     paths = [...new Set([...exactHeadPaths, ...paths])];
-    paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
+    const relatedPaths = [...new Set([...changedPaths, ...(options.reviewedPaths || [])])];
+    paths.sort((left, right) => contractPathScore(right, relatedPaths, options.counterevidence) - contractPathScore(left, relatedPaths, options.counterevidence) || left.localeCompare(right));
     const selectedPaths = options.counterevidence
       ? paths.slice(0, MAX_PATHS_PER_QUERY)
-      : selectLayerDiversePaths(paths, MAX_PATHS_PER_QUERY, options.reviewedPaths);
+      : selectLayerDiversePaths(paths, MAX_PATHS_PER_QUERY, options.reviewedPaths, changedPaths);
     for (const path of selectedPaths) {
       if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0) continue;
       seen.add(path);
@@ -203,17 +232,17 @@ function contractLayer(path: string): string {
   if (/^(?:docs?\/|README)/i.test(path)) return "docs";
   if (/\.(?:swift|m|mm)$|(?:^|\/)ios(?:\/|$)/i.test(path)) return "apple";
   if (/(?:^|\/)(?:backend|server|api)(?:\/|$)/i.test(path)) return "server";
-  if (/(?:^|\/)(?:scripts?|cli|bin)(?:\/|$)/i.test(path)) return "tooling";
   if (/(?:^|[/_.-])(?:test|tests|spec|specs|e2e|fixture|fixtures)(?:[/_.-]|$)/i.test(path)) return "test";
+  if (/(?:^|\/)(?:scripts?|cli|bin)(?:\/|$)/i.test(path)) return "tooling";
   if (/(?:^|\/)(?:web|studio|app)(?:\/|$)/i.test(path)) return "client";
   return path.split("/", 1)[0] || "root";
 }
 
-function selectLayerDiversePaths(paths: string[], limit: number, reviewedPaths: string[] = []): string[] {
-  const reviewed = paths.find((path, index) =>
-    index > 0 && reviewedPaths.includes(path) && contractLayer(path) === contractLayer(paths[0])
-  );
-  const selected = reviewed ? [paths[0], reviewed] : [];
+function selectLayerDiversePaths(paths: string[], limit: number, reviewedPaths: string[] = [], chunkPaths: string[] = []): string[] {
+  const selected = paths.length > 0 ? [paths[0]] : [];
+  const reviewed = paths.find((path) => path !== paths[0] && reviewedPaths.includes(path) && !chunkPaths.includes(path)
+    && !/(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|schema|types?)(?:[/_.-]|$)/i.test(path));
+  if (reviewed && selected.length < limit) selected.push(reviewed);
   const layers = new Set<string>();
   selected.forEach((path) => layers.add(contractLayer(path)));
   for (const path of paths) {
@@ -222,6 +251,12 @@ function selectLayerDiversePaths(paths: string[], limit: number, reviewedPaths: 
     if (layers.has(layer)) continue;
     selected.push(path);
     layers.add(layer);
+    if (selected.length === limit) return selected;
+  }
+  for (const path of paths) {
+    if (!reviewedPaths.includes(path) || chunkPaths.includes(path) || selected.includes(path)
+        || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|schema|types?)(?:[/_.-]|$)/i.test(path)) continue;
+    selected.push(path);
     if (selected.length === limit) return selected;
   }
   for (const path of paths) {

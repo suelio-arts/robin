@@ -34,6 +34,18 @@ describe("contract discovery", () => {
     ]);
   });
 
+  it("searches the exact write-side override collection from diff context", () => {
+    const chunk = [
+      "diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts",
+      "+  ...(node.title !== undefined ? {title: resolve(node.title)} : {}),",
+    ].join("\n");
+
+    expect(completeContractSearchPlan('{"queries":[]}', chunk, "const override = request.navNodeOverridesById?.[node.id];")).toEqual([
+      "navNodeOverridesById",
+      "buildStoryWalk",
+    ]);
+  });
+
   it("searches invoked helpers that can validate a candidate", () => {
     expect(completeContractSearchPlan('{"queries":["handler"]}', [
       "diff --git a/cli.ts b/cli.ts",
@@ -47,6 +59,33 @@ describe("contract discovery", () => {
       "diff --git a/studio/web/js/walk-editor.mjs b/studio/web/js/walk-editor.mjs",
       "+if (thesis && beats.length === 0) throw new Error('Add a beat');",
     ].join("\n"))).toEqual(["thesis", "beats", "unrelated"]);
+  });
+
+  it("searches the manifest head for a changed external checkout pin", () => {
+    const chunk = [
+      "diff --git a/.github/workflows/eval.yml b/.github/workflows/eval.yml",
+      "          repository: suelio-arts/robin",
+      "-         ref: 1111111111111111111111111111111111111111",
+      "+         ref: 2222222222222222222222222222222222222222",
+    ].join("\n");
+
+    expect(completeContractSearchPlan('{"queries":[]}', chunk)).toEqual(["robinHead"]);
+  });
+
+  it("associates a changed checkout ref with its own repository step", () => {
+    const chunk = [
+      "diff --git a/.github/workflows/eval.yml b/.github/workflows/eval.yml",
+      "      - uses: actions/checkout@v4",
+      "        with:",
+      "          repository: suelio-arts/other",
+      "      - uses: actions/checkout@v4",
+      "        with:",
+      "          repository: suelio-arts/robin",
+      "-         ref: 1111111111111111111111111111111111111111",
+      "+         ref: 2222222222222222222222222222222222222222",
+    ].join("\n");
+
+    expect(completeContractSearchPlan('{"queries":[]}', chunk)).toEqual(["robinHead"]);
   });
 
   it("prioritizes model-planned queries only for precision evidence", () => {
@@ -175,11 +214,39 @@ describe("contract discovery", () => {
         "studio/web/core/walk-creator-core.mjs",
         "studio/web/js/walk-editor.mjs",
         "studio/web/js/simulator.mjs",
+        "studio/cli/mix-studio-cli.mjs",
+        "backend/functions/src/endpoints/story-walks.ts",
+        "studio/tests/simulator-walk.spec.mjs",
       ],
       getFileContent: async (_owner, _repo, path) => `${path}\nnavNodeOverridesById`,
-    }, "o", "r", "head", ["navNodeOverridesById"], ["backend/functions/src/endpoints/studio-simulator.ts"]);
+    }, "o", "r", "head", ["navNodeOverridesById"], ["backend/functions/src/endpoints/studio-simulator.ts"], {
+      reviewedPaths: [
+        "backend/functions/src/endpoints/studio-simulator.ts",
+        "backend/functions/src/endpoints/story-walks.ts",
+        "studio/web/js/walk-editor.mjs",
+        "studio/web/js/walk-manager.mjs",
+        "studio/cli/mix-studio-cli.mjs",
+      ],
+    });
 
-    expect(evidence).toContain("studio/web/js/simulator.mjs");
+    expect(evidence).toContain("studio/web/js/walk-editor.mjs");
+    expect(evidence).toContain("studio/web/js/walk-manager.mjs");
+    expect(evidence).toContain("studio/cli/mix-studio-cli.mjs");
+  });
+
+  it("expands a broad override query from the exact changed file", async () => {
+    const searches: string[] = [];
+    await buildContractSearchEvidence({
+      searchPaths: async (_owner, _repo, query) => {
+        searches.push(query);
+        return [];
+      },
+      getFileContent: async () => "const override = request.navNodeOverridesById?.[node.id];",
+    }, "o", "r", "head", ["OverridesById", "buildStoryWalk"], ["backend/studio-simulator.ts"], {
+      reviewedPaths: ["backend/studio-simulator.ts", "studio/web/editor.mjs"],
+    });
+
+    expect(searches.slice(0, 2)).toEqual(["navNodeOverridesById", "buildStoryWalk"]);
   });
 
   it("prioritizes cross-layer authority and marks reviewed files for precision", async () => {

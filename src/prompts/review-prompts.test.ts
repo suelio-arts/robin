@@ -53,6 +53,9 @@ describe("getReviewPrompt", () => {
     }
     expect(getDiscoveryPasses("diff --git a/src/latest.ts b/src/latest.ts")).toEqual(DISCOVERY_PASSES);
     expect(getDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
+    const trackingPasses = getDiscoveryPasses("diff --git a/web/ar.mjs b/web/ar.mjs\n+anchor.position.copy(next.position);\n+ImageTargetEvent.UPDATED");
+    expect(trackingPasses).toHaveLength(6);
+    expect(trackingPasses[0]).toContain("mixed-frame transform");
     expect(getInitialDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("canonical sibling preflight/contract entry points");
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("server handler and persistence serializer");

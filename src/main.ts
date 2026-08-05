@@ -19,7 +19,7 @@ import {
 } from "./repo-config";
 import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
-import { isPullRequestReviewEvent, workflowDispatchPrNumber } from "./events";
+import { isPullRequestReviewEvent, validateExpectedHeadSha, workflowDispatchPrNumber } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
 import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
@@ -37,6 +37,7 @@ async function run(): Promise<void> {
   try {
     const eventName = github.context.eventName;
     const payload = github.context.payload;
+    const expectedHeadSha = core.getInput("expected-head-sha");
     const token = core.getInput("github-token", { required: true });
     octokit = github.getOctokit(token);
     const minCommandPermission = core.getInput("min-command-permission") || "write";
@@ -96,15 +97,8 @@ async function run(): Promise<void> {
         return;
       }
 
-      await addEyesReaction(octokit, owner, repo, payload.comment?.id);
-
       command = parsedCommand;
       prNumber = payload.issue.number;
-
-      if (command === "help") {
-        await postHelpComment(octokit, payload);
-        return;
-      }
 
       shouldRun = true;
     } else {
@@ -123,6 +117,16 @@ async function run(): Promise<void> {
       return;
     }
     pullNumber = prNumber;
+
+    const { data: pullRequest } = await octokit.rest.pulls.get({ owner, repo, pull_number: prNumber });
+    validateExpectedHeadSha(expectedHeadSha, pullRequest.head.sha);
+    if (eventName === "issue_comment") {
+      await addEyesReaction(octokit, owner, repo, payload.comment?.id);
+    }
+    if (command === "help") {
+      await postHelpComment(octokit, payload);
+      return;
+    }
 
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
@@ -187,7 +191,6 @@ async function run(): Promise<void> {
     }
 
     const gitUtils = new GitUtils(octokit as any);
-    const { data: pullRequest } = await octokit.rest.pulls.get({ owner, repo, pull_number: prNumber });
     const baseRef = pullRequest.base.sha;
     const headRef = pullRequest.head.sha;
     const repoConfig = await loadRepoConfig(

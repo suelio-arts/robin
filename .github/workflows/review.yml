@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: ""
+      expected-head-sha:
+        description: "Optional full PR head SHA; fail before review side effects if the PR has advanced."
+        required: false
+        type: string
+        default: ""
       fail-on-high:
         description: "Fail the workflow when high severity issues are found."
         required: false
@@ -119,6 +124,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           pr-number: ${{ inputs.pr-number }}
+          expected-head-sha: ${{ inputs.expected-head-sha }}
           llm-api-key: ${{ secrets.LLM_API_KEY }}
           llm-base-url: ${{ secrets.LLM_BASE_URL }}
           model: ${{ secrets.LLM_MODEL }}

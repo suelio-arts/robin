@@ -72,6 +72,8 @@ describe("getReviewPrompt", () => {
     }
     expect(getDiscoveryPasses("diff --git a/src/latest.ts b/src/latest.ts")).toEqual(DISCOVERY_PASSES);
     expect(getDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
+    const cliHelpPasses = getDiscoveryPasses("diff --git a/cli.mjs b/cli.mjs\n-  tool-cli walk build --walk-id <id>\n+  tool-cli walk build --walk-id <id> [--title <text>]");
+    expect(cliHelpPasses[5]).toContain("repository-contract gaps");
     const trackingPasses = getDiscoveryPasses("diff --git a/web/ar.mjs b/web/ar.mjs\n+anchor.position.copy(next.position);\n+ImageTargetEvent.UPDATED");
     expect(trackingPasses).toHaveLength(6);
     expect(trackingPasses[0]).toContain("mixed-frame transform");

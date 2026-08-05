@@ -79,4 +79,21 @@ describe("chunkDiffByFile", () => {
     expect(chunks[0]).toContain("a.ts");
     expect(chunks[1]).toContain("b.ts");
   });
+
+  it("paginates every hunk of an oversized file", () => {
+    const diff = [
+      "diff --git a/large.ts b/large.ts\n+++ b/large.ts\n",
+      "@@ -1 +1 @@\n+first-change\n",
+      `@@ -2 +2 @@\n+${"middle".repeat(20)}\n`,
+      "@@ -3 +3 @@\n+last-change\n",
+    ].join("");
+
+    const chunks = chunkDiffByFile(diff, 100);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.length <= 100)).toBe(true);
+    expect(chunks.join("\n")).toContain("first-change");
+    expect(chunks.join("\n")).toContain("last-change");
+    expect(chunks.every((chunk) => chunk.startsWith("diff --git a/large.ts b/large.ts"))).toBe(true);
+  });
 });

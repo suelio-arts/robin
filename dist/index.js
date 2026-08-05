@@ -387,7 +387,7 @@ function chunkDiffByFile(diff, maxChunkSize) {
             current = "";
         }
         if (file.content.length > maxChunkSize) {
-            chunks.push(`${file.content.slice(0, maxChunkSize)}\n\n[... File diff truncated]`);
+            chunks.push(...chunkOversizedFile(file.content, maxChunkSize));
         }
         else {
             current += file.content;
@@ -396,6 +396,36 @@ function chunkDiffByFile(diff, maxChunkSize) {
     if (current)
         chunks.push(current);
     return chunks;
+}
+function chunkOversizedFile(content, maxChunkSize) {
+    const firstHunk = content.search(/^@@ /m);
+    const header = firstHunk === -1 ? "" : content.slice(0, firstHunk);
+    const bodies = firstHunk === -1
+        ? [content]
+        : content.slice(firstHunk).split(/(?=^@@ )/m).filter(Boolean);
+    const prefix = header.slice(0, Math.max(0, maxChunkSize - 1));
+    const bodyLimit = Math.max(1, maxChunkSize - prefix.length);
+    const pages = [];
+    let page = prefix;
+    const flush = () => {
+        if (page.length > prefix.length || (prefix === "" && page))
+            pages.push(page);
+        page = prefix;
+    };
+    for (const body of bodies) {
+        if (body.length > bodyLimit) {
+            flush();
+            for (let offset = 0; offset < body.length; offset += bodyLimit) {
+                pages.push(prefix + body.slice(offset, offset + bodyLimit));
+            }
+            continue;
+        }
+        if (page.length + body.length > maxChunkSize)
+            flush();
+        page += body;
+    }
+    flush();
+    return pages;
 }
 //# sourceMappingURL=diff-filter.js.map
 
@@ -2009,7 +2039,8 @@ function isContractChunk(chunk) {
     const contractPath = paths.some((path) => path.startsWith(".github/workflows/")
         || path.includes("studio-simulator")
         || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|harness|validate|validator|validation|verify|check|checks|gate|gates|aggregate|preflight|e2e|ci)(?:[/_.-]|$)/i.test(path));
-    const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk);
+    const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk)
+        || /^[+-](?![+-])\s*(?:Usage:|\S*cli\b.*--)/mi.test(chunk);
     return contractPath || contractContent;
 }
 function getDiscoveryPasses(chunk) {

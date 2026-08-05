@@ -34,7 +34,8 @@ export function isContractChunk(chunk: string): boolean {
     || path.includes("studio-simulator")
     || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|harness|validate|validator|validation|verify|check|checks|gate|gates|aggregate|preflight|e2e|ci)(?:[/_.-]|$)/i.test(path)
   );
-  const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk);
+  const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk)
+    || /^[+-](?![+-])\s*(?:Usage:|\S*cli\b.*--)/mi.test(chunk);
   return contractPath || contractContent;
 }
 

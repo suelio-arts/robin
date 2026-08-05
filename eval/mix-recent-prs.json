@@ -543,6 +543,31 @@
         {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "the self-test injects retry arguments directly into verify_release_once and never exercises the production failure-classification-cache-reset-retry orchestration it claims to protect", "source": "Luna"},
         {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "substring call-count checks over flattened argv accept invalid option suffixes and do not prove the exact invocation set", "source": "Luna"}
       ]
+    },
+    {
+      "pr": 258,
+      "base": "0505ccb89927655d9b7450915e16b9cbf3b80dfc",
+      "head": "f296746b6d3c9bc1f0c1986f73e422abc6d9e806",
+      "labels": [
+        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "survival verification compares a trimmed persisted navigation title with the raw untrimmed requested title and falsely reports a failed save", "source": "CodeRabbit"},
+        {"file": "backend/functions/src/endpoints/studio-simulator.ts", "rootCause": "Studio projects existing navigation titles but both save surfaces omit title from navNodeOverridesById, so rebuild discards authored titles and hidden beats fall back", "source": "Greptile"}
+      ]
+    },
+    {
+      "pr": 274,
+      "base": "065ff57c7d1e344cb0d1ebdfa49f9e691300e3b3",
+      "head": "f4387ed210cb8b45f5b842c634aae6f55a641076",
+      "labels": [
+        {"file": "studio/ingestion_backend/store.py", "rootCause": "prompt or keyterm transcription forces universal-3-pro while forwarding unsupported language codes unchanged instead of validating or selecting the compatible model", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 314,
+      "base": "3ad1aca1307b386fe2b2651c7f227a8329bc7e1f",
+      "head": "a972064a70157536d3bd9b20be35459a161e9e93",
+      "labels": [
+        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "the workflow checks out a Robin SHA different from the immutable robinHead declared by the loaded benchmark manifest, so results are attributed to the wrong review pipeline", "source": "CodeRabbit"}
+      ]
     }
   ],
   "unscoredHistoricalNotes": [
@@ -653,6 +678,51 @@
       "labels": [
         {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "verify_async_algorithms_pin parses commented PBX properties and lets them overwrite active fields, allowing a moving dependency to pass the revision-pin gate", "source": "CodeRabbit"}
       ]
+    },
+    {
+      "pr": 240,
+      "base": "0d3035e3c073b63e6c4d6f7abc6d6556658baadc",
+      "head": "534bd0735137c72e0c581da08db2b8f15bd1dd86",
+      "generation": 2,
+      "labels": [{"file": "studio/ops/release/xcode-cloud.py", "rootCause": "pagination follows an arbitrary links.next URL while api_request attaches the App Store Connect bearer token, allowing credential exfiltration to another host", "source": "CodeRabbit"}]
+    },
+    {
+      "pr": 243,
+      "base": "79e05d37ebcb550947f3fe95a7729ca7aff00965",
+      "head": "22a96ff2cceaddbf61978f1aff11bee9ba86e00c",
+      "generation": 2,
+      "labels": [],
+      "rejected": "CodeRabbit purge-result claim is contradicted by retainedQuarantineEntries in the return value and the CLI's nonzero exit when it is non-empty"
+    },
+    {
+      "pr": 288,
+      "base": "abbc49e3759c6fbd98db6a70ba3cc6ca0a746f87",
+      "head": "ffe723aeda956af3d977a2f46844934be5dc7209",
+      "generation": 2,
+      "labels": [{"file": "studio/ops/ads/cli.py", "rootCause": "a non-PAUSED campaign, ad group, or ad is rejected only after creation, leaving a live spend-capable resource despite the staged-paused guarantee", "source": "CodeRabbit"}]
+    },
+    {
+      "pr": 294,
+      "base": "3728824f2b67592dc702d5895fbc3cc0c7e16da3",
+      "head": "eee54092e835cc999ac7e0ae4bccf56d6891a6fc",
+      "generation": 2,
+      "labels": [],
+      "rejected": "The internal handlers receive IDs only from controls rendered from the current collections; no reachable caller supplies a missing ID"
+    },
+    {
+      "pr": 307,
+      "base": "2aabd6ce2a4761ba9f39e9d0e2a3795902aef60c",
+      "head": "720a0a16e59ade200316b5850d64eca46f9bf66a",
+      "generation": 2,
+      "labels": [],
+      "rejected": "The select and prepare steps both require 40-character lowercase commit SHAs; mutable branches, tags, and abbreviations are rejected"
+    },
+    {
+      "pr": 317,
+      "base": "fa6dc8a0cd650d9da021854668ded1578420aae7",
+      "head": "87fe3fe8cab52c567e287f907dab354433bb25ab",
+      "generation": 2,
+      "labels": [{"file": "studio/web/js/walk-manager.mjs", "rootCause": "dirty workspace state survives sign-out or account switch and can expose or save the prior user's unpublished content under the next user", "source": "CodeRabbit"}]
     }
   ],
   "holdoutCases": [
@@ -731,23 +801,6 @@
           "file": "AR/MIX iOS/Views/SpatialStoriesExperienceView.swift",
           "rootCause": "TabView selection uses a constant binding, so user selection cannot persist",
           "source": "CodeRabbit"
-        }
-      ]
-    },
-    {
-      "pr": 258,
-      "base": "0505ccb89927655d9b7450915e16b9cbf3b80dfc",
-      "head": "f296746b6d3c9bc1f0c1986f73e422abc6d9e806",
-      "labels": [
-        {
-          "file": "studio/cli/mix-studio-cli.mjs",
-          "rootCause": "survival verification compares a trimmed persisted navigation title with the raw untrimmed requested title and falsely reports a failed save",
-          "source": "CodeRabbit"
-        },
-        {
-          "file": "backend/functions/src/endpoints/studio-simulator.ts",
-          "rootCause": "Studio projects existing navigation titles but both save surfaces omit title from navNodeOverridesById, so rebuild discards authored titles and hidden beats fall back",
-          "source": "Greptile"
         }
       ]
     },
@@ -902,22 +955,6 @@
       ]
     },
     {
-      "pr": 274,
-      "base": "065ff57c7d1e344cb0d1ebdfa49f9e691300e3b3",
-      "head": "f4387ed210cb8b45f5b842c634aae6f55a641076",
-      "labels": [
-        {"file": "studio/ingestion_backend/store.py", "rootCause": "prompt or keyterm transcription forces universal-3-pro while forwarding unsupported language codes unchanged instead of validating or selecting the compatible model", "source": "CodeRabbit"}
-      ]
-    },
-    {
-      "pr": 314,
-      "base": "3ad1aca1307b386fe2b2651c7f227a8329bc7e1f",
-      "head": "a972064a70157536d3bd9b20be35459a161e9e93",
-      "labels": [
-        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "the workflow checks out a Robin SHA different from the immutable robinHead declared by the loaded benchmark manifest, so results are attributed to the wrong review pipeline", "source": "CodeRabbit"}
-      ]
-    },
-    {
       "pr": 263,
       "base": "20703acae2ce0e6cbf6ab3a7ffaa8add7a240757",
       "head": "96385d40d006f93a25afb92aefa7829c5cd9469c",
@@ -940,6 +977,77 @@
       "labels": [
         {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "benchmark inputs accept mutable or abbreviated refs and record them as exact snapshots without requiring immutable 40-character commit SHAs", "source": "CodeRabbit"}
       ]
+    },
+    {
+      "pr": 303,
+      "base": "2ae990fbd1340ca1755aa42b1c9fd3e79dc3c2d6",
+      "head": "abb58780b429e58be09dbc016f1c802e9ef3ea8e",
+      "labels": [
+        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "benchmark executes evaluated Robin code while checkout credentials remain persisted in local Git configuration", "source": "CodeRabbit"},
+        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "benchmark workflow uses mutable action tags instead of immutable full commit SHAs", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 303,
+      "base": "2ae990fbd1340ca1755aa42b1c9fd3e79dc3c2d6",
+      "head": "e5d8fd3753d81cd71c3b7b2d61ddda11c55e7403",
+      "labels": [
+        {"file": ".github/benchmarks/artifacts/fourth-holdout-supplemental-prelabel-freeze-2.json", "rootCause": "supplemental freeze stores selected PR 301 only under prs while cases-only consumers omit it, and also contains unselected PR 299", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 238,
+      "base": "651c753a2034ca11eec6ad181cef22412f65e13c",
+      "head": "3af1e4e50a37e427ffeafc76454337416d7b121c",
+      "labels": [
+        {"file": "web/qr/800/verify.mjs", "rootCause": "lifecycle dependency gate matches arbitrary path substrings rather than the actual import declaration", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 235,
+      "base": "8af51b083ee0048ef08f3082c4840b48513fc658",
+      "head": "73c924647136dfd904df0281721544a3ba3566a1",
+      "generation": 3,
+      "labels": [{"file": "web/qr/800/experience-v1.mjs", "rootCause": "layout JSON is fetched without a deadline, so a connection that keeps dribbling bytes leaves loadLayout pending forever and prevents the preview fallback", "source": "CodeRabbit"}]
+    },
+    {
+      "pr": 237,
+      "base": "b8238bd820357c3b54ece8f897eee3cfa10dd7dd",
+      "head": "7fd1ad6b79950f00e164b611a29d251b4a2bd5cb",
+      "generation": 3,
+      "labels": [
+        {"file": "web/qr/800/experience-v2.mjs", "rootCause": "XR8.stop() is evaluated before settleSafely can handle it, so a synchronous throw escapes stopAR and prevents abortInvalidARStart from resetting the UI to paused preview", "source": "CodeRabbit"},
+        {"file": "web/qr/800/experience-v2.mjs", "rootCause": "preview teardown calls nonexistent THREE.Mesh.dispose(), throwing before geometry and material disposal and breaking lifecycle cleanup", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 244,
+      "base": "78ea88d1c9792b073049c21a881e35176e635763",
+      "head": "6a2e29a9af28439029c696c242fff2fab35023ca",
+      "generation": 3,
+      "labels": [{"file": "web/qr/800/verify.mjs", "rootCause": "persistent-placement verification rejects only two literal source spellings, so equivalent target-loss code can hide the field or clear its anchor while the gate still passes", "source": "CodeRabbit"}]
+    },
+    {
+      "pr": 247,
+      "base": "c813a4ad4ddb6491dde87fd5f5bda4930e06a5df",
+      "head": "af982c4f0f81370639780eab7dd9a7f7921cb2a5",
+      "generation": 3,
+      "labels": [{"file": "ios/AR/Shared/Store/Store.swift", "rootCause": "each product request launches an unstructured 12-second timeout task that is never retained or cancelled after success, so completed or retried requests accumulate live timer tasks until their deadlines", "source": "CodeRabbit"}]
+    },
+    {
+      "pr": 248,
+      "base": "9b20cf9b364c21414914ea814e5ab838851185fd",
+      "head": "fc4e11154470ad183dc9650b9fb78f3671e9787c",
+      "generation": 3,
+      "labels": [{"file": "studio/ci_scripts/verify_studio_cli_contracts.sh", "rootCause": "RejectedItemClient.paged_request ignores params, so the contract test still passes if the production request drops fields[reviewSubmissionItems] or changes its page limit", "source": "CodeRabbit"}]
+    },
+    {
+      "pr": 102,
+      "base": "3da0be66d010b954d2b51acb5f68b2e77b9f5255",
+      "head": "2824887dd459efda77a0208a7adbfe35c97573d6",
+      "generation": 3,
+      "labels": [],
+      "rejected": "An unused timestamp is dead state, not a proven user-visible regression"
     }
   ],
   "holdoutNegativeControls": [

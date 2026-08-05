@@ -153,6 +153,25 @@ describe("getReviewPrompt", () => {
       "diff --git a/ci/verify_gate.sh b/ci/verify_gate.sh",
       "+if [[ ${1:-} == --self-test ]]; then ! verify_once; fi",
     ].join("\n"))[3]).toContain("standalone ! command");
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/vendor/client.py b/vendor/client.py",
+      "+config[\"speech_models\"] = [\"universal-3-pro\"]",
+    ].join("\n"))[4]).toContain("every option the changed request still forwards");
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/.github/workflows/eval.yml b/.github/workflows/eval.yml",
+      "+      uses: vendor/action@main",
+    ].join("\n"))[0]).toContain("immutable full commit SHAs");
+    expect(DISCOVERY_PASSES[0]).toContain("findIndex=-1");
+    expect(DISCOVERY_PASSES[1]).toContain("structured result");
+    expect(DISCOVERY_PASSES[2]).toContain("authenticated origin");
+    expect(getInitialDiscoveryPasses("diff --git a/client.mjs b/client.mjs\n+await fetch(url).then(r => r.json())")[0])
+      .toContain("network completion bounds");
+    expect(getInitialDiscoveryPasses("diff --git a/ar.mjs b/ar.mjs\n+await settleSafely(XR8.stop?.())")[0])
+      .toContain("evaluation order");
+    expect(getInitialDiscoveryPasses("diff --git a/verify.mjs b/verify.mjs\n+assert.doesNotMatch(source, /visible = false/)")[0])
+      .toContain("source-code verification gates");
+    expect(getInitialDiscoveryPasses("diff --git a/src/domain.ts b/src/domain.ts\n+const version = 2\n+const model = record"))
+      .toEqual(DISCOVERY_PASSES);
     const requiredChildren = [
       "diff --git a/studio/editor.mjs b/studio/editor.mjs",
       "+if (thesis && beats.length === 0) throw new Error('Add a beat');",

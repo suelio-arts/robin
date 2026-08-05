@@ -5,12 +5,12 @@ import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
 import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
-import { StructuredReview } from "../src/review-parser";
+import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
 import { LLMClient } from "../src/llm-client";
 
-type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
+type EvalCase = { pr: number; base: string; head: string; generation?: number; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
 type NegativeControl = EvalCase & { rejectedCandidates: RejectedCandidate[] };
 
@@ -20,6 +20,7 @@ const manifest = JSON.parse(
   readFileSync(resolve("eval/mix-recent-prs.json"), "utf8")
 ) as {
   developmentCases: EvalCase[];
+  unscoredHistoricalNotes: EvalCase[];
   holdoutCases: EvalCase[];
   holdoutNegativeControls: NegativeControl[];
 };
@@ -46,6 +47,7 @@ const selectedFiles = new Set(
 const selectedChunks = new Set(
   (process.env.EVAL_CHUNKS || "").split(",").filter(Boolean).map(Number)
 );
+const exposedGenerations = new Set([3, 4]);
 
 function asReview(value: unknown): Partial<StructuredReview> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Partial<StructuredReview> : {};
@@ -88,8 +90,12 @@ async function main() {
     throw new Error("EVAL_SET must be development or holdout");
   }
   const cases = evalSet === "holdout"
-    ? manifest.holdoutCases
-    : manifest.developmentCases;
+    ? manifest.holdoutCases.filter(({generation}) => !generation || !exposedGenerations.has(generation))
+    : [
+        ...manifest.developmentCases,
+        ...manifest.unscoredHistoricalNotes.filter(({generation}) => generation === 2),
+        ...manifest.holdoutCases.filter(({generation}) => generation && exposedGenerations.has(generation)),
+      ];
   for (const testCase of cases.filter(
     (candidate) =>
       (selectedPrs.size === 0 || selectedPrs.has(candidate.pr))
@@ -183,7 +189,7 @@ async function main() {
         ].join("\n\n")));
       }
       const candidates = discovery.map((candidate) =>
-        asReview(JSON.parse(candidate.choices[0]?.message.content || "{}"))
+        asReview(ReviewParser.parse(candidate.choices[0]?.message.content || ""))
       );
       const verification = await review(reviewPrompt, [
         reviewInput,
@@ -192,7 +198,7 @@ async function main() {
         "REVIEW FOCUS:",
         VERIFICATION_INSTRUCTIONS.join("\n"),
       ].join("\n\n"));
-      const verified = asReview(JSON.parse(verification.choices[0]?.message.content || "{}"));
+      const verified = asReview(ReviewParser.parse(verification.choices[0]?.message.content || ""));
       const precisionCandidates = buildPrecisionCandidates([...candidates, verified]);
       let precisionQueries: string[] = [];
       let precisionEvidence = "";

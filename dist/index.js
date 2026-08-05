@@ -1113,7 +1113,6 @@ function runFile(file, args, options) {
     });
 }
 class LLMClient {
-    static localQueue = Promise.resolve();
     client;
     model;
     maxOutputTokens;
@@ -1123,12 +1122,14 @@ class LLMClient {
     reasoningEffort;
     localAgent;
     timeoutMs;
-    constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort) {
+    localAgentCaller;
+    constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort, localAgentCaller = "github") {
         this.model = model;
         this.localAgent = baseUrl === ROLLY_AGENT_URL;
         this.routerModel = (0, llm_retry_1.isOpenRouterRouterModel)(model);
         this.onProgress = onProgress;
         this.reasoningEffort = reasoningEffort;
+        this.localAgentCaller = localAgentCaller;
         this.maxOutputTokens =
             maxOutputTokens && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
                 ? maxOutputTokens
@@ -1207,10 +1208,6 @@ class LLMClient {
         throw new Error(`Empty response from LLM after ${this.maxAttempts} attempts (finish_reason=${lastFinishReason})`);
     }
     async localAgentCompletion(systemPrompt, userContent) {
-        let release;
-        const previous = LLMClient.localQueue;
-        LLMClient.localQueue = new Promise((resolve) => { release = resolve; });
-        await previous;
         let root;
         try {
             root = await (0, promises_1.mkdtemp)((0, path_1.join)(process.env.RUNNER_TEMP || (0, os_1.tmpdir)(), "robin-agent-"));
@@ -1223,7 +1220,7 @@ class LLMClient {
                 "agent", "run",
                 "--agent", this.model,
                 "--mode", "read",
-                "--caller", "github",
+                "--caller", this.localAgentCaller,
                 "--user", "deniz",
                 "--workdir", workdir,
                 "--prompt", prompt,
@@ -1238,13 +1235,8 @@ class LLMClient {
             return { content, model: this.model };
         }
         finally {
-            try {
-                if (root)
-                    await (0, promises_1.rm)(root, { recursive: true, force: true });
-            }
-            finally {
-                release();
-            }
+            if (root)
+                await (0, promises_1.rm)(root, { recursive: true, force: true });
         }
     }
     async blockingChatCompletion(request) {

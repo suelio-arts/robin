@@ -1,0 +1,32 @@
+{
+  "createdAt": "2026-08-05",
+  "sourcePolicy": "GitHub PR reviews, inline review comments, Actions metadata, and immutable reviewed commits only",
+  "added": {"snapshots": 8, "positiveLabels": 9, "negativeControls": 1, "prs": [270, 272, 304, 308, 312, 321, 322]},
+  "positiveEvidence": [
+    {"pr": 304, "head": "893124efa2f6941c8190be681dfb98ec34de0b4b", "commentId": 3716896536, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896536", "source": "CodeRabbit", "category": "backend data integrity"},
+    {"pr": 304, "head": "893124efa2f6941c8190be681dfb98ec34de0b4b", "commentId": 3716896556, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896556", "source": "CodeRabbit", "category": "Swift/iOS contract handling"},
+    {"pr": 304, "head": "44ecd13af4e5774814fc3a41c4719805b30070db", "commentId": 3716896547, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896547", "source": "CodeRabbit", "category": "schema/generated contract"},
+    {"pr": 308, "head": "d3e780caab03367390a95c95ff6d1e805c15d601", "commentId": 3717437999, "url": "https://github.com/suelio-arts/mix-mono/pull/308#discussion_r3717437999", "source": "CodeRabbit", "category": "shell/CI"},
+    {"pr": 312, "head": "f1cc4c1e75c9be75cd08d846dc81eef9e7470cbe", "commentId": 3717550081, "url": "https://github.com/suelio-arts/mix-mono/pull/312#discussion_r3717550081", "source": "CodeRabbit", "category": "TypeScript/web concurrency/lifecycle"},
+    {"pr": 321, "head": "c35d1fe276537d961e5ecc1187273076b310b61b", "commentId": 3718795059, "url": "https://github.com/suelio-arts/mix-mono/pull/321#discussion_r3718795059", "source": "CodeRabbit", "category": "schema/runtime compatibility"},
+    {"pr": 322, "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16", "commentId": 3720100861, "reviewId": 4863783321, "url": "https://github.com/suelio-arts/mix-mono/pull/322#discussion_r3720100861", "reviewUrl": "https://github.com/suelio-arts/mix-mono/pull/322#pullrequestreview-4863783321", "source": "CodeRabbit", "category": "shell/CI dependency integrity", "independentValidation": "A synthetic PBX object with active kind=branch/revision=main and expected kind/revision inside a block comment produces the expected dictionary and false-passes the exact-head parser.", "parityDisposition": "Luna miss at Robin run 31000526134"},
+    {"pr": 270, "head": "12a8d81b293bdb7bbe681589189c14e3c6305079", "commentId": 3699887717, "url": "https://github.com/suelio-arts/mix-mono/pull/270#discussion_r3699887717", "source": "Greptile", "category": "backend/iOS universal-link contract"},
+    {"pr": 272, "head": "db361347a16c118452bdbfbe64b554f0ec89586d", "commentId": 3700041940, "url": "https://github.com/suelio-arts/mix-mono/pull/272#discussion_r3700041940", "source": "Greptile", "category": "release documentation contract"}
+  ],
+  "negativeEvidence": [
+    {"pr": 304, "head": "893124efa2f6941c8190be681dfb98ec34de0b4b", "commentId": 3716896516, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896516", "source": "CodeRabbit", "disposition": "negative_nondefect_refactor", "reason": "The comment identifies a refactor suggestion; duplicated values match the central contract and no behavioral failure is demonstrated."}
+  ],
+  "pr322Parity": {
+    "robinRunId": 31000526134,
+    "runUrl": "https://github.com/suelio-arts/mix-mono/actions/runs/31000526134",
+    "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16",
+    "conclusion": "success",
+    "benchmarkDisposition": "development regression used to tune the conditional parser-adversary pass; excluded from holdout parity scoring",
+    "coderabbitUniqueRootCause": "comment-blind PBX property parsing in verify_async_algorithms_pin",
+    "robinObservedFindingsForAdjudication": [
+      {"commentId": 3720117263, "url": "https://github.com/suelio-arts/mix-mono/pull/322#discussion_r3720117263", "severity": "medium", "rootCause": "pipeline documentation omits the Android build stage", "scoreDisposition": "unscored_unique_robin_finding"},
+      {"commentId": 3720117272, "url": "https://github.com/suelio-arts/mix-mono/pull/322#discussion_r3720117272", "severity": "medium", "rootCause": "background-command guard misses arguments, redirects, and pipelines before the ampersand", "scoreDisposition": "unscored_unique_robin_finding"}
+    ]
+  },
+  "greptileEvidence": {"addedLabels": 2, "availablePrs": [270, 272], "missingSelectedPrs": [304, 308, 312, 321, 322], "reason": "No Greptile inline evidence was present on those five selected PRs; the gap is explicit rather than inferred."}
+}

@@ -120,5 +120,14 @@ describe("getReviewPrompt", () => {
     expect(getDiscoveryPasses(quotedUnicodePython)[3]).toContain("repository-enforced Python static analysis");
     expect(getContractSearchDiscoveryPass(quotedUnicodePython)).toContain("repository-enforced Python static analysis");
     expect(getContractSearchDiscoveryPass("diff --git a/tools/check.ts b/tools/check.ts")).toBe(CONTRACT_SEARCH_DISCOVERY_PASS);
+    const parserPasses = getInitialDiscoveryPasses([
+      "diff --git a/scripts/verify.py b/scripts/verify.py",
+      "+kind = re.search(r'kind = ([^;]+)', block).group(1)",
+    ].join("\n"));
+    expect(parserPasses).toHaveLength(4);
+    expect(parserPasses[0]).toContain("comments, quoted strings, duplicate fields");
+    expect(parserPasses[0]).toContain("active properties from commented or quoted lookalikes");
+    expect(getInitialDiscoveryPasses("diff --git a/src/value.ts b/src/value.ts\n+const value = input.trim()"))
+      .toEqual(DISCOVERY_PASSES);
   });
 });

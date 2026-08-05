@@ -17,5 +17,10 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("normalized readback comparisons");
     expect(DISCOVERY_PASSES.join("\n")).toContain("user-entered search/filter values");
     expect(DISCOVERY_PASSES.join("\n")).toContain("required registries and preflight lists");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("aggregate commands invoke its canonical contract gates");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("observable system to settle");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("transient pending or generating states");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("losing timeout or operation is cancelled");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("privacy text with the actual data and capability use");
   });
 });

@@ -17,7 +17,7 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
+import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext } from "./review-context";
@@ -760,6 +760,15 @@ async function runReviewPipeline(
     [`CANDIDATE FINDINGS:\n${candidates}`, ...VERIFICATION_INSTRUCTIONS].join("\n\n")
   )).content);
   const precisionCandidates = buildPrecisionCandidates([...discovery, verified]);
+  let precisionEvidence = "";
+  if (precisionCandidates.length > 0 && isContractChunk(diff)) {
+    const plan = await llm.chatCompletion(
+      PRECISION_SEARCH_PLANNER_INSTRUCTIONS,
+      [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"),
+      true
+    );
+    precisionEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff), changedHeadPaths(diff));
+  }
   const precisionPrompt = [
     reviewInstructions,
     ...PRECISION_INSTRUCTIONS,
@@ -767,8 +776,9 @@ async function runReviewPipeline(
   const precisionInput = [
     "CANDIDATES:",
     JSON.stringify(precisionCandidates),
+    precisionEvidence && `CANDIDATE COUNTEREVIDENCE:\n${wrapContractSearchEvidence(precisionEvidence)}`,
     buildReviewInput(diff, context),
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
   let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
   let precise: StructuredReview;
   try {

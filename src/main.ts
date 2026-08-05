@@ -17,7 +17,7 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
+import { PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext } from "./review-context";
@@ -728,7 +728,7 @@ async function runReviewPipeline(
       `${instructions}\n\nReturn ONLY a single valid JSON object.`
     )).content);
   };
-  const [firstPass, ...remainingPasses] = DISCOVERY_PASSES;
+  const [firstPass, ...remainingPasses] = getDiscoveryPasses(diff);
   const discovery = [await discover(firstPass)];
   for (let index = 0; index < remainingPasses.length; index += 2) {
     discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));

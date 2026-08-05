@@ -31,6 +31,7 @@ async function run(): Promise<void> {
   let statusCommentId: number | undefined;
   let statusCommand: "review" | "summary" = "review";
   let statusModel = "not configured";
+  let pullNumber: number | undefined;
   let onJobCancelled: (() => Promise<void>) | undefined;
 
   try {
@@ -112,6 +113,7 @@ async function run(): Promise<void> {
       core.info("No matching trigger found. Skipping.");
       return;
     }
+    pullNumber = prNumber;
 
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
@@ -353,6 +355,20 @@ async function run(): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     if (octokit && statusOwner && statusRepo && statusCommentId) {
       await updateStatusComment(octokit, statusOwner, statusRepo, statusCommentId, buildFailedStatusBody(message, statusCommand));
+    }
+    if (octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
+      try {
+        await new GitHubReviewer(octokit as any).postFailureReview(
+          statusOwner,
+          statusRepo,
+          pullNumber,
+          message
+        );
+        core.warning(`Review blocked after execution failure: ${message}`);
+        return;
+      } catch (reviewError) {
+        core.error(`Could not post fail-closed review: ${reviewError}`);
+      }
     }
     core.setFailed(message);
   } finally {

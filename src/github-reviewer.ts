@@ -14,6 +14,30 @@ export class GitHubReviewer {
     this.maxComments = Number.isFinite(maxComments) ? Math.max(0, maxComments) : 25;
   }
 
+  async postFailureReview(
+    owner: string,
+    repo: string,
+    pullNumber: number,
+    message: string
+  ): Promise<void> {
+    const { data: review } = await this.octokit.rest.pulls.createReview({
+      owner,
+      repo,
+      pull_number: pullNumber,
+      event: "REQUEST_CHANGES",
+      body: [
+        "## " + ROBIN_SIGNATURE,
+        "",
+        "Robin could not complete this review, so this head is blocked fail-closed.",
+        "",
+        `\`${message}\``,
+        "",
+        "Re-run Robin after the transient failure is resolved.",
+      ].join("\n"),
+    });
+    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+  }
+
   /** Gatekeeper mode requests changes for High findings and approves clean heads. */
   static resolveReviewEvent(hasHigh: boolean, hasFindings: boolean, requestChanges: boolean): "REQUEST_CHANGES" | "APPROVE" | "COMMENT" {
     if (!requestChanges) return "COMMENT";

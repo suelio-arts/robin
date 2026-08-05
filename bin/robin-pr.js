@@ -17,7 +17,7 @@ function gh(args) {
 }
 
 function parseArgs(argv) {
-  const options = { timeout: 1800, interval: 10, json: false, rerun: false };
+  const options = { timeout: 3000, interval: 10, json: false, rerun: false };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--repo") options.repo = argv[++index];
@@ -34,17 +34,21 @@ function parseArgs(argv) {
   return options;
 }
 
-function exactHeadRun(repo, head) {
+function exactHeadRuns(repo, head) {
   const payload = JSON.parse(gh([
     "api",
     `repos/${repo}/commits/${head}/check-runs?check_name=review&per_page=100`,
   ]));
   return payload.check_runs
     .filter((run) => run.name === "review" && run.app?.slug === "github-actions")
-    .sort((left, right) => new Date(right.started_at || right.created_at) - new Date(left.started_at || left.created_at))[0];
+    .sort((left, right) => new Date(right.started_at || right.created_at) - new Date(left.started_at || left.created_at));
 }
 
-function exactHeadVerdict(repo, number, head) {
+function exactHeadRun(repo, head) {
+  return exactHeadRuns(repo, head)[0];
+}
+
+function exactHeadVerdicts(repo, number, head) {
   const reviews = JSON.parse(gh(["api", "--paginate", "--slurp", `repos/${repo}/pulls/${number}/reviews?per_page=100`])).flat();
   return reviews
     .filter((review) =>
@@ -52,7 +56,11 @@ function exactHeadVerdict(repo, number, head) {
       && review.user?.login === "github-actions[bot]"
       && (review.body || "").includes(":bow_and_arrow: Robin")
     )
-    .sort((left, right) => new Date(right.submitted_at) - new Date(left.submitted_at))[0];
+    .sort((left, right) => new Date(right.submitted_at) - new Date(left.submitted_at));
+}
+
+function exactHeadVerdict(repo, number, head, excludedIds = new Set()) {
+  return exactHeadVerdicts(repo, number, head).find((review) => !excludedIds.has(review.id));
 }
 
 function printResult(options, result) {
@@ -85,35 +93,38 @@ function main(argv) {
     const pr = JSON.parse(gh(viewArgs));
     const repo = options.repo || gh(["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"]);
     let run = exactHeadRun(repo, pr.headRefOid);
-    if (!run) fail(`No Robin review check exists on exact head ${pr.headRefOid}. Push/open the PR with synchronize reviews enabled first.`, options.json);
+    if (!run && !options.rerun) fail(`No Robin review check exists on exact head ${pr.headRefOid}. Push/open the PR with synchronize reviews enabled first.`, options.json);
+    let previousReviewIds = new Set();
     if (options.rerun) {
-      gh(["run", "rerun", String(run.id), "--repo", repo]);
-      sleep(1000);
+      previousReviewIds = new Set(exactHeadVerdicts(repo, pr.number, pr.headRefOid).map(({ id }) => id));
+      gh(["pr", "comment", String(pr.number), "--repo", repo, "--body", "/robin"]);
     }
 
     const deadline = Date.now() + options.timeout * 1000;
-    do {
-      run = exactHeadRun(repo, pr.headRefOid);
-      if (run?.status === "completed") break;
-      if (Date.now() >= deadline) fail(`Timed out waiting for Robin check on ${pr.headRefOid}.`, options.json);
-      sleep(options.interval * 1000);
-    } while (true);
+    if (!options.rerun) {
+      do {
+        run = exactHeadRun(repo, pr.headRefOid);
+        if (run?.status === "completed") break;
+        if (Date.now() >= deadline) fail(`Timed out waiting for Robin check on ${pr.headRefOid}.`, options.json);
+        sleep(options.interval * 1000);
+      } while (true);
+    }
 
     let verdict;
     do {
-      verdict = exactHeadVerdict(repo, pr.number, pr.headRefOid);
+      verdict = exactHeadVerdict(repo, pr.number, pr.headRefOid, previousReviewIds);
       if (verdict) break;
       if (Date.now() >= deadline) fail(`Robin check completed without an exact-head review verdict.`, options.json);
       sleep(options.interval * 1000);
     } while (true);
 
     const result = {
-      status: verdict.state === "APPROVED" && run.conclusion === "success" ? "clean" : "blocked",
+      status: verdict.state === "APPROVED" && (options.rerun || run.conclusion === "success") ? "clean" : "blocked",
       repo,
       pr: pr.number,
       head: pr.headRefOid,
-      check: run.conclusion,
-      runUrl: run.html_url,
+      check: options.rerun ? "review" : run.conclusion,
+      runUrl: options.rerun ? verdict.html_url : run.html_url,
       verdict: verdict.state,
       reviewUrl: verdict.html_url,
     };

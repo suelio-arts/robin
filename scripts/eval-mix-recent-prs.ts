@@ -36,6 +36,9 @@ const selectedHeads = new Set(
 const selectedFiles = new Set(
   (process.env.EVAL_FILES || "").split(",").filter(Boolean)
 );
+const selectedChunks = new Set(
+  (process.env.EVAL_CHUNKS || "").split(",").filter(Boolean).map(Number)
+);
 
 function asReview(value: unknown): Partial<StructuredReview> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Partial<StructuredReview> : {};
@@ -96,7 +99,8 @@ async function main() {
     );
     const reviewChunks = splitDiffIntoFiles(diff)
       .filter(({ path }) => selectedFiles.size === 0 || selectedFiles.has(path))
-      .flatMap(({ content }) => chunkDiffByFile(content, 50000));
+      .flatMap(({ content }) => chunkDiffByFile(content, 50000))
+      .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     const reviewedPaths = changedHeadPaths(diff);
     const responses = [];
     console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
@@ -261,7 +265,7 @@ async function main() {
     });
     writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
   }
-  if (evalSet === "holdout") {
+  if (evalSet === "holdout" && selectedChunks.size === 0) {
     for (const testCase of manifest.holdoutNegativeControls.filter(
       (candidate) =>
         (selectedPrs.size === 0 || selectedPrs.has(candidate.pr))
@@ -269,6 +273,7 @@ async function main() {
     )) {
       validateSnapshot(testCase);
       for (const candidate of testCase.rejectedCandidates) {
+        if (selectedFiles.size > 0 && !selectedFiles.has(candidate.file)) continue;
         const diff = execFileSync(
           "git",
           ["diff", "--no-ext-diff", "--unified=20", testCase.base, testCase.head, "--", candidate.file],

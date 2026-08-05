@@ -42,6 +42,13 @@ describe("contract discovery", () => {
     ].join("\n"))).toEqual(["loadGeneratedStory", "assembleWalkEditPayload", "handler"]);
   });
 
+  it("searches editing surfaces for required child collections", () => {
+    expect(completeContractSearchPlan('{"queries":["unrelated"]}', [
+      "diff --git a/studio/web/js/walk-editor.mjs b/studio/web/js/walk-editor.mjs",
+      "+if (thesis && beats.length === 0) throw new Error('Add a beat');",
+    ].join("\n"))).toEqual(["thesis", "beats", "unrelated"]);
+  });
+
   it("prioritizes model-planned queries only for precision evidence", () => {
     const chunk = [
       "diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts",
@@ -223,5 +230,22 @@ describe("contract discovery", () => {
     expect(evidence).toContain("backend/api/routes.ts");
     expect(evidence).toContain(".github/workflows/release.yml");
     expect(evidence).not.toContain("studio/web/routes/b.ts");
+  });
+
+  it("keeps a changed sibling editor needed to satisfy a new validator", async () => {
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async () => [
+        "studio/web/js/walk-editor.mjs",
+        "studio/web/js/walk-manager.mjs",
+        "studio/web/js/walk-editor.test.mjs",
+        "studio/cli/walk-edit.test.mjs",
+        "backend/scripts/story.ts",
+      ],
+      getFileContent: async (_owner, _repo, path) => `${path}\nthesis`,
+    }, "o", "r", "head", ["thesis"], ["studio/web/js/walk-editor.mjs"], {
+      reviewedPaths: ["studio/web/js/walk-editor.mjs", "studio/web/js/walk-manager.mjs"],
+    });
+
+    expect(evidence).toContain("studio/web/js/walk-manager.mjs [CHANGED IN THIS PR]");
   });
 });

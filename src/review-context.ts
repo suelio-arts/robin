@@ -24,7 +24,14 @@ export async function buildFileContext(
   let remaining = CONTEXT_LIMIT;
   const sections: string[] = [];
   const fetched = new Set<string>();
-  const terms = changedIdentifiers(chunk);
+  const boundaryTerms = [...chunk.matchAll(/\b([A-Za-z_$][A-Za-z0-9_$]*(?:Timestamp|Amount|Duration|Latitude|Longitude)[A-Za-z0-9_$]*)\b/gi)]
+    .map((match) => match[1]);
+  const contractTerms = [...chunk.matchAll(/^\+(?!\+\+).*\b([A-Za-z_$][A-Za-z0-9_$]*)\s*:\s*z\./gm)]
+    .map((match) => match[1]);
+  const fieldTerms = [...new Set([...boundaryTerms, ...contractTerms])];
+  const crossLayerTerms = /^\+(?!\+\+).*\b[A-Za-z_$][A-Za-z0-9_$]*Id\s*:\s*z\.string\(\)\.uuid\(\)/m.test(chunk)
+    ? [...fieldTerms, ".doc()"] : fieldTerms;
+  const terms = [...new Set([...fieldTerms, ...changedIdentifiers(chunk)])];
   const changedPaths = splitDiffIntoFiles(chunk).map((file) => file.path);
   const relatedBudget = { remaining: RELATED_REQUEST_LIMIT };
 
@@ -65,37 +72,79 @@ export async function buildFileContext(
     }
   }
 
+  if (remaining > 0 && fieldTerms.length > 0) {
+    const paths = [...new Set((await Promise.all(
+      fieldTerms.slice(0, 4).map((term) => git.searchPaths(owner, repo, term))
+    )).flat())]
+      .filter((path) => !changedPaths.includes(path) && !fetched.has(`${head}:${path}`))
+      .sort((left, right) => boundaryFieldScore(right) - boundaryFieldScore(left)
+        || repositorySearchAffinity(right, changedPaths) - repositorySearchAffinity(left, changedPaths)
+        || left.localeCompare(right));
+    for (const path of selectRepositoryLayers(paths, 4)) {
+      fetched.add(`${head}:${path}`);
+      const content = await git.getFileContent(owner, repo, path, head);
+      if (!content) continue;
+      const focused = matchingNeighborhoods(content, crossLayerTerms, Math.min(3000, remaining));
+      if (!focused) continue;
+      sections.push(`HEAD CROSS-LAYER FIELD MATCH: ${path}\n${focused}`);
+      remaining -= focused.length;
+      if (remaining <= 0) break;
+    }
+  }
+
   let treePaths: string[] = [];
   if (remaining > 0) {
     treePaths = await git.getTreePaths(owner, repo, head);
+    if (changedPaths.some(isContractSourcePath)) {
+      const generated = treePaths
+        .filter(isGeneratedContractPath)
+        .filter((path) => !fetched.has(`${head}:${path}`))
+        .sort((left, right) => generatedContractScore(right) - generatedContractScore(left)
+          || pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths)
+          || left.localeCompare(right));
+      let generatedBudget = Math.min(6000, remaining);
+      for (const path of generated.slice(0, 6)) {
+        fetched.add(`${head}:${path}`);
+        const content = await git.getFileContent(owner, repo, path, head);
+        if (!content) continue;
+        const limit = Math.min(3000, generatedBudget);
+        const focused = matchingNeighborhoods(content, terms, limit) || excerpt(content, limit);
+        sections.push(`HEAD GENERATED CONTRACT: ${path}\n${focused}`);
+        remaining -= focused.length;
+        generatedBudget -= focused.length;
+        if (remaining <= 0 || generatedBudget <= 0) break;
+      }
+    }
     const configurations = treePaths
       .filter(isConfigurationPath)
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+    let configurationBudget = Math.min(4000, remaining);
     for (const path of configurations.filter((path) => !fetched.has(`${head}:${path}`)).slice(0, 4)) {
       const key = `${head}:${path}`;
       if (fetched.has(key)) continue;
       fetched.add(key);
       const content = await git.getFileContent(owner, repo, path, head);
       if (!content) continue;
-      const value = excerpt(content, Math.min(RELATED_LIMIT, remaining));
+      const value = matchingNeighborhoods(content, terms, configurationBudget) || excerpt(content, configurationBudget);
       sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
       remaining -= value.length;
-      if (remaining <= 0) break;
+      configurationBudget -= value.length;
+      if (remaining <= 0 || configurationBudget <= 0) break;
     }
   }
 
   if (remaining > 0) {
-    const paths = [...new Set((await Promise.all(
+    const rankedPaths = [...new Set((await Promise.all(
       terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term))
     )).flat())]
       .filter((path) => !changedPaths.includes(path) && !isConfigurationPath(path) && !fetched.has(`${head}:${path}`))
       .sort((left, right) => repositorySearchAffinity(right, changedPaths) - repositorySearchAffinity(left, changedPaths) || left.localeCompare(right));
-    for (const path of paths.slice(0, 12)) {
+    for (const path of selectRepositoryLayers(rankedPaths, 12)) {
       const key = `${head}:${path}`;
       fetched.add(key);
       const content = await git.getFileContent(owner, repo, path, head);
       if (!content) continue;
-      const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
+      const focused = matchingNeighborhoods(content, terms, Math.min(3000, remaining));
       if (!focused) continue;
       sections.push(`HEAD REPOSITORY SEARCH MATCH: ${path}\n${focused}`);
       remaining -= focused.length;
@@ -129,6 +178,22 @@ function isConfigurationPath(path: string): boolean {
   return /(?:^|\/)(?:AGENTS\.md|CLAUDE\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path);
 }
 
+function isContractSourcePath(path: string): boolean {
+  return /(?:^|[/_.-])(?:schema|schemas|types|contract|contracts|openapi)(?:[/_.-]|$)/i.test(path);
+}
+
+function isGeneratedContractPath(path: string): boolean {
+  return /(?:^|[/_.-])(?:generated|codegen|openapi)(?:[/_.-]|$)/i.test(path)
+    && /\.(?:json|js|ts|swift|kt|java|py|go|rs)$/i.test(path);
+}
+
+function generatedContractScore(path: string): number {
+  if (/GeneratedModels\.(?:swift|kt|java)$/i.test(path)) return 3;
+  if (/openapi\.json$/i.test(path)) return 2;
+  if (/types?\.generated\./i.test(path)) return 1;
+  return 0;
+}
+
 function pathAffinity(path: string, changedPaths: string[]): number {
   return Math.max(0, ...changedPaths.map((changed) => {
     const left = path.split("/");
@@ -142,6 +207,30 @@ function pathAffinity(path: string, changedPaths: string[]): number {
 function repositorySearchAffinity(path: string, changedPaths: string[]): number {
   const documentationPriority = changedPaths.some((changed) => changed.startsWith("docs/")) && /(?:^|\/)README(?:\.|$)/i.test(path) ? 100 : 0;
   return documentationPriority + pathAffinity(path, changedPaths);
+}
+
+function boundaryFieldScore(path: string): number {
+  return /(?:^|[/_.-])(?:schema|schemas|types|contract|contracts|validator|validation)(?:[/_.-]|$)/i.test(path) ? 1 : 0;
+}
+
+function selectRepositoryLayers(paths: string[], limit: number): string[] {
+  const firstByLayer = new Map<string, string>();
+  for (const path of paths) {
+    const layer = /(?:^|\/)ios(?:\/|$)|\.swift$/i.test(path) ? "apple"
+      : /(?:^|\/)(?:backend|server|api)(?:\/|$)/i.test(path) ? "server"
+        : /(?:^|\/)(?:web|studio|app)(?:\/|$)/i.test(path) ? "client"
+          : /(?:^|\/)(?:docs?|README)(?:\/|\.|$)/i.test(path) ? "docs"
+            : "other";
+    if (!firstByLayer.has(layer)) firstByLayer.set(layer, path);
+  }
+  const selected = ["server", "apple", "client", "docs", "other"]
+    .flatMap((layer) => firstByLayer.has(layer) ? [firstByLayer.get(layer)!] : [])
+    .slice(0, limit);
+  for (const path of paths) {
+    if (!selected.includes(path)) selected.push(path);
+    if (selected.length === limit) break;
+  }
+  return selected;
 }
 
 function changedIdentifiers(diff: string): string[] {
@@ -162,11 +251,13 @@ function changedIdentifiers(diff: string): string[] {
     }
   }
   const ordered = [...counts.entries()]
-    .sort((left, right) => right[0].length - left[0].length || right[1] - left[1])
+    .sort((left, right) => right[1] - left[1] || right[0].length - left[0].length)
     .map(([term]) => term);
   const expanded = new Set<string>();
   for (const term of ordered) {
     expanded.add(term);
+    const unsuffixed = term.replace(/(?:Schema|Contract|Type)$/, "");
+    if (unsuffixed.length >= 7 && unsuffixed !== term) expanded.add(unsuffixed);
     const boundaries = [...term.matchAll(/[A-Z]/g)].map((match) => match.index || 0).filter((index) => index > 0);
     for (const index of boundaries) {
       const suffix = term.slice(index);

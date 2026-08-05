@@ -54,7 +54,34 @@ export function completeContractSearchPlan(content: string, chunk: string): stri
 }
 
 export function changedHeadPaths(diff: string): string[] {
-  return [...diff.matchAll(/^diff --git a\/.+? b\/(.+)$/gm)].map((match) => match[1]);
+  return diff.split("\n").flatMap((line) => {
+    if (!line.startsWith("diff --git ")) return [];
+    const fields = [...line.slice(11).matchAll(/"((?:\\.|[^"])*)"|(\S+)/g)];
+    if (fields.length !== 2) return [];
+    const quoted = fields[1][1];
+    const value = quoted === undefined ? fields[1][2] : decodeGitQuotedPath(quoted);
+    return value.startsWith("b/") ? [value.slice(2)] : [];
+  });
+}
+
+function decodeGitQuotedPath(value: string): string {
+  const bytes: number[] = [];
+  const escapes: Record<string, number> = {n: 10, r: 13, t: 9, b: 8, f: 12, v: 11};
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] !== "\\") {
+      bytes.push(...Buffer.from(value[index]));
+      continue;
+    }
+    const octal = value.slice(index + 1, index + 4);
+    if (/^[0-7]{3}$/.test(octal)) {
+      bytes.push(Number.parseInt(octal, 8));
+      index += 3;
+    } else {
+      const escaped = value[++index];
+      bytes.push(escapes[escaped] ?? escaped.charCodeAt(0));
+    }
+  }
+  return Buffer.from(bytes).toString("utf8");
 }
 
 export async function buildContractSearchEvidence(

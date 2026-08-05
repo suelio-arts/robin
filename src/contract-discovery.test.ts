@@ -25,6 +25,8 @@ describe("contract discovery", () => {
   it("uses HEAD-side paths for renamed files", () => {
     expect(changedHeadPaths("diff --git a/old/place.ts b/studio/new/place.ts"))
       .toEqual(["studio/new/place.ts"]);
+    expect(changedHeadPaths('diff --git "a/old/caf\\303\\251 name.ts" "b/studio/new/caf\\303\\251 name.ts"'))
+      .toEqual(["studio/new/café name.ts"]);
   });
 
   it("builds bounded exact-head evidence and survives failed searches", async () => {

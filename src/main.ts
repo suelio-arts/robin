@@ -19,7 +19,7 @@ import {
 } from "./repo-config";
 import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
-import { isPullRequestReviewEvent } from "./events";
+import { isPullRequestReviewEvent, workflowDispatchPrNumber } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
 import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
@@ -107,6 +107,15 @@ async function run(): Promise<void> {
       }
 
       shouldRun = true;
+    } else {
+      const dispatchedPr = workflowDispatchPrNumber(
+        eventName,
+        core.getInput("pr-number")
+      );
+      if (dispatchedPr) {
+        shouldRun = true;
+        prNumber = dispatchedPr;
+      }
     }
 
     if (!shouldRun || !prNumber) {

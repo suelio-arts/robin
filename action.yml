@@ -10,6 +10,10 @@ inputs:
     description: "GitHub token for posting PR review comments"
     required: true
     default: "${{ github.token }}"
+  pr-number:
+    description: "Exact pull request number for a workflow_dispatch review. Ignored for pull_request and issue_comment events."
+    required: false
+    default: ""
   llm-api-key:
     description: "API key for your LLM endpoint. Use \"ollama\" for self-hosted Ollama."
     required: false

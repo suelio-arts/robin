@@ -591,8 +591,17 @@ function chunkOversizedFile(content, maxChunkSize) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.isPullRequestReviewEvent = isPullRequestReviewEvent;
+exports.workflowDispatchPrNumber = workflowDispatchPrNumber;
 function isPullRequestReviewEvent(eventName) {
     return eventName === "pull_request" || eventName === "pull_request_target";
+}
+function workflowDispatchPrNumber(eventName, input) {
+    if (eventName !== "workflow_dispatch")
+        return undefined;
+    if (!/^[1-9][0-9]*$/.test(input)) {
+        throw new Error("workflow_dispatch requires a positive integer pr-number input");
+    }
+    return Number(input);
 }
 //# sourceMappingURL=events.js.map
 
@@ -1598,6 +1607,13 @@ async function run() {
                 return;
             }
             shouldRun = true;
+        }
+        else {
+            const dispatchedPr = (0, events_1.workflowDispatchPrNumber)(eventName, core.getInput("pr-number"));
+            if (dispatchedPr) {
+                shouldRun = true;
+                prNumber = dispatchedPr;
+            }
         }
         if (!shouldRun || !prNumber) {
             core.info("No matching trigger found. Skipping.");

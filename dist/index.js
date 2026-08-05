@@ -1914,7 +1914,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
         const changedPaths = (0, contract_discovery_1.changedHeadPaths)(diff);
         const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff, context), changedPaths);
         discovery.push(await discover([
-            review_prompts_1.CONTRACT_SEARCH_DISCOVERY_PASS,
+            (0, review_prompts_1.getContractSearchDiscoveryPass)(diff),
             "CONTRACT SEARCH EVIDENCE:",
             (0, contract_discovery_1.wrapContractSearchEvidence)(evidence),
         ].join("\n\n")));
@@ -2093,6 +2093,7 @@ exports.PRECISION_INSTRUCTIONS = exports.VERIFICATION_INSTRUCTIONS = exports.CON
 exports.isContractChunk = isContractChunk;
 exports.getDiscoveryPasses = getDiscoveryPasses;
 exports.getInitialDiscoveryPasses = getInitialDiscoveryPasses;
+exports.getContractSearchDiscoveryPass = getContractSearchDiscoveryPass;
 exports.getReviewPrompt = getReviewPrompt;
 exports.getSummaryPrompt = getSummaryPrompt;
 exports.getHelpMessage = getHelpMessage;
@@ -2156,6 +2157,11 @@ function getInitialDiscoveryPasses(chunk) {
     const passes = getDiscoveryPasses(chunk);
     return isContractChunk(chunk) ? passes.slice(0, 4) : passes;
 }
+function getContractSearchDiscoveryPass(chunk) {
+    return /^diff --git a\/[^ ]+\.py b\/[^ ]+\.py/m.test(chunk)
+        ? `${exports.CONTRACT_SEARCH_DISCOVERY_PASS}\n\n${PYTHON_LINT_DISCOVERY_PASS}`
+        : exports.CONTRACT_SEARCH_DISCOVERY_PASS;
+}
 exports.VERIFICATION_INSTRUCTIONS = [
     "Final evidence pass: do not add findings. Keep only candidates whose trigger, changed line, failing path, and material impact are directly proven.",
     "Reject pre-existing or copied behavior, unsupported callers, build targets, configurations, provider-contract hypotheticals, and concurrency contradicted by a serialized caller.",
@@ -2174,11 +2180,11 @@ exports.PRECISION_INSTRUCTIONS = [
     "Exact-head repository context outranks omission from a filtered diff. Reject claims that a matching asset, schema, or companion file was not updated when supplied HEAD context proves its current value already matches the change.",
     "Search evidence marked CHANGED IN THIS PR is code under review, not independent authority. A changed assertion can share the implementation bug and cannot by itself refute a candidate; trace the changed behavior through its unchanged consumers.",
     "Keep a cross-entity identity mismatch when changed code combines a display name or title from one entity with another entity's record ID, provenance, geometry, or source and unchanged consumers use those fields together for enrichment, citation, lookup, or persistence. A same-diff comment or test calling that mixture intentional does not establish semantic coherence; reject only when an unchanged contract proves the fields are deliberately independent.",
-    "For a claimed round-trip loss, require exact evidence that the value exists in the read projection and that the current writer persists it. An accepted request field, legacy recipe, transient build flag, or manually possible stored value is not proof of persisted state. Reject a bundled omission finding when any field used to establish its material impact is contradicted or unproven.",
+    "For a claimed round-trip loss, require exact evidence that the value exists in the read projection and that the current writer persists it. Direct changed schema and writer code establish the current contract when they accept and write the field; do not demand an unchanged duplicate contract. An accepted request field, legacy recipe, transient build flag, or manually possible stored value is not proof of persisted state. Reject a bundled omission finding when any field used to establish its material impact is contradicted or unproven.",
     "Reject persisted-loss or stale-persisted-value claims whose evidence cites only help, a parser, a request field, or a CLI assignment without the exact current schema and writer. When the current writer omits the field, removing its legacy documentation is cleanup, and unchanged dead-flag behavior is pre-existing rather than a regression.",
     "A CLI option is required only when the supplied parser, validator, or invoked handler requires it; an older example command is not evidence. Before claiming malformed CLI input reaches a callable or mutation, trace every invoked payload-assembly and validation helper; reject the downstream-corruption claim if any helper blocks it, while keeping a proven opaque wrong-error finding distinct. Do not invent create/empty behavior for a command whose handler first loads an existing entity. Trace seeded maps through the final serializer before claiming removed keys fail validation, because serializers may iterate only selected IDs.",
     "Reject a missing mock-argument assertion when the changed implementation directly forwards the already validated input without a changed transformation, branch, or demonstrated wrong-target path. Keep incomplete contract assertions when the changed test explicitly claims full preservation but omits persisted fields represented by its fixture.",
-    "Judge a changed test at its stated layer and with adjacent assertions. Do not call a helper unit test tautological merely because it constructs the helper's output state when a separate assertion already proves the serializer input; require an explicit end-to-end claim before demanding server persistence coverage. Reject requests to assert a mock's input when the changed handler directly forwards an already validated identifier and no transform, alternate target, or routing branch can change it.",
+    "Judge a changed test at its stated layer and with adjacent assertions. A helper unit test may construct the helper's output state and assert that the helper compares it correctly; do not demand a real save or reload unless the test explicitly claims end-to-end persistence coverage. Do not call that test tautological when a separate assertion already proves the serializer input. Reject requests to assert a mock's input when the changed handler directly forwards an already validated identifier and no transform, alternate target, or routing branch can change it.",
     "For generated aggregate metadata, inspect the generator or exact counted collection before inferring that new descriptors change a total; additions outside that collection do not make the count stale.",
     "Reject corrupt-type paths when supplied schemas and projections enforce the consumed type and no reachable unvalidated writer is shown. Do not treat arbitrary programmatic helper misuse as persisted input.",
     "A helper parameter is not a trust boundary, and a language-level export keyword does not make an internal module function an external API. Reject a trigger stated only as 'a caller supplies' an invalid value unless supplied repository evidence identifies a reachable caller, persisted writer, or external input boundary that can supply it without the enforcing schema.",

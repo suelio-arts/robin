@@ -17,7 +17,7 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
+import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext } from "./review-context";
@@ -753,7 +753,7 @@ async function runReviewPipeline(
     const changedPaths = changedHeadPaths(diff);
     const evidence = await searchContracts(completeContractSearchPlan(plan.content, diff, context), changedPaths);
     discovery.push(await discover([
-      CONTRACT_SEARCH_DISCOVERY_PASS,
+      getContractSearchDiscoveryPass(diff),
       "CONTRACT SEARCH EVIDENCE:",
       wrapContractSearchEvidence(evidence),
     ].join("\n\n")));

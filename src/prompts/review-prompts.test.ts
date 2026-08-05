@@ -1,4 +1,4 @@
-import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, getDiscoveryPasses, getInitialDiscoveryPasses, getReviewPrompt } from "./review-prompts";
+import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, getContractSearchDiscoveryPass, getDiscoveryPasses, getInitialDiscoveryPasses, getReviewPrompt } from "./review-prompts";
 
 describe("getReviewPrompt", () => {
   it("includes the focused review passes", () => {
@@ -52,7 +52,7 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("unchanged dead-flag behavior is pre-existing");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("serializers may iterate only selected IDs");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("directly forwards the already validated input");
-    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("helper unit test tautological");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("helper's output state");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("trace every invoked payload-assembly and validation helper");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("directly forwards an already validated identifier");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("exact counted collection");
@@ -110,5 +110,7 @@ describe("getReviewPrompt", () => {
     expect(pythonPasses[3]).toContain("repository-enforced Python static analysis");
     expect(pythonPasses[3]).toContain("per-file ignores");
     expect(pythonPasses[3]).toContain("anchored to a changed line");
+    expect(getContractSearchDiscoveryPass("diff --git a/tools/check.py b/tools/check.py")).toContain("repository-enforced Python static analysis");
+    expect(getContractSearchDiscoveryPass("diff --git a/tools/check.ts b/tools/check.ts")).toBe(CONTRACT_SEARCH_DISCOVERY_PASS);
   });
 });

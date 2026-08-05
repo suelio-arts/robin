@@ -42,6 +42,7 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("serializers may iterate only selected IDs");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("directly forwards the already validated input");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("helper unit test tautological");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("trace it through shared payload assembly and validation");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("exact counted collection");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("no reachable unvalidated writer");
   });

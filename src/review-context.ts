@@ -52,7 +52,10 @@ export async function buildFileContext(
         for (const relatedPath of relativeImports(content, path)) {
           const related = await resolveRelatedFile(git, owner, repo, relatedPath, head, fetched, relatedBudget);
           if (!related) continue;
-          const focused = matchingNeighborhoods(related.content, terms, Math.min(RELATED_LIMIT, remaining));
+          const limit = Math.min(RELATED_LIMIT, remaining);
+          const focused = related.content.length <= limit
+            ? related.content
+            : matchingNeighborhoods(related.content, terms, limit);
           if (!focused) continue;
           sections.push(`HEAD RELATED FILE: ${related.path}\n${focused}`);
           remaining -= focused.length;

@@ -1,4 +1,4 @@
-import { DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, getDiscoveryPasses, getReviewPrompt } from "./review-prompts";
+import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, getDiscoveryPasses, getInitialDiscoveryPasses, getReviewPrompt } from "./review-prompts";
 
 describe("getReviewPrompt", () => {
   it("includes the focused review passes", () => {
@@ -27,6 +27,8 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("losing timeout or operation is cancelled");
     expect(DISCOVERY_PASSES.join("\n")).toContain("privacy text with the actual data and capability use");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("not seeing an entry is not evidence");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("arbitrarily huge caller-controlled");
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {
@@ -39,10 +41,14 @@ describe("getReviewPrompt", () => {
     ]) {
       const passes = getDiscoveryPasses(`diff --git a/${path} b/${path}`);
       expect(passes).toHaveLength(6);
-      expect(passes[5]).toContain("enumerate every rejection guard and state");
-      expect(passes[5]).toContain("canonical preflight or contract checks");
+      expect(passes[5]).toContain("imported predicate rejection guard and state");
+      expect(passes[5]).toContain("canonical preflight or contract entry points");
+      expect(getInitialDiscoveryPasses(`diff --git a/${path} b/${path}`)).toHaveLength(4);
     }
     expect(getDiscoveryPasses("diff --git a/src/latest.ts b/src/latest.ts")).toEqual(DISCOVERY_PASSES);
     expect(getDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
+    expect(getInitialDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
+    expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("canonical sibling preflight/contract entry points");
+    expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("HEAD CONTRACT SEARCH MATCH evidence");
   });
 });

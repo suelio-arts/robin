@@ -41,6 +41,9 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("value exists in the read projection");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("serializers may iterate only selected IDs");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("directly forwards the already validated input");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("helper unit test tautological");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("exact counted collection");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("no reachable unvalidated writer");
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {

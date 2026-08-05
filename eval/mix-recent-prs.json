@@ -687,6 +687,71 @@
           "source": "CodeRabbit"
         }
       ]
+    },
+    {
+      "pr": 304,
+      "base": "37cb4658fe418c6232742552c6218741411cacf5",
+      "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
+      "labels": [
+        {"file": "backend/functions/src/endpoints/attribution.ts", "rootCause": "organic-to-paid reconciliation overwrites the original resolvedAt install timestamp with the later reconciliation time", "source": "CodeRabbit"},
+        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "fractional Singular click timestamps are sent as Double values to a backend schema that requires positive integers", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 304,
+      "base": "37cb4658fe418c6232742552c6218741411cacf5",
+      "head": "44ecd13af4e5774814fc3a41c4719805b30070db",
+      "labels": [
+        {"file": "backend/functions/src/utils/types.ts", "rootCause": "the committed generated Swift request model omits singularAttribution even though the Zod and OpenAPI contracts include it", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 308,
+      "base": "6502905c6745e790c8fa039d0f2607c44fef5f75",
+      "head": "d3e780caab03367390a95c95ff6d1e805c15d601",
+      "labels": [
+        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "the cleanup gate feeds simctl's OpenStep plist output directly to plistlib, so parse failure is mistaken for an absent app", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 312,
+      "base": "b3b20085033cca76377bb94df782cd5bb1da8550",
+      "head": "f1cc4c1e75c9be75cd08d846dc81eef9e7470cbe",
+      "labels": [
+        {"file": "studio/web/js/admin-page-bootstrap.mjs", "rootCause": "roleless auth callbacks force repeated and concurrent token refreshes because refresh work is not coordinated per signed-in UID", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 321,
+      "base": "8203017605712a4270c64973b89de8aa0cd016c2",
+      "head": "c35d1fe276537d961e5ecc1187273076b310b61b",
+      "labels": [
+        {"file": "backend/functions/src/utils/types.ts", "rootCause": "root z.partialRecord calls use an API absent from the repository's locked Zod 3 runtime and can prevent the Functions module from loading", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 322,
+      "base": "37cb4658fe418c6232742552c6218741411cacf5",
+      "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16",
+      "labels": [
+        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "verify_async_algorithms_pin parses commented PBX properties and lets them overwrite active fields, allowing a moving dependency to pass the revision-pin gate", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 270,
+      "base": "52305556f3e379106893ca6332177bc63c45a483",
+      "head": "12a8d81b293bdb7bbe681589189c14e3c6305079",
+      "labels": [
+        {"file": "backend/functions/src/endpoints/walk-links.ts", "rootCause": "focused Boston preview links are absent from AASA and rejected by exact-path app routing", "source": "Greptile"}
+      ]
+    },
+    {
+      "pr": 272,
+      "base": "fb19bb00992b54529c30ceb3b8ddadab1768238f",
+      "head": "db361347a16c118452bdbfbe64b554f0ec89586d",
+      "labels": [
+        {"file": "docs/subsystems/xcode-cloud-trigger.md", "rootCause": "root and iOS READMEs still claim automatic TestFlight after the runbook switched to manual Main Daily", "source": "Greptile"}
+      ]
     }
   ],
   "holdoutNegativeControls": [
@@ -813,6 +878,19 @@
           "file": "studio/web/js/walk-manager.mjs",
           "rootCause": "load paths leave busy state stuck after failures",
           "reason": "stale at exact head: loadCatalog and openWalk use finally to clear busy state"
+        }
+      ]
+    },
+    {
+      "pr": 304,
+      "base": "37cb4658fe418c6232742552c6218741411cacf5",
+      "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/src/endpoints/attribution.ts",
+          "rootCause": "the endpoint duplicates centralized attribution channel and provider identifiers",
+          "source": "CodeRabbit",
+          "reason": "explicit nondefect control: CodeRabbit marks this as a refactor suggestion, and the exact-head duplicated literals match the centralized values without a demonstrated behavioral failure"
         }
       ]
     }

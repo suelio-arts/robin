@@ -1923,6 +1923,7 @@ exports.PRECISION_INSTRUCTIONS = [
     "Evaluate every candidate ID independently. Approve it only when the changed line proves a reachable trigger, concrete failing path, and material impact.",
     "Direct language semantics are evidence. Persisted or external input is reachable when changed code consumes it without enforcing its required invariant.",
     "An unsynchronized whole-value read-modify-write proves lost-update risk when overlap or re-entry is possible; reject it when supplied code proves serialization or atomic mutation.",
+    "Keep a mixed-frame transform when changed tracking code refreshes position or scale from a later anchor while retaining rotation from an earlier anchor; that internal inconsistency proves drift without requiring an external alignment contract.",
     "Reject pre-existing behavior, unseen-caller assumptions, hypothetical configurations, refactor requests, and third-party signatures or provider contracts not proven by repository context or build output. Keep changed required test and harness code when it can false-pass its contract or fail its required gate. High-confidence language standard-library and platform API semantics are valid evidence.",
     "Reject missing key, translation, registry, schema, or symbol claims unless supplied repository evidence proves the absence; not seeing an entry is not evidence that it is missing.",
     "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",

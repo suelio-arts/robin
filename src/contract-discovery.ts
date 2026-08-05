@@ -9,6 +9,47 @@ const MAX_PATHS = 10;
 const FILE_LIMIT = 6000;
 const TOTAL_LIMIT = 30000;
 
+type QueryCandidate = {query: string; priority: number};
+
+function addedLines(chunk: string): string[] {
+  return chunk.split("\n").filter((line) => line.startsWith("+") && !line.startsWith("+++"));
+}
+
+/** Exact changed symbols and literals whose unchanged consumers define the contract. */
+export function extractChangedContractQueries(chunk: string): string[] {
+  const lines = addedLines(chunk);
+  const candidates: QueryCandidate[] = [];
+  const add = (query: string, priority: number) => {
+    const value = query.trim();
+    if (value.length >= 2 && value.length <= 80 && /^[A-Za-z0-9_$./@+ -]+$/.test(value)) {
+      candidates.push({query: value, priority});
+    }
+  };
+
+  for (const line of lines) {
+    for (const match of line.matchAll(/\b(?:async\s+function\s+|(?:const|let|var)\s+)([A-Za-z_$][\w$]*)\s*(?:=\s*async\b|\()/g)) add(match[1], 100);
+    for (const match of line.matchAll(/\b(?:setInterval|setTimeout|queueMicrotask)\s*\(\s*([A-Za-z_$][\w$]*)/g)) add(match[1], 100);
+    for (const match of line.matchAll(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+){2,}\b/g)) add(match[0], 90);
+
+    if (/\b(?:import|require)\b/.test(line)) {
+      for (const match of line.matchAll(/\b((?:is|has|can|should|validate|verify|assert|require|check)[A-Z_$][\w$]*)\b/g)) add(match[1], 85);
+    }
+    for (const match of line.matchAll(/\b([A-Za-z_$][\w$]*)\s*:\s*(?:true|false|null|["'][A-Za-z][\w-]*["'])/g)) add(match[1], 75);
+    for (const match of line.matchAll(/["'](\/[A-Za-z0-9_./:@+-]{2,})["']/g)) add(match[1], 80);
+    if (/\b(?:exec|spawn|command|usage|preflight|aggregate)\b/i.test(line)) {
+      for (const match of line.matchAll(/["'`]([A-Za-z0-9_./@+-]+(?: [A-Za-z0-9_./@+<>=-]+)+)["'`]/g)) add(match[1], 70);
+    }
+  }
+
+  if (/^diff --git a\/[^ ]+\.py b\/[^ ]+\.py/m.test(chunk)) {
+    add("ruff", 65);
+    add("lint", 64);
+  }
+  return [...new Map(candidates
+    .sort((left, right) => right.priority - left.priority || left.query.localeCompare(right.query))
+    .map((candidate) => [candidate.query, candidate.query])).values()].slice(0, MAX_QUERIES);
+}
+
 function excerptMatches(content: string, query: string, limit: number): string {
   if (content.length <= limit) return content;
   const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
@@ -47,7 +88,8 @@ export function parseContractSearchPlan(content: string): string[] {
 
 export function completeContractSearchPlan(content: string, chunk: string, context = ""): string[] {
   const planned = parseContractSearchPlan(content);
-  const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk)
+  const changedContractQueries = extractChangedContractQueries(chunk);
+  const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+.*\btitle\s*:/m.test(chunk)
     ? ["OverridesById", "buildStoryWalk"]
     : [];
   const helperQueries = [...chunk.matchAll(/\b((?:assemble|validate|verify|parse|normalize|serialize|deserialize|require|load|save|persist)[A-Za-z0-9_$]*)\s*\(/gi)]
@@ -58,7 +100,7 @@ export function completeContractSearchPlan(content: string, chunk: string, conte
     .map((match) => match[1] || match[2])
     .filter((option) => changedCliUsage && !documentedOptions.has(option)))]
     .sort((left, right) => Number(right.includes("-")) - Number(left.includes("-")) || left.localeCompare(right));
-  return [...new Set([...projectionQueries, ...missingCliOptions, ...helperQueries, ...planned])].slice(0, MAX_QUERIES);
+  return [...new Set([...projectionQueries, ...missingCliOptions, ...changedContractQueries, ...helperQueries, ...planned])].slice(0, MAX_QUERIES);
 }
 
 export function changedHeadPaths(diff: string): string[] {
@@ -112,7 +154,7 @@ export async function buildContractSearchEvidence(
       continue;
     }
     paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
-    for (const path of paths.slice(0, MAX_PATHS_PER_QUERY)) {
+    for (const path of selectLayerDiversePaths(paths, MAX_PATHS_PER_QUERY)) {
       if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0) continue;
       seen.add(path);
       let content: string;
@@ -133,6 +175,34 @@ export async function buildContractSearchEvidence(
     }
   }
   return sections.join("\n\n");
+}
+
+function contractLayer(path: string): string {
+  if (path.startsWith(".github/")) return "workflow";
+  if (/^(?:docs?\/|README)/i.test(path)) return "docs";
+  if (/\.(?:swift|m|mm)$|(?:^|\/)ios(?:\/|$)/i.test(path)) return "apple";
+  if (/(?:^|\/)(?:backend|server|api)(?:\/|$)/i.test(path)) return "server";
+  if (/(?:^|\/)(?:scripts?|cli|bin)(?:\/|$)/i.test(path)) return "tooling";
+  if (/(?:^|[/_.-])(?:test|tests|spec|specs|e2e|fixture|fixtures)(?:[/_.-]|$)/i.test(path)) return "test";
+  if (/(?:^|\/)(?:web|studio|app)(?:\/|$)/i.test(path)) return "client";
+  return path.split("/", 1)[0] || "root";
+}
+
+function selectLayerDiversePaths(paths: string[], limit: number): string[] {
+  const selected: string[] = [];
+  const layers = new Set<string>();
+  for (const path of paths) {
+    const layer = contractLayer(path);
+    if (layers.has(layer)) continue;
+    selected.push(path);
+    layers.add(layer);
+    if (selected.length === limit) return selected;
+  }
+  for (const path of paths) {
+    if (!selected.includes(path)) selected.push(path);
+    if (selected.length === limit) break;
+  }
+  return selected;
 }
 
 function contractPathScore(path: string, changedPaths: string[], counterevidence = false): number {

@@ -1,4 +1,4 @@
-import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, parseContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
+import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, extractChangedContractQueries, parseContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
 
 describe("contract discovery", () => {
   it("parses bounded literal queries", () => {
@@ -22,12 +22,53 @@ describe("contract discovery", () => {
     expect(queries).toEqual(["OverridesById", "buildStoryWalk", "localizedTitle", "schema"]);
   });
 
+  it("recognizes projected fields inside conditional object spreads", () => {
+    const chunk = [
+      "diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts",
+      "+  ...(node.title !== undefined ? {title: resolve(node.title)} : {}),",
+    ].join("\n");
+
+    expect(completeContractSearchPlan('{"queries":[]}', chunk)).toEqual([
+      "OverridesById",
+      "buildStoryWalk",
+    ]);
+  });
+
   it("searches invoked helpers that can validate a candidate", () => {
     expect(completeContractSearchPlan('{"queries":["handler"]}', [
       "diff --git a/cli.ts b/cli.ts",
       "+const story = await loadGeneratedStory(id);",
       "+const payload = assembleWalkEditPayload(story, edits);",
     ].join("\n"))).toEqual(["loadGeneratedStory", "assembleWalkEditPayload", "handler"]);
+  });
+
+  it("extracts bounded changed contract identifiers and async callers", () => {
+    const chunk = [
+      "diff --git a/src/dashboard.ts b/src/dashboard.ts",
+      "+import { isReusableState } from './state';",
+      "+const refreshDashboard = async () => loadDashboard();",
+      "+setInterval(refreshDashboard, 1000);",
+      "+process.env.PRODUCT_EXPECTED_SUBSCRIPTION_ID = 'member';",
+      "+const route = '/preview/city';",
+      "+const fixture = { generating: true };",
+    ].join("\n");
+
+    expect(extractChangedContractQueries(chunk)).toEqual([
+      "refreshDashboard",
+      "PRODUCT_EXPECTED_SUBSCRIPTION_ID",
+      "isReusableState",
+      "/preview/city",
+    ]);
+  });
+
+  it("seeds configured-lint evidence for changed Python without naming rules", () => {
+    const queries = extractChangedContractQueries([
+      "diff --git a/tools/check.py b/tools/check.py",
+      "+def validate_value(value):",
+      "+    return value",
+    ].join("\n"));
+
+    expect(queries).toEqual(["ruff", "lint"]);
   });
 
   it("searches handler options omitted from changed CLI help", () => {
@@ -121,5 +162,26 @@ describe("contract discovery", () => {
     });
 
     expect(evidence).toContain("backend/types/schema.ts [CHANGED IN THIS PR]");
+  });
+
+  it("keeps cross-layer consumers instead of filling evidence from one directory", async () => {
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async () => [
+        "studio/web/routes/a.ts",
+        "studio/web/routes/b.ts",
+        "studio/web/routes/c.ts",
+        "studio/web/routes/d.ts",
+        "ios/App/Route.swift",
+        "backend/api/routes.ts",
+        ".github/workflows/release.yml",
+      ],
+      getFileContent: async (_owner, _repo, path) => `${path}\n/preview/city`,
+    }, "o", "r", "head", ["/preview/city"], ["studio/web/routes/new.ts"]);
+
+    expect(evidence).toContain("studio/web/routes/a.ts");
+    expect(evidence).toContain("ios/App/Route.swift");
+    expect(evidence).toContain("backend/api/routes.ts");
+    expect(evidence).toContain(".github/workflows/release.yml");
+    expect(evidence).not.toContain("studio/web/routes/b.ts");
   });
 });

@@ -135,7 +135,13 @@ function completeContractSearchPlan(content, chunk) {
         : [];
     const helperQueries = [...chunk.matchAll(/\b((?:assemble|validate|verify|parse|normalize|serialize|deserialize|require|load|save|persist)[A-Za-z0-9_$]*)\s*\(/gi)]
         .map((match) => match[1]);
-    return [...new Set([...projectionQueries, ...helperQueries, ...planned])].slice(0, MAX_QUERIES);
+    const changedCliUsage = chunk.split("\n").find((line) => /^\+\s*\S*cli\b.*--/i.test(line)) || "";
+    const documentedOptions = new Set([...changedCliUsage.matchAll(/--([a-z0-9-]+)/gi)].map((match) => match[1]));
+    const missingCliOptions = [...new Set([...chunk.matchAll(/\boptions(?:\[['"]([^'"]+)['"]\]|\.([A-Za-z][\w-]*))/g)]
+            .map((match) => match[1] || match[2])
+            .filter((option) => changedCliUsage && !documentedOptions.has(option)))]
+        .sort((left, right) => Number(right.includes("-")) - Number(left.includes("-")) || left.localeCompare(right));
+    return [...new Set([...projectionQueries, ...missingCliOptions, ...helperQueries, ...planned])].slice(0, MAX_QUERIES);
 }
 function changedHeadPaths(diff) {
     return diff.split("\n").flatMap((line) => {

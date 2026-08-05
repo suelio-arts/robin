@@ -30,6 +30,14 @@ describe("contract discovery", () => {
     ].join("\n"))).toEqual(["loadGeneratedStory", "assembleWalkEditPayload", "handler"]);
   });
 
+  it("searches handler options omitted from changed CLI help", () => {
+    expect(completeContractSearchPlan('{"queries":["handler"]}', [
+      "diff --git a/cli.mjs b/cli.mjs",
+      " options['arc-file']; options.language; options.title;",
+      "+  tool-cli walk build --walk-id <id> [--title <text>]",
+    ].join("\n"))).toEqual(["arc-file", "language", "handler"]);
+  });
+
   it("uses HEAD-side paths for renamed files", () => {
     expect(changedHeadPaths("diff --git a/old/place.ts b/studio/new/place.ts"))
       .toEqual(["studio/new/place.ts"]);

@@ -1800,7 +1800,11 @@ exports.DISCOVERY_PASSES = [
 ];
 const CONTRACT_DISCOVERY_PASS = "Audit only false-passing validators, gates, fixtures, harnesses, and aggregate CLI commands. Treat changed test infrastructure as product code. For each imported predicate, use its supplied implementation to enumerate every rejection guard and state, then map each to the changed assertions; report any omitted reachable state, including pending or generating. For each new aggregate or UI-test path, compare supplied repository conventions and sibling entry points for canonical preflight or contract checks, and report a bypass. Anchor an omission to the changed case list or invocation block.";
 function getDiscoveryPasses(chunk) {
-    if (!/(?:test|spec|fixture|harness|validate|verify|check|e2e|ci[_/-]|workflow|\.github\/workflows)/i.test(chunk)) {
+    const paths = [...chunk.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
+    const contractPath = paths.some((path) => path.startsWith(".github/workflows/")
+        || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|harness|validate|validator|validation|verify|check|checks|gate|gates|aggregate|preflight|e2e|ci)(?:[/_.-]|$)/i.test(path));
+    const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk);
+    if (!contractPath && !contractContent) {
         return exports.DISCOVERY_PASSES;
     }
     return [...exports.DISCOVERY_PASSES.slice(0, -1), CONTRACT_DISCOVERY_PASS];

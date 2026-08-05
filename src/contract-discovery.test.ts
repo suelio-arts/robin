@@ -22,6 +22,14 @@ describe("contract discovery", () => {
     expect(queries).toEqual(["OverridesById", "buildStoryWalk", "localizedTitle", "schema"]);
   });
 
+  it("searches invoked helpers that can validate a candidate", () => {
+    expect(completeContractSearchPlan('{"queries":["handler"]}', [
+      "diff --git a/cli.ts b/cli.ts",
+      "+const story = await loadGeneratedStory(id);",
+      "+const payload = assembleWalkEditPayload(story, edits);",
+    ].join("\n"))).toEqual(["loadGeneratedStory", "assembleWalkEditPayload", "handler"]);
+  });
+
   it("uses HEAD-side paths for renamed files", () => {
     expect(changedHeadPaths("diff --git a/old/place.ts b/studio/new/place.ts"))
       .toEqual(["studio/new/place.ts"]);

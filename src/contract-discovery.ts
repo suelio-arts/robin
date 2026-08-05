@@ -50,7 +50,9 @@ export function completeContractSearchPlan(content: string, chunk: string): stri
   const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk)
     ? ["OverridesById", "buildStoryWalk"]
     : [];
-  return [...new Set([...projectionQueries, ...planned])].slice(0, MAX_QUERIES);
+  const helperQueries = [...chunk.matchAll(/\b((?:assemble|validate|verify|parse|normalize|serialize|deserialize|require|load|save|persist)[A-Za-z0-9_$]*)\s*\(/gi)]
+    .map((match) => match[1]);
+  return [...new Set([...projectionQueries, ...helperQueries, ...planned])].slice(0, MAX_QUERIES);
 }
 
 export function changedHeadPaths(diff: string): string[] {

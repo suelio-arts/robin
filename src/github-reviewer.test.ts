@@ -62,6 +62,22 @@ describe("GitHubReviewer", () => {
     );
   });
 
+  it("blocks a PR when review execution fails", async () => {
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 20 } });
+    const octokit = {
+      paginate: jest.fn().mockResolvedValue([]),
+      rest: { pulls: { createReview, listReviews: {}, dismissReview: jest.fn() } },
+    };
+
+    await new GitHubReviewer(octokit as any).postFailureReview("o", "r", 7, "provider timeout");
+
+    expect(createReview).toHaveBeenCalledWith(expect.objectContaining({
+      pull_number: 7,
+      event: "REQUEST_CHANGES",
+      body: expect.stringContaining("provider timeout"),
+    }));
+  });
+
   it("detects new-file line numbers present in the diff", () => {
     const reviewer = new GitHubReviewer({} as any);
     const isLineInNewDiff = (reviewer as any).isLineInNewDiff.bind(reviewer) as (

@@ -720,6 +720,24 @@ class GitHubReviewer {
         this.octokit = octokit;
         this.maxComments = Number.isFinite(maxComments) ? Math.max(0, maxComments) : 25;
     }
+    async postFailureReview(owner, repo, pullNumber, message) {
+        const { data: review } = await this.octokit.rest.pulls.createReview({
+            owner,
+            repo,
+            pull_number: pullNumber,
+            event: "REQUEST_CHANGES",
+            body: [
+                "## " + exports.ROBIN_SIGNATURE,
+                "",
+                "Robin could not complete this review, so this head is blocked fail-closed.",
+                "",
+                `\`${message}\``,
+                "",
+                "Re-run Robin after the transient failure is resolved.",
+            ].join("\n"),
+        });
+        await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+    }
     /** Gatekeeper mode requests changes for High findings and approves clean heads. */
     static resolveReviewEvent(hasHigh, hasFindings, requestChanges) {
         if (!requestChanges)
@@ -1416,6 +1434,7 @@ async function run() {
     let statusCommentId;
     let statusCommand = "review";
     let statusModel = "not configured";
+    let pullNumber;
     let onJobCancelled;
     try {
         const eventName = github.context.eventName;
@@ -1474,6 +1493,7 @@ async function run() {
             core.info("No matching trigger found. Skipping.");
             return;
         }
+        pullNumber = prNumber;
         const apiKey = core.getInput("llm-api-key") || "ollama";
         const baseUrl = core.getInput("llm-base-url") || "";
         const model = core.getInput("model") || "";
@@ -1622,6 +1642,16 @@ async function run() {
         const message = error instanceof Error ? error.message : String(error);
         if (octokit && statusOwner && statusRepo && statusCommentId) {
             await updateStatusComment(octokit, statusOwner, statusRepo, statusCommentId, buildFailedStatusBody(message, statusCommand));
+        }
+        if (octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
+            try {
+                await new github_reviewer_1.GitHubReviewer(octokit).postFailureReview(statusOwner, statusRepo, pullNumber, message);
+                core.warning(`Review blocked after execution failure: ${message}`);
+                return;
+            }
+            catch (reviewError) {
+                core.error(`Could not post fail-closed review: ${reviewError}`);
+            }
         }
         core.setFailed(message);
     }

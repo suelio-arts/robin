@@ -409,6 +409,130 @@
           "source": "CodeRabbit"
         }
       ]
+    },
+    {
+      "pr": 304,
+      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
+      "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
+      "labels": [
+        {"file": "backend/functions/src/endpoints/attribution.ts", "rootCause": "organic-to-paid reconciliation overwrites the original resolvedAt install timestamp with the later reconciliation time", "source": "CodeRabbit"},
+        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "fractional Singular click timestamps are sent as Double values to a backend schema that requires positive integers", "source": "CodeRabbit"},
+        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "NaN or infinite Singular click timestamps cannot be encoded or persisted and can lose the one-shot attribution callback", "source": "Luna"}
+      ],
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/src/endpoints/attribution.ts",
+          "rootCause": "the endpoint duplicates centralized attribution channel and provider identifiers",
+          "source": "CodeRabbit",
+          "reason": "explicit nondefect control: CodeRabbit marks this as a refactor suggestion, and the exact-head duplicated literals match the centralized values without a demonstrated behavioral failure"
+        }
+      ]
+    },
+    {
+      "pr": 304,
+      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
+      "head": "44ecd13af4e5774814fc3a41c4719805b30070db",
+      "labels": [],
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/src/utils/types.ts",
+          "rootCause": "the committed generated Swift request model omits singularAttribution even though the Zod and OpenAPI contracts include it",
+          "source": "CodeRabbit",
+          "reason": "false endpoint mapping: GeneratedRecordInstallAttributionRequest corresponds to RecordInstallAttributionRequestSchema, not the changed RecordDeviceInstallRequestSchema; the generated type matches its actual schema"
+        }
+      ]
+    },
+    {
+      "pr": 270,
+      "base": "52305556f3e379106893ca6332177bc63c45a483",
+      "head": "12a8d81b293bdb7bbe681589189c14e3c6305079",
+      "labels": [
+        {"file": "backend/functions/src/endpoints/walk-links.ts", "rootCause": "focused Boston preview links are absent from AASA and rejected by exact-path app routing", "source": "Greptile"},
+        {"file": "backend/functions/src/endpoints/walk-links.ts", "rootCause": "the new Boston public feed leaves a public cache header on 500 responses, making transient failures cacheable", "source": "Luna"}
+      ]
+    },
+    {
+      "pr": 264,
+      "base": "7844c3fb31950c11430f5c9e5c9322bf5d9b4e68",
+      "head": "971ff608b06a6ac698042dcaaec1b6033d89db5a",
+      "labels": [
+        {"file": "web/qr/800/index.html", "rootCause": "the page loads experience-v8.mjs while Firebase immutable caching covers only v1 through v7", "source": "Greptile"}
+      ]
+    },
+    {
+      "pr": 300,
+      "base": "07f417c30044d8b48de455b720479f2a7a0b5d25",
+      "head": "6c992a3bf3b73d03811f557ee5797366e7477d8b",
+      "labels": [
+        {"file": "backend/functions/src/utils/types.ts", "rootCause": "playingBeatId requires UUID even though persisted beats use non-UUID Firestore auto IDs that the iOS client sends back", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 301,
+      "base": "07f417c30044d8b48de455b720479f2a7a0b5d25",
+      "head": "31eb20ecc9962fc73cac1a994cf01cd1b0cbb6b2",
+      "labels": [
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "the ads snapshot schema accepts a runningCampaignCount that contradicts the independently persisted campaigns array", "source": "CodeRabbit"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "provider status and error are validated independently, allowing error states with no actionable error and ok states whose stored error is silently suppressed", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "a campaign's provider is not constrained to match its enclosing provider summary, allowing internally misattributed campaign data", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "providers length four permits duplicates and omissions instead of requiring each supported provider exactly once", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "an arbitrarily future generatedAt remains fresh and makes the monotonic writer reject subsequent current snapshots, freezing ads analytics", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "totalDailyBudgetUsd is accepted independently of the campaign budgets it summarizes, allowing persisted totals that contradict the campaign rows", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "failure to read the optional growth_ads document aborts the entire primary engagement report even though missing and invalid ads snapshots are explicitly supported", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "the response still describes network installs as non-binding but removes the network_installs blocker that explains the missing linkage whenever ads snapshot reporting is introduced", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "the top-level campaigns array is validated independently from providers[].campaigns, allowing two contradictory campaign inventories to be persisted and returned", "source": "Luna"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "raw Zod validation errors escape the callable boundary as internal failures instead of the invalid-argument contract clients need for permanent malformed requests", "source": "Luna"}
+      ],
+      "rejectedCandidates": [
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "epoch seconds are accepted where readers assume milliseconds", "reason": "unproven: the sole authorized canonical producer emits epoch milliseconds and no corrupt-state producer is reachable"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "blank campaign IDs necessarily break downstream behavior", "reason": "unproven: no exact consumer requires a non-empty ID or demonstrates a failing path"},
+        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "different snapshots sharing an exact millisecond overwrite each other", "reason": "unproven: no duplicate or concurrent canonical caller makes the theoretical collision reachable"}
+      ]
+    },
+    {
+      "pr": 326,
+      "base": "370ec4210d01936dac7118182c5ae23e11a11c25",
+      "head": "559a2e474d29dad65cf7283966e3e1976689f4b7",
+      "labels": [
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "a missing navigation center override is initialized as an empty object and only one edited axis is stored, so buildWalkPayload drops the incomplete center and silently loses the edit", "source": "CodeRabbit"},
+        {"file": "studio/web/js/walk-editor.mjs", "rootCause": "the Story inspector lets users create a thesis with an empty beats array but provides no control to add a first beat, while save validation rejects that state", "source": "CodeRabbit"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "clearing a visible stop coordinate converts the empty input to zero and persists a materially different location", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "clearing a navigation coordinate converts the empty input to zero and treats it as a valid override", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "selectNode changes the active section without rerendering the section tabs, leaving their visible selected state stale", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "renaming a stop rerenders the rail but not the map, leaving the marker tooltip stale", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "navigation title overrides update the stop rail even though the rail ignores the override and continues rendering the stale title", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "processNextEntry removes an entry before beat generation succeeds, permanently losing it on generation failure", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "a node is marked visited and added to the feed before audio is validated or playable, so playback failure permanently skips it", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "switching movement mode replaces the queue without invalidating an in-flight processor that can later consume the replacement queue", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "asynchronous generation can complete after the user changes workspaces and overwrite the newer workspace with stale output", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "playback reads defaultMusicUrl while saved walks and the editor use musicThemeUrl, silently dropping custom music", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "endWalk tears down local playback before the server end-session call succeeds, leaving an open server session in a torn-down UI on failure", "source": "Luna"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "media onerror and play rejection can both run recovery for one failure, duplicating messages, music transitions, and automatic processing", "source": "Luna"}
+      ],
+      "rejectedCandidates": [
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "adding the first stop incorrectly disables save", "reason": "false: routed walks require at least two stops and an explicit route review before saving"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "routeless coordinate edits cannot be saved", "reason": "false: Apply sends the routeless payload and the backend permits route generation for that workflow"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "omitting branding and narrationFlavor from the payload clears persisted fields", "reason": "false: the exact-head backend does not persist or consume either request field"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "generated drafts retain a stale route baseline through pollJob", "reason": "false: the claimed pollJob path does not exist and openGeneratedWalk hydrates and recaptures the baseline"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "cloning route anchors creates a material memory regression", "reason": "unproven: no realistic input size or material memory threshold is established"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "JSON-stringifying route anchors creates a material UI regression", "reason": "unproven: linear comparison alone does not establish material latency at reachable sizes"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "rendering one marker per route anchor creates a material UI regression", "reason": "unproven: no realistic anchor count or measured failure is established"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "route anchors are dangerously unbounded", "reason": "unproven: absence of an arbitrary cap does not establish a reachable resource failure"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "map-created manual stops always have a source and skip materialization", "reason": "false: blank map stops have no source and search results carry genuine provider sources"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "retryAfterMs can be zero or negative", "reason": "false: the exact producer schema requires a positive integer"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "generation kickoff can omit status or return completed", "reason": "false: current producer contracts require generating, ready, or failed"},
+        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "neighborhood generation must accept preview.walk", "reason": "false: the exact current response contract uses walk"}
+      ]
+    },
+    {
+      "pr": 319,
+      "base": "9c22c2ae028093fa42b59c70a8f82420d8dca374",
+      "head": "18e82cfb11689dbf671920d23baef19e6b9997ed",
+      "labels": [
+        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "negating verify_release_once suppresses errexit without asserting the expected failure, so an unexpectedly successful retry can still pass the self-test", "source": "CodeRabbit"},
+        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "the self-test injects retry arguments directly into verify_release_once and never exercises the production failure-classification-cache-reset-retry orchestration it claims to protect", "source": "Luna"},
+        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "substring call-count checks over flattened argv accept invalid option suffixes and do not prove the exact invocation set", "source": "Luna"}
+      ]
     }
   ],
   "unscoredHistoricalNotes": [
@@ -423,12 +547,6 @@
       "pr": 254,
       "base": "23abe489578e18eb6287fe1df995e87ee52e18fa",
       "head": "3a77304197f92c6620e0eb3f9527f44b3c39683c",
-      "labels": []
-    },
-    {
-      "pr": 255,
-      "base": "22b9a01915a8c85caf18bf86d033024deca33906",
-      "head": "9e526ef3c5110ca4e9a419d61d4110baf0574a07",
       "labels": []
     },
     {
@@ -697,23 +815,6 @@
       ]
     },
     {
-      "pr": 304,
-      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
-      "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
-      "labels": [
-        {"file": "backend/functions/src/endpoints/attribution.ts", "rootCause": "organic-to-paid reconciliation overwrites the original resolvedAt install timestamp with the later reconciliation time", "source": "CodeRabbit"},
-        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "fractional Singular click timestamps are sent as Double values to a backend schema that requires positive integers", "source": "CodeRabbit"}
-      ]
-    },
-    {
-      "pr": 304,
-      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
-      "head": "44ecd13af4e5774814fc3a41c4719805b30070db",
-      "labels": [
-        {"file": "backend/functions/src/utils/types.ts", "rootCause": "the committed generated Swift request model omits singularAttribution even though the Zod and OpenAPI contracts include it", "source": "CodeRabbit"}
-      ]
-    },
-    {
       "pr": 308,
       "base": "2aabd6ce2a4761ba9f39e9d0e2a3795902aef60c",
       "head": "d3e780caab03367390a95c95ff6d1e805c15d601",
@@ -730,27 +831,43 @@
       ]
     },
     {
-      "pr": 321,
-      "base": "8203017605712a4270c64973b89de8aa0cd016c2",
-      "head": "c35d1fe276537d961e5ecc1187273076b310b61b",
-      "labels": [
-        {"file": "backend/functions/src/utils/types.ts", "rootCause": "root z.partialRecord calls use an API absent from the repository's locked Zod 3 runtime and can prevent the Functions module from loading", "source": "CodeRabbit"}
-      ]
-    },
-    {
-      "pr": 270,
-      "base": "52305556f3e379106893ca6332177bc63c45a483",
-      "head": "12a8d81b293bdb7bbe681589189c14e3c6305079",
-      "labels": [
-        {"file": "backend/functions/src/endpoints/walk-links.ts", "rootCause": "focused Boston preview links are absent from AASA and rejected by exact-path app routing", "source": "Greptile"}
-      ]
-    },
-    {
       "pr": 272,
       "base": "fb19bb00992b54529c30ceb3b8ddadab1768238f",
       "head": "db361347a16c118452bdbfbe64b554f0ec89586d",
       "labels": [
         {"file": "docs/subsystems/xcode-cloud-trigger.md", "rootCause": "root and iOS READMEs still claim automatic TestFlight after the runbook switched to manual Main Daily", "source": "Greptile"}
+      ]
+    },
+    {
+      "pr": 255,
+      "base": "22b9a01915a8c85caf18bf86d033024deca33906",
+      "head": "f76a34ecdf095bb9592b0cfb6beeefb1ed68b550",
+      "labels": [
+        {"file": "workbench/server/run_retention.py", "rootCause": "a run created between the initial scan and recording_temp_plan is absent from decision_by_run and raises KeyError", "source": "Greptile"}
+      ]
+    },
+    {
+      "pr": 320,
+      "base": "57ef7d92227fd5f36dece2b0157359d556ca6060",
+      "head": "1ad70bd0636d26c8810d93c1f730aa36e6f6e314",
+      "labels": [
+        {"file": "ios/AR/ci_scripts/verify_ui_screen_flow_suite.sh", "rootCause": "the xcodebuild-argument self-test overwrites captures and greps a substring, so extra invocations or a missing screenshot environment argument still pass", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 318,
+      "base": "9c22c2ae028093fa42b59c70a8f82420d8dca374",
+      "head": "41e4d06be8eab388e93f41e5a88825407da77b09",
+      "labels": [
+        {"file": "studio/tests/walk-manager.spec.mjs", "rootCause": "the layout test asserts only display grid and a loose input width, so a two-column label/control layout still passes despite the intended stacked full-width contract", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 266,
+      "base": "559d358245ef2157e01076c0745dcb58ab035562",
+      "head": "4ef6393035c885266198705e84f62996f5d7c582",
+      "labels": [
+        {"file": "web/qr/800/experience-v9.mjs", "rootCause": "UPDATED image-target events reapply position and scale while retaining the recognition heading, destabilizing world-fixed placement", "source": "Greptile"}
       ]
     }
   ],
@@ -882,15 +999,41 @@
       ]
     },
     {
-      "pr": 304,
-      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
-      "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
+      "pr": 321,
+      "base": "8203017605712a4270c64973b89de8aa0cd016c2",
+      "head": "c35d1fe276537d961e5ecc1187273076b310b61b",
       "rejectedCandidates": [
         {
-          "file": "backend/functions/src/endpoints/attribution.ts",
-          "rootCause": "the endpoint duplicates centralized attribution channel and provider identifiers",
+          "file": "backend/functions/src/utils/types.ts",
+          "rootCause": "root z.partialRecord calls use an API absent from the repository's locked Zod 3 runtime and can prevent the Functions module from loading",
           "source": "CodeRabbit",
-          "reason": "explicit nondefect control: CodeRabbit marks this as a refactor suggestion, and the exact-head duplicated literals match the centralized values without a demonstrated behavioral failure"
+          "reason": "false at exact head: the file imports zod/v4, and locked zod 3.25.76 exports partialRecord from that v4 subpath"
+        }
+      ]
+    },
+    {
+      "pr": 255,
+      "base": "22b9a01915a8c85caf18bf86d033024deca33906",
+      "head": "9e526ef3c5110ca4e9a419d61d4110baf0574a07",
+      "rejectedCandidates": [
+        {
+          "file": "workbench/server/run_retention.py",
+          "rootCause": "a run created between the initial scan and recording_temp_plan is absent from decision_by_run and raises KeyError",
+          "source": "Greptile",
+          "reason": "false at exact head: recording_temp_plan inserts every newly observed run with setdefault before retention_plan indexes its decision"
+        }
+      ]
+    },
+    {
+      "pr": 301,
+      "base": "07f417c30044d8b48de455b720479f2a7a0b5d25",
+      "head": "c507fca44edec0337d1c38247c35e7ff3897c1fe",
+      "rejectedCandidates": [
+        {
+          "file": "studio/web/js/ads-dashboard.mjs",
+          "rootCause": "loadSelectedWindow leaks rejected promises from failed engagement data loads",
+          "source": "CodeRabbit",
+          "reason": "false at exact head: loadEngagementData catches its fetch and parse failures and resolves after rendering the error state"
         }
       ]
     }

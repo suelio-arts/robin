@@ -97,6 +97,8 @@ export function completeContractSearchPlan(
   const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+.*\btitle\s*:/m.test(chunk)
     ? ["OverridesById", "buildStoryWalk"]
     : [];
+  const requiredCollectionQueries = [...chunk.matchAll(/\b([A-Za-z_$][\w$]*)\s*&&\s*([A-Za-z_$][\w$]*)\.length\s*===?\s*0/g)]
+    .flatMap((match) => [match[1], match[2]]);
   const helperQueries = [...chunk.matchAll(/\b((?:assemble|validate|verify|parse|normalize|serialize|deserialize|require|load|save|persist)[A-Za-z0-9_$]*)\s*\(/gi)]
     .map((match) => match[1]);
   const changedCliUsage = chunk.split("\n").find((line) => /^\+\s*\S*cli\b.*--/i.test(line)) || "";
@@ -105,7 +107,7 @@ export function completeContractSearchPlan(
     .map((match) => match[1] || match[2])
     .filter((option) => changedCliUsage && !documentedOptions.has(option)))]
     .sort((left, right) => Number(right.includes("-")) - Number(left.includes("-")) || left.localeCompare(right));
-  const inferred = [...projectionQueries, ...missingCliOptions, ...changedContractQueries, ...helperQueries];
+  const inferred = [...requiredCollectionQueries, ...projectionQueries, ...missingCliOptions, ...changedContractQueries, ...helperQueries];
   return [...new Set(options.prioritizePlanned ? [...planned, ...inferred] : [...inferred, ...planned])]
     .slice(0, MAX_QUERIES);
 }
@@ -163,7 +165,7 @@ export async function buildContractSearchEvidence(
     paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
     const selectedPaths = options.counterevidence
       ? paths.slice(0, MAX_PATHS_PER_QUERY)
-      : selectLayerDiversePaths(paths, MAX_PATHS_PER_QUERY);
+      : selectLayerDiversePaths(paths, MAX_PATHS_PER_QUERY, options.reviewedPaths);
     for (const path of selectedPaths) {
       if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0) continue;
       seen.add(path);
@@ -198,10 +200,15 @@ function contractLayer(path: string): string {
   return path.split("/", 1)[0] || "root";
 }
 
-function selectLayerDiversePaths(paths: string[], limit: number): string[] {
-  const selected: string[] = [];
+function selectLayerDiversePaths(paths: string[], limit: number, reviewedPaths: string[] = []): string[] {
+  const reviewed = paths.find((path, index) =>
+    index > 0 && reviewedPaths.includes(path) && contractLayer(path) === contractLayer(paths[0])
+  );
+  const selected = reviewed ? [paths[0], reviewed] : [];
   const layers = new Set<string>();
+  selected.forEach((path) => layers.add(contractLayer(path)));
   for (const path of paths) {
+    if (selected.includes(path)) continue;
     const layer = contractLayer(path);
     if (layers.has(layer)) continue;
     selected.push(path);

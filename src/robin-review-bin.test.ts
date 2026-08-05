@@ -214,4 +214,37 @@ esac
       expect(JSON.parse(error.stdout)).toEqual(expect.objectContaining({ status: "blocked", verdict: "CHANGES_REQUESTED" }));
     }
   });
+
+  it("reruns through the PR command and waits for a new exact-head check", () => {
+    const fakeBin = path.join(dir, "bin");
+    const fakeGh = path.join(fakeBin, "gh");
+    const marker = path.join(dir, "rerun-requested");
+    fs.mkdirSync(fakeBin);
+    fs.writeFileSync(fakeGh, `#!/bin/sh
+case "$1 $2" in
+  "pr view") echo '{"number":7,"headRefOid":"abc123","url":"https://example/pr/7"}' ;;
+  "pr comment") printf '%s\n' "$*" > "$FAKE_MARKER" ;;
+  "api repos/o/r/commits/abc123/check-runs?check_name=review&per_page=100") echo '{"check_runs":[]}' ;;
+  "api --paginate")
+    if [ -f "$FAKE_MARKER" ]; then id=2; submitted=2026-01-02; else id=1; submitted=2026-01-01; fi
+    printf '[[{"id":%s,"commit_id":"abc123","state":"APPROVED","body":"## :bow_and_arrow: Robin","submitted_at":"%sT00:01:00Z","html_url":"https://example/review/%s","user":{"login":"github-actions[bot]"}}]]\n' "$id" "$submitted" "$id" ;;
+  *) echo "unexpected gh args: $*" >&2; exit 1 ;;
+esac
+`);
+    fs.chmodSync(fakeGh, 0o755);
+
+    const result = cp.spawnSync("node", [BIN, "pr", "7", "--repo", "o/r", "--rerun", "--json"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, FAKE_MARKER: marker },
+    });
+
+    expect({ status: result.status, stdout: result.stdout, stderr: result.stderr }).toEqual({
+      status: 0,
+      stdout: result.stdout,
+      stderr: "",
+    });
+    expect(fs.existsSync(marker)).toBe(true);
+    expect(fs.readFileSync(marker, "utf8")).toBe("pr comment 7 --repo o/r --body /robin\n");
+    expect(JSON.parse(result.stdout)).toEqual(expect.objectContaining({ status: "clean", check: "review", runUrl: "https://example/review/2" }));
+  });
 });

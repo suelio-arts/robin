@@ -165,7 +165,7 @@ describe("reusable review workflow", () => {
   it("keeps the reusable request-changes input boolean-compatible", () => {
     const block = workflowCallInputBlock(reviewWorkflow, "request-changes");
     expect(block).toContain("type: boolean");
-    expect(block).toContain("default: false");
+    expect(block).toContain("default: true");
   });
 
   it("documents every public action input in ADVANCED.md", () => {

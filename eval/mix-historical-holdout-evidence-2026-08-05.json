@@ -1,20 +1,32 @@
 {
   "createdAt": "2026-08-05",
   "sourcePolicy": "GitHub PR reviews, inline review comments, Actions metadata, and immutable reviewed commits only",
-  "added": {"snapshots": 8, "positiveLabels": 9, "negativeControls": 1, "prs": [270, 272, 304, 308, 312, 321, 322]},
+  "added": {"snapshots": 18, "positiveLabels": 17, "negativeControls": 5, "prs": [255, 264, 266, 270, 272, 300, 301, 304, 308, 312, 318, 319, 320, 321, 322, 326]},
   "positiveEvidence": [
     {"pr": 304, "head": "893124efa2f6941c8190be681dfb98ec34de0b4b", "commentId": 3716896536, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896536", "source": "CodeRabbit", "category": "backend data integrity"},
     {"pr": 304, "head": "893124efa2f6941c8190be681dfb98ec34de0b4b", "commentId": 3716896556, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896556", "source": "CodeRabbit", "category": "Swift/iOS contract handling"},
-    {"pr": 304, "head": "44ecd13af4e5774814fc3a41c4719805b30070db", "commentId": 3716896547, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896547", "source": "CodeRabbit", "category": "schema/generated contract"},
     {"pr": 308, "head": "d3e780caab03367390a95c95ff6d1e805c15d601", "commentId": 3717437999, "url": "https://github.com/suelio-arts/mix-mono/pull/308#discussion_r3717437999", "source": "CodeRabbit", "category": "shell/CI"},
     {"pr": 312, "head": "f1cc4c1e75c9be75cd08d846dc81eef9e7470cbe", "commentId": 3717550081, "url": "https://github.com/suelio-arts/mix-mono/pull/312#discussion_r3717550081", "source": "CodeRabbit", "category": "TypeScript/web concurrency/lifecycle"},
-    {"pr": 321, "head": "c35d1fe276537d961e5ecc1187273076b310b61b", "commentId": 3718795059, "url": "https://github.com/suelio-arts/mix-mono/pull/321#discussion_r3718795059", "source": "CodeRabbit", "category": "schema/runtime compatibility"},
     {"pr": 322, "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16", "commentId": 3720100861, "reviewId": 4863783321, "url": "https://github.com/suelio-arts/mix-mono/pull/322#discussion_r3720100861", "reviewUrl": "https://github.com/suelio-arts/mix-mono/pull/322#pullrequestreview-4863783321", "source": "CodeRabbit", "category": "shell/CI dependency integrity", "independentValidation": "A synthetic PBX object with active kind=branch/revision=main and expected kind/revision inside a block comment produces the expected dictionary and false-passes the exact-head parser.", "parityDisposition": "Luna miss at Robin run 31000526134"},
     {"pr": 270, "head": "12a8d81b293bdb7bbe681589189c14e3c6305079", "commentId": 3699887717, "url": "https://github.com/suelio-arts/mix-mono/pull/270#discussion_r3699887717", "source": "Greptile", "category": "backend/iOS universal-link contract"},
-    {"pr": 272, "head": "db361347a16c118452bdbfbe64b554f0ec89586d", "commentId": 3700041940, "url": "https://github.com/suelio-arts/mix-mono/pull/272#discussion_r3700041940", "source": "Greptile", "category": "release documentation contract"}
+    {"pr": 272, "head": "db361347a16c118452bdbfbe64b554f0ec89586d", "commentId": 3700041940, "url": "https://github.com/suelio-arts/mix-mono/pull/272#discussion_r3700041940", "source": "Greptile", "category": "release documentation contract"},
+    {"pr": 255, "head": "f76a34ecdf095bb9592b0cfb6beeefb1ed68b550", "commentId": 3693734148, "url": "https://github.com/suelio-arts/mix-mono/pull/255#discussion_r3693734148", "source": "Greptile", "category": "Python retention concurrency"},
+    {"pr": 264, "head": "971ff608b06a6ac698042dcaaec1b6033d89db5a", "commentId": 3697194754, "url": "https://github.com/suelio-arts/mix-mono/pull/264#discussion_r3697194754", "source": "Greptile", "category": "web caching/release contract"},
+    {"pr": 266, "head": "4ef6393035c885266198705e84f62996f5d7c582", "commentId": 3697611584, "url": "https://github.com/suelio-arts/mix-mono/pull/266#discussion_r3697611584", "source": "Greptile", "category": "AR transform state"},
+    {"pr": 300, "head": "6c992a3bf3b73d03811f557ee5797366e7477d8b", "commentId": 3716235965, "url": "https://github.com/suelio-arts/mix-mono/pull/300#discussion_r3716235965", "source": "CodeRabbit", "category": "cross-layer identifier contract"},
+    {"pr": 301, "head": "31eb20ecc9962fc73cac1a994cf01cd1b0cbb6b2", "commentId": 3716326989, "url": "https://github.com/suelio-arts/mix-mono/pull/301#discussion_r3716326989", "source": "CodeRabbit", "category": "schema/data consistency"},
+    {"pr": 326, "head": "559a2e474d29dad65cf7283966e3e1976689f4b7", "commentId": 3720303114, "url": "https://github.com/suelio-arts/mix-mono/pull/326#discussion_r3720303114", "source": "CodeRabbit", "category": "web editor state/data integrity"},
+    {"pr": 326, "head": "559a2e474d29dad65cf7283966e3e1976689f4b7", "commentId": 3720303072, "url": "https://github.com/suelio-arts/mix-mono/pull/326#discussion_r3720303072", "source": "CodeRabbit", "category": "cross-file web editor validation"},
+    {"pr": 319, "head": "18e82cfb11689dbf671920d23baef19e6b9997ed", "commentId": 3718176006, "url": "https://github.com/suelio-arts/mix-mono/pull/319#discussion_r3718176006", "source": "CodeRabbit", "category": "shell self-test correctness"},
+    {"pr": 320, "head": "1ad70bd0636d26c8810d93c1f730aa36e6f6e314", "commentId": 3718431740, "url": "https://github.com/suelio-arts/mix-mono/pull/320#discussion_r3718431740", "source": "CodeRabbit", "category": "shell argument-capture contract"},
+    {"pr": 318, "head": "41e4d06be8eab388e93f41e5a88825407da77b09", "commentId": 3718018596, "url": "https://github.com/suelio-arts/mix-mono/pull/318#discussion_r3718018596", "source": "CodeRabbit", "category": "browser layout test contract"}
   ],
   "negativeEvidence": [
-    {"pr": 304, "head": "893124efa2f6941c8190be681dfb98ec34de0b4b", "commentId": 3716896516, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896516", "source": "CodeRabbit", "disposition": "negative_nondefect_refactor", "reason": "The comment identifies a refactor suggestion; duplicated values match the central contract and no behavioral failure is demonstrated."}
+    {"pr": 304, "head": "893124efa2f6941c8190be681dfb98ec34de0b4b", "commentId": 3716896516, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896516", "source": "CodeRabbit", "disposition": "negative_nondefect_refactor", "reason": "The comment identifies a refactor suggestion; duplicated values match the central contract and no behavioral failure is demonstrated."},
+    {"pr": 321, "head": "c35d1fe276537d961e5ecc1187273076b310b61b", "commentId": 3718795059, "url": "https://github.com/suelio-arts/mix-mono/pull/321#discussion_r3718795059", "source": "CodeRabbit", "disposition": "negative_false_runtime_claim", "reason": "The exact file imports zod/v4, and locked zod 3.25.76 exports partialRecord from that v4 subpath."},
+    {"pr": 304, "head": "44ecd13af4e5774814fc3a41c4719805b30070db", "commentId": 3716896547, "url": "https://github.com/suelio-arts/mix-mono/pull/304#discussion_r3716896547", "source": "CodeRabbit", "disposition": "negative_false_generated_mapping", "reason": "GeneratedRecordInstallAttributionRequest maps to RecordInstallAttributionRequestSchema, not RecordDeviceInstallRequestSchema; its fields match the actual source schema."},
+    {"pr": 255, "head": "9e526ef3c5110ca4e9a419d61d4110baf0574a07", "commentId": 3693734148, "url": "https://github.com/suelio-arts/mix-mono/pull/255#discussion_r3693734148", "source": "Greptile", "disposition": "negative_stale_after_fix", "reason": "The later exact head uses setdefault before every direct decision lookup."},
+    {"pr": 301, "head": "c507fca44edec0337d1c38247c35e7ff3897c1fe", "commentId": 3716181495, "url": "https://github.com/suelio-arts/mix-mono/pull/301#discussion_r3716181495", "source": "CodeRabbit", "disposition": "negative_false_rejection_leak", "reason": "loadEngagementData catches fetch and parse failures and resolves after rendering the error state."}
   ],
   "pr322Parity": {
     "robinRunId": 31000526134,
@@ -28,5 +40,30 @@
       {"commentId": 3720117272, "url": "https://github.com/suelio-arts/mix-mono/pull/322#discussion_r3720117272", "severity": "medium", "rootCause": "background-command guard misses arguments, redirects, and pipelines before the ampersand", "scoreDisposition": "unscored_unique_robin_finding"}
     ]
   },
-  "greptileEvidence": {"addedLabels": 2, "availablePrs": [270, 272], "missingSelectedPrs": [304, 308, 312, 321, 322], "reason": "No Greptile inline evidence was present on those five selected PRs; the gap is explicit rather than inferred."}
+  "tunedSnapshotsExcludedFromBlindScoring": [
+    {"pr": 304, "heads": ["893124efa2f6941c8190be681dfb98ec34de0b4b", "44ecd13af4e5774814fc3a41c4719805b30070db"], "reason": "used to tune reconciliation, numeric transport, and generated-contract context"},
+    {"pr": 322, "heads": ["00a5b2d915f35f045d61ea3b94a5314f1c411f16"], "reason": "used to tune parser adversary"},
+    {"pr": 270, "heads": ["12a8d81b293bdb7bbe681589189c14e3c6305079"], "reason": "Luna-unique cache finding was adjudicated after the first run"},
+    {"pr": 264, "heads": ["971ff608b06a6ac698042dcaaec1b6033d89db5a"], "reason": "used to tune versioned-asset deployment closure after the fresh blind miss"},
+    {"pr": 300, "heads": ["6c992a3bf3b73d03811f557ee5797366e7477d8b"], "reason": "used to tune cross-layer identifier and generated-ID context after the fresh blind miss"},
+    {"pr": 301, "heads": ["31eb20ecc9962fc73cac1a994cf01cd1b0cbb6b2"], "reason": "used to tune redundant aggregate invariant review after the fresh blind miss"},
+    {"pr": 326, "heads": ["559a2e474d29dad65cf7283966e3e1976689f4b7"], "reason": "used to tune partial-pair serialization, required-child editor closure, and large-diff precision after the fresh blind miss"},
+    {"pr": 319, "heads": ["18e82cfb11689dbf671920d23baef19e6b9997ed"], "reason": "used to tune shell expected-failure self-test review after the fresh blind miss"}
+  ],
+  "evaluationResults": {
+    "freshHoldouts": [
+      {"pr": 318, "expectedRoots": 1, "caughtRoots": 1, "additionalRealFindings": 1, "falsePositives": 0, "output": "/tmp/robin-holdout-pr318.json"},
+      {"pr": 320, "expectedRoots": 1, "caughtRoots": 1, "additionalRealFindings": 0, "falsePositives": 0, "output": "/tmp/robin-holdout-pr320.json"}
+    ],
+    "tunedRegressions": [
+      {"pr": 264, "result": "caught exact Greptile immutable-cache root"},
+      {"pr": 300, "result": "caught exact CodeRabbit identifier root with no false positive"},
+      {"pr": 301, "result": "caught all 10 adjudicated roots with 10/10 precision"},
+      {"pr": 319, "result": "caught both benchmark roots plus one additional real exact-argv defect with 3/3 precision"},
+      {"pr": 326, "scope": "Story editor", "result": "caught exact CodeRabbit required-first-beat root with 1/1 precision", "output": "/tmp/robin-dev-pr326-story-v5.json"},
+      {"pr": 326, "scope": "Walk manager", "result": "caught the CodeRabbit partial-navigation-center root; large multi-root development case remained variable and is not counted as blind parity"}
+    ],
+    "discardedExperiment": "A second adversarial precision call was rejected: it increased cost, retained known false findings, and removed validated roots. Robin keeps the simpler single precision gate."
+  },
+  "greptileEvidence": {"addedLabels": 5, "availablePrs": [255, 264, 266, 270, 272], "missingSelectedPrs": [300, 301, 304, 308, 312, 318, 319, 320, 321, 322, 326], "reason": "No Greptile inline evidence was present on the listed CodeRabbit-selected PRs; the gap is explicit rather than inferred."}
 }

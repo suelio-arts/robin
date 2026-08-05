@@ -26,6 +26,10 @@ OPENAI_API_KEY=... npm run eval:mix -- /tmp/mix-review-results.json
 EVAL_SET=holdout OPENAI_API_KEY=... npm run eval:mix -- /tmp/mix-holdout-results.json
 ```
 
+For a focused rerun, select exact snapshots/files with `EVAL_HEADS` and
+`EVAL_FILES`; `EVAL_CHUNKS=2,3` selects one-based chunks after file filtering.
+File filters also constrain negative controls. Chunk filters skip negative controls because those cases are file-level, not chunked.
+
 Score a finding only when it matches the PR, file, and root cause. Generic advice
 does not count. Bot agreement is not validation: incorrect bot findings belong in
 the negative controls. Run each candidate prompt at least three times before

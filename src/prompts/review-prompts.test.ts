@@ -129,5 +129,35 @@ describe("getReviewPrompt", () => {
     expect(parserPasses[0]).toContain("active properties from commented or quoted lookalikes");
     expect(getInitialDiscoveryPasses("diff --git a/src/value.ts b/src/value.ts\n+const value = input.trim()"))
       .toEqual(DISCOVERY_PASSES);
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/backend/types.ts b/backend/types.ts",
+      "+const reconciled = {...existing, ...record}; // reconciliation upgrade",
+    ].join("\n"))[1]).toContain("field-provenance matrix");
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/ios/Analytics.swift b/ios/Analytics.swift",
+      "+let clickTimestamp = value as? Double",
+    ].join("\n"))[2]).toContain("single-axis edits");
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/backend/types.ts b/backend/types.ts",
+      "+export const RequestSchema = z.object({ newField: z.string() });",
+    ].join("\n"))[2]).toContain("committed generated clients");
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/web/index.html b/web/index.html",
+      "+<script type=\"module\" src=\"experience-v8.mjs\"></script>",
+    ].join("\n"))[3]).toContain("immutable-cache globs");
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/backend/types.ts b/backend/types.ts",
+      "+runningCampaignCount: z.number().int(),",
+    ].join("\n"))[3]).toContain("child.provider !== parent.provider");
+    expect(getInitialDiscoveryPasses([
+      "diff --git a/ci/verify_gate.sh b/ci/verify_gate.sh",
+      "+if [[ ${1:-} == --self-test ]]; then ! verify_once; fi",
+    ].join("\n"))[3]).toContain("standalone ! command");
+    const requiredChildren = [
+      "diff --git a/studio/editor.mjs b/studio/editor.mjs",
+      "+if (thesis && beats.length === 0) throw new Error('Add a beat');",
+    ].join("\n");
+    expect(getInitialDiscoveryPasses(requiredChildren)).toHaveLength(4);
+    expect(getContractSearchDiscoveryPass(requiredChildren)).toContain("required first child");
   });
 });

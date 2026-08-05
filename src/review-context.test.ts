@@ -208,4 +208,66 @@ describe("buildFileContext", () => {
     expect(context).toContain("value.generating !== true");
   });
 
+  it("includes generated models for changed canonical schemas", async () => {
+    const files: Record<string, string> = {
+      "head:backend/types.ts": "export const RecordDeviceInstallRequestSchema = z.object({ singularAttribution: SingularSchema.optional() });",
+      "base:backend/types.ts": "export const RecordDeviceInstallRequestSchema = z.object({});",
+      "head:ios/Generated/GeneratedModels.swift": "public struct GeneratedRecordDeviceInstallRequest {\n  public let installId: String\n}",
+    };
+    const context = await buildFileContext({
+      getFileContent: async (_owner, _repo, path, ref) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => ["ios/Generated/GeneratedModels.swift"],
+      searchPaths: async () => [],
+    }, "o", "r", [
+      "diff --git a/backend/types.ts b/backend/types.ts",
+      "+++ b/backend/types.ts",
+      "+export const RecordDeviceInstallRequestSchema = z.object({ singularAttribution: SingularSchema.optional() });",
+    ].join("\n"), "base", "head");
+
+    expect(context).toContain("HEAD GENERATED CONTRACT: ios/Generated/GeneratedModels.swift");
+    expect(context).toContain("GeneratedRecordDeviceInstallRequest");
+  });
+
+  it("prioritizes cross-layer schemas for changed numeric fields", async () => {
+    const files: Record<string, string> = {
+      "head:ios/Analytics.swift": "let clickTimestamp = payload.doubleValue",
+      "base:ios/Analytics.swift": "",
+      "head:backend/ARCHITECTURE.md": "clickTimestamp is forwarded",
+      "head:backend/types.ts": "clickTimestamp: z.number().int().positive()",
+    };
+    const context = await buildFileContext({
+      getFileContent: async (_owner, _repo, path, ref) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async (_owner, _repo, query) => query === "clickTimestamp"
+        ? ["backend/ARCHITECTURE.md", "backend/types.ts"] : [],
+    }, "o", "r", [
+      "diff --git a/ios/Analytics.swift b/ios/Analytics.swift",
+      "+++ b/ios/Analytics.swift",
+      "+let clickTimestamp = payload.doubleValue",
+    ].join("\n"), "base", "head");
+
+    expect(context).toContain("HEAD CROSS-LAYER FIELD MATCH: backend/types.ts");
+    expect(context).toContain("z.number().int().positive()");
+  });
+
+  it("includes repository-generated ID evidence for new UUID constraints", async () => {
+    const files: Record<string, string> = {
+      "head:backend/types.ts": "playingBeatId: z.string().uuid().optional()",
+      "base:backend/types.ts": "",
+      "head:backend/radio.ts": "function consume(playingBeatId: string) {}\nconst beatRef = beatsCollection.doc();",
+    };
+    const context = await buildFileContext({
+      getFileContent: async (_owner, _repo, path, ref) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async (_owner, _repo, query) => query === "playingBeatId" ? ["backend/radio.ts"] : [],
+    }, "o", "r", [
+      "diff --git a/backend/types.ts b/backend/types.ts",
+      "+++ b/backend/types.ts",
+      "+playingBeatId: z.string().uuid().optional()",
+    ].join("\n"), "base", "head");
+
+    expect(context).toContain("HEAD CROSS-LAYER FIELD MATCH: backend/radio.ts");
+    expect(context).toContain("beatsCollection.doc()");
+  });
+
 });

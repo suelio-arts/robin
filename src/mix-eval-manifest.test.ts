@@ -4,12 +4,12 @@ import manifest from "../eval/mix-recent-prs.json";
 
 describe("MIX review benchmark", () => {
   it("keeps a non-trivial, unique historical corpus", () => {
-    const prs = manifest.developmentCases.map((testCase) => testCase.pr);
-    expect(new Set(prs).size).toBe(prs.length);
+    const snapshots = manifest.developmentCases.map(({pr, head}) => `${pr}:${head}`);
+    expect(new Set(snapshots).size).toBe(snapshots.length);
     expect(manifest.developmentCases.length).toBeGreaterThanOrEqual(5);
     expect(manifest.developmentCases.flatMap((testCase) => testCase.labels).length).toBeGreaterThanOrEqual(12);
-    expect(manifest.holdoutCases.flatMap((testCase) => testCase.labels)).toHaveLength(29);
-    expect(manifest.holdoutNegativeControls.flatMap(({ rejectedCandidates }) => rejectedCandidates)).toHaveLength(15);
+    expect(manifest.holdoutCases.flatMap((testCase) => testCase.labels)).toHaveLength(28);
+    expect(manifest.holdoutNegativeControls.flatMap(({ rejectedCandidates }) => rejectedCandidates)).toHaveLength(17);
     for (const label of manifest.holdoutCases.flatMap((testCase) => testCase.labels)) {
       expect(label).toEqual(expect.objectContaining({
         file: expect.stringMatching(/\S/),

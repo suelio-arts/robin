@@ -74,6 +74,76 @@ function parseLLMTimeout(input) {
 
 /***/ }),
 
+/***/ 9972:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseContractSearchPlan = parseContractSearchPlan;
+exports.buildContractSearchEvidence = buildContractSearchEvidence;
+const MAX_QUERIES = 4;
+const MAX_PATHS_PER_QUERY = 4;
+const MAX_PATHS = 10;
+const FILE_LIMIT = 6000;
+const TOTAL_LIMIT = 30000;
+function parseContractSearchPlan(content) {
+    let value;
+    try {
+        value = JSON.parse(content);
+    }
+    catch {
+        return [];
+    }
+    const queries = value?.queries;
+    if (!Array.isArray(queries))
+        return [];
+    return [...new Set(queries
+            .filter((query) => typeof query === "string")
+            .map((query) => query.trim())
+            .filter((query) => query.length >= 2 && query.length <= 80)
+            .filter((query) => !/\b(?:repo|org|user|language|path):/i.test(query))
+            .filter((query) => /^[A-Za-z0-9_$./@:+ -]+$/.test(query)))].slice(0, MAX_QUERIES);
+}
+async function buildContractSearchEvidence(git, owner, repo, head, queries) {
+    const seen = new Set();
+    const sections = [];
+    let remaining = TOTAL_LIMIT;
+    for (const query of queries.slice(0, MAX_QUERIES)) {
+        let paths;
+        try {
+            paths = await git.searchPaths(owner, repo, query);
+        }
+        catch {
+            continue;
+        }
+        for (const path of paths.slice(0, MAX_PATHS_PER_QUERY)) {
+            if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0)
+                continue;
+            seen.add(path);
+            let content;
+            try {
+                content = await git.getFileContent(owner, repo, path, head);
+            }
+            catch {
+                continue;
+            }
+            if (!content)
+                continue;
+            const limit = Math.min(FILE_LIMIT, remaining);
+            const excerpt = content.length <= limit
+                ? content
+                : `${content.slice(0, Math.floor(limit * 0.75))}\n[... middle omitted ...]\n${content.slice(-Math.floor(limit * 0.25))}`;
+            sections.push(`HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n${excerpt}`);
+            remaining -= excerpt.length;
+        }
+    }
+    return sections.join("\n\n");
+}
+//# sourceMappingURL=contract-discovery.js.map
+
+/***/ }),
+
 /***/ 4523:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -1121,6 +1191,7 @@ const commands_1 = __nccwpck_require__(367);
 const events_1 = __nccwpck_require__(6420);
 const review_context_1 = __nccwpck_require__(4635);
 const precision_gate_1 = __nccwpck_require__(1006);
+const contract_discovery_1 = __nccwpck_require__(9972);
 async function run() {
     let octokit;
     let statusOwner = "";
@@ -1307,7 +1378,7 @@ async function run() {
                 const reviews = await Promise.all(batch.map(async (chunk, offset) => {
                     core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
                     const context = await (0, review_context_1.buildFileContext)(gitUtils, owner, repo, chunk, baseRef, headRef);
-                    return runReviewPipeline(llm, chunk, context, reviewInstructions, useJsonMode);
+                    return runReviewPipeline(llm, async (queries) => (0, contract_discovery_1.buildContractSearchEvidence)(gitUtils, owner, repo, headRef, queries), chunk, context, reviewInstructions, useJsonMode);
                 }));
                 for (const review of reviews) {
                     findings.summary += `${review.summary}\n`;
@@ -1615,7 +1686,7 @@ async function runReview(llm, diff, reviewInstructions, jsonResponseMode, contex
     core.info("Getting full code review...");
     return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
 }
-async function runReviewPipeline(llm, diff, context, reviewInstructions, jsonResponseMode) {
+async function runReviewPipeline(llm, searchContracts, diff, context, reviewInstructions, jsonResponseMode) {
     const discover = async (instructions) => {
         const response = await runReview(llm, diff, reviewInstructions, jsonResponseMode, context, instructions);
         const parsed = review_parser_1.ReviewParser.parseDetailed(response.content);
@@ -1623,10 +1694,19 @@ async function runReviewPipeline(llm, diff, context, reviewInstructions, jsonRes
             return parsed.findings;
         return review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
     };
-    const [firstPass, ...remainingPasses] = (0, review_prompts_1.getDiscoveryPasses)(diff);
+    const [firstPass, ...remainingPasses] = (0, review_prompts_1.getInitialDiscoveryPasses)(diff);
     const discovery = [await discover(firstPass)];
     for (let index = 0; index < remainingPasses.length; index += 2) {
         discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
+    }
+    if ((0, review_prompts_1.isContractChunk)(diff)) {
+        const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
+        const evidence = await searchContracts((0, contract_discovery_1.parseContractSearchPlan)(plan.content));
+        discovery.push(await discover([
+            review_prompts_1.CONTRACT_SEARCH_DISCOVERY_PASS,
+            "CONTRACT SEARCH EVIDENCE:",
+            evidence || "No repository search matches were available.",
+        ].join("\n\n")));
     }
     const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
     const verified = review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, [`CANDIDATE FINDINGS:\n${candidates}`, ...review_prompts_1.VERIFICATION_INSTRUCTIONS].join("\n\n"))).content);
@@ -1785,8 +1865,10 @@ function selectApprovedCandidates(candidates, response, summary = "") {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PRECISION_INSTRUCTIONS = exports.VERIFICATION_INSTRUCTIONS = exports.DISCOVERY_PASSES = void 0;
+exports.PRECISION_INSTRUCTIONS = exports.VERIFICATION_INSTRUCTIONS = exports.CONTRACT_SEARCH_DISCOVERY_PASS = exports.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS = exports.DISCOVERY_PASSES = void 0;
+exports.isContractChunk = isContractChunk;
 exports.getDiscoveryPasses = getDiscoveryPasses;
+exports.getInitialDiscoveryPasses = getInitialDiscoveryPasses;
 exports.getReviewPrompt = getReviewPrompt;
 exports.getSummaryPrompt = getSummaryPrompt;
 exports.getHelpMessage = getHelpMessage;
@@ -1798,16 +1880,29 @@ exports.DISCOVERY_PASSES = [
     "Audit only availability and resource safety: wall-clock completion, cancellation, streaming that may never finish, decompression and expansion ratios, geometry or payload complexity, memory/disk growth, fan-out, cache lifetime, and bounds that fail to constrain real work.",
     "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, viewport height, min-height, overflow, reachable scrolling, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace short-screen and dynamic-viewport layouts end to end; content below the viewport must remain reachable. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
 ];
-const CONTRACT_DISCOVERY_PASS = "Audit only false-passing validators, gates, fixtures, harnesses, and aggregate CLI commands. Treat changed test infrastructure as product code. For each imported predicate, use its supplied implementation to enumerate every rejection guard and state, then map each to the changed assertions; report any omitted reachable state, including pending or generating. For each new aggregate or UI-test path, compare supplied repository conventions and sibling entry points for canonical preflight or contract checks, and report a bypass. Anchor an omission to the changed case list or invocation block.";
-function getDiscoveryPasses(chunk) {
+exports.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS = [
+    "Plan repository searches for a changed validator, gate, fixture, harness, or aggregate command.",
+    "Return strict JSON only: {\"queries\":[\"literal identifier or phrase\"]}.",
+    "Return at most four literal queries that locate imported predicate implementations and rejection guards, canonical sibling preflight/contract entry points, or scenario registries.",
+    "Use exact identifiers or short code phrases, never prose or GitHub search qualifiers.",
+].join("\n");
+exports.CONTRACT_SEARCH_DISCOVERY_PASS = "Audit only false-passing validators, gates, fixtures, harnesses, and aggregate CLI commands. Treat changed test infrastructure as product code. Use the supplied HEAD CONTRACT SEARCH MATCH evidence. Enumerate every imported predicate rejection guard and state, then map each to the changed assertions; report any omitted reachable state, including pending or generating. Compare new aggregate or UI-test paths with canonical preflight or contract entry points and report a bypass. Anchor an omission to the changed case list or invocation block.";
+function isContractChunk(chunk) {
     const paths = [...chunk.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
     const contractPath = paths.some((path) => path.startsWith(".github/workflows/")
         || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|harness|validate|validator|validation|verify|check|checks|gate|gates|aggregate|preflight|e2e|ci)(?:[/_.-]|$)/i.test(path));
     const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk);
-    if (!contractPath && !contractContent) {
-        return exports.DISCOVERY_PASSES;
-    }
-    return [...exports.DISCOVERY_PASSES.slice(0, -1), CONTRACT_DISCOVERY_PASS];
+    return contractPath || contractContent;
+}
+function getDiscoveryPasses(chunk) {
+    return isContractChunk(chunk)
+        ? [...exports.DISCOVERY_PASSES.slice(0, -1), exports.CONTRACT_SEARCH_DISCOVERY_PASS]
+        : exports.DISCOVERY_PASSES;
+}
+function getInitialDiscoveryPasses(chunk) {
+    return isContractChunk(chunk)
+        ? [exports.DISCOVERY_PASSES[0], exports.DISCOVERY_PASSES[1], exports.DISCOVERY_PASSES[3], exports.DISCOVERY_PASSES[4]]
+        : exports.DISCOVERY_PASSES;
 }
 exports.VERIFICATION_INSTRUCTIONS = [
     "Final evidence pass: do not add findings. Keep only candidates whose trigger, changed line, failing path, and material impact are directly proven.",
@@ -1821,6 +1916,9 @@ exports.PRECISION_INSTRUCTIONS = [
     "Direct language semantics are evidence. Persisted or external input is reachable when changed code consumes it without enforcing its required invariant.",
     "An unsynchronized whole-value read-modify-write proves lost-update risk when overlap or re-entry is possible; reject it when supplied code proves serialization or atomic mutation.",
     "Reject pre-existing behavior, unseen-caller assumptions, hypothetical configurations, refactor requests, and third-party signatures or provider contracts not proven by repository context or build output. Keep changed required test and harness code when it can false-pass its contract or fail its required gate. High-confidence language standard-library and platform API semantics are valid evidence.",
+    "Reject missing key, translation, registry, schema, or symbol claims unless supplied repository evidence proves the absence; not seeing an entry is not evidence that it is missing.",
+    "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",
+    "Reject product-type, provider, and framework behavior claims without a supplied consumer or authoritative contract proving the behavior matters.",
     "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause. Repetition is not evidence.",
     "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
     "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
@@ -2075,7 +2173,10 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
                     const related = await resolveRelatedFile(git, owner, repo, relatedPath, head, fetched, relatedBudget);
                     if (!related)
                         continue;
-                    const focused = matchingNeighborhoods(related.content, terms, Math.min(RELATED_LIMIT, remaining));
+                    const limit = Math.min(RELATED_LIMIT, remaining);
+                    const focused = related.content.length <= limit
+                        ? related.content
+                        : matchingNeighborhoods(related.content, terms, limit);
                     if (!focused)
                         continue;
                     sections.push(`HEAD RELATED FILE: ${related.path}\n${focused}`);

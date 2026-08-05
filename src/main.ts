@@ -17,11 +17,12 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
+import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
+import { buildContractSearchEvidence, parseContractSearchPlan } from "./contract-discovery";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -307,6 +308,7 @@ async function run(): Promise<void> {
           const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
           return runReviewPipeline(
             llm,
+            async (queries) => buildContractSearchEvidence(gitUtils, owner, repo, headRef, queries),
             chunk,
             context,
             reviewInstructions,
@@ -703,6 +705,7 @@ async function runReview(
 
 async function runReviewPipeline(
   llm: LLMClient,
+  searchContracts: (queries: string[]) => Promise<string>,
   diff: string,
   context: string,
   reviewInstructions: string,
@@ -728,10 +731,23 @@ async function runReviewPipeline(
       `${instructions}\n\nReturn ONLY a single valid JSON object.`
     )).content);
   };
-  const [firstPass, ...remainingPasses] = getDiscoveryPasses(diff);
+  const [firstPass, ...remainingPasses] = getInitialDiscoveryPasses(diff);
   const discovery = [await discover(firstPass)];
   for (let index = 0; index < remainingPasses.length; index += 2) {
     discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
+  }
+  if (isContractChunk(diff)) {
+    const plan = await llm.chatCompletion(
+      CONTRACT_SEARCH_PLANNER_INSTRUCTIONS,
+      buildReviewInput(diff, context),
+      true
+    );
+    const evidence = await searchContracts(parseContractSearchPlan(plan.content));
+    discovery.push(await discover([
+      CONTRACT_SEARCH_DISCOVERY_PASS,
+      "CONTRACT SEARCH EVIDENCE:",
+      evidence || "No repository search matches were available.",
+    ].join("\n\n")));
   }
   const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
   const verified = ReviewParser.parse((await runReview(

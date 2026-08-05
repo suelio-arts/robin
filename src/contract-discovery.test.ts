@@ -1,0 +1,30 @@
+import { buildContractSearchEvidence, parseContractSearchPlan } from "./contract-discovery";
+
+describe("contract discovery", () => {
+  it("parses bounded literal queries", () => {
+    expect(parseContractSearchPlan('{"queries":[" generating ","verify_cli_contracts","generating","repo:o/r"]}'))
+      .toEqual(["generating", "verify_cli_contracts"]);
+    expect(parseContractSearchPlan("not json")).toEqual([]);
+    expect(parseContractSearchPlan('{"queries":"generating"}')).toEqual([]);
+    expect(parseContractSearchPlan('{"queries":["aa","bb","cc","dd","ee"]}')).toEqual(["aa", "bb", "cc", "dd"]);
+  });
+
+  it("builds bounded exact-head evidence and survives failed searches", async () => {
+    const refs: string[] = [];
+    const git = {
+      searchPaths: async (_owner: string, _repo: string, query: string) => {
+        if (query === "broken") throw new Error("search failed");
+        return ["src/contract.ts", "src/contract.ts"];
+      },
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => {
+        refs.push(ref);
+        return `${path}\nexport const generating = true;`;
+      },
+    };
+    const evidence = await buildContractSearchEvidence(git, "o", "r", "head-sha", ["broken", "generating"]);
+    expect(evidence).toContain("HEAD CONTRACT SEARCH MATCH (generating): src/contract.ts");
+    expect(evidence).toContain("export const generating = true");
+    expect(evidence.match(/src\/contract\.ts/g)).toHaveLength(2);
+    expect(refs).toEqual(["head-sha"]);
+  });
+});

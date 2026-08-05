@@ -120,4 +120,23 @@ describe("buildFileContext", () => {
     expect(context).toContain("persistedValue.trim()");
   });
 
+  it("includes complete small imported predicates so rejection guards remain visible", async () => {
+    const files: Record<string, string> = {
+      "head:src/check.ts": 'import { accepts } from "./predicate";\naccepts(value);',
+      "base:src/check.ts": "",
+      "head:src/predicate.ts": "export function accepts(value: {generating?: boolean}) {\n  return value.generating !== true;\n}",
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async () => [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/src/check.ts b/src/check.ts",
+      "+++ b/src/check.ts",
+      "+accepts(value);",
+    ].join("\n"), "base", "head");
+    expect(context).toContain("value.generating !== true");
+  });
+
 });

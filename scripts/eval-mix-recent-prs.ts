@@ -4,10 +4,11 @@ import { resolve } from "path";
 import OpenAI from "openai";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
-import { PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getDiscoveryPasses, getReviewPrompt } from "../src/prompts/review-prompts";
+import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
+import { buildContractSearchEvidence, parseContractSearchPlan } from "../src/contract-discovery";
 
 type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
@@ -147,10 +148,27 @@ async function main() {
         reviewPrompt,
         `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
       );
-      const [firstPass, ...remainingPasses] = getDiscoveryPasses(chunk);
+      const [firstPass, ...remainingPasses] = getInitialDiscoveryPasses(chunk);
       const discovery = [await discover(firstPass)];
       for (let pass = 0; pass < remainingPasses.length; pass += 2) {
         discovery.push(...await Promise.all(remainingPasses.slice(pass, pass + 2).map(discover)));
+      }
+      const toolUsage: unknown[] = [];
+      if (isContractChunk(chunk)) {
+        const plan = await review(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, reviewInput);
+        toolUsage.push(plan.usage);
+        const evidence = await buildContractSearchEvidence(
+          localGit,
+          "",
+          "",
+          testCase.head,
+          parseContractSearchPlan(plan.choices[0]?.message.content || "")
+        );
+        discovery.push(await discover([
+          CONTRACT_SEARCH_DISCOVERY_PASS,
+          "CONTRACT SEARCH EVIDENCE:",
+          evidence || "No repository search matches were available.",
+        ].join("\n\n")));
       }
       const candidates = discovery.map((candidate) =>
         asReview(JSON.parse(candidate.choices[0]?.message.content || "{}"))
@@ -183,7 +201,7 @@ async function main() {
             kind: "review-error",
             error: reason,
             candidates,
-            usage: [...discovery.map(({ usage }) => usage), verification.usage, ...precisionUsage],
+            usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
           });
           continue;
         }
@@ -191,7 +209,7 @@ async function main() {
       responses.push({
         candidates,
         response: approved,
-        usage: [...discovery.map(({ usage }) => usage), verification.usage, ...precisionUsage],
+        usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
       });
     }
     results.push({

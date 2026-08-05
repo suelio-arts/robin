@@ -7,19 +7,35 @@ export const DISCOVERY_PASSES = [
   "Audit only UI and rendering semantics: DOM ownership, selectors after reparenting, viewport height, min-height, overflow, reachable scrolling, scene-graph parent-child transforms, world-space lights and targets, camera lifecycle, asset loading, and disposal. Trace short-screen and dynamic-viewport layouts end to end; content below the viewport must remain reachable. Trace which objects inherit every changed position, rotation, quaternion, and scale. Verify that lights or targets parented to content do not unintentionally inherit preview rotation or AR anchor transforms.",
 ];
 
-const CONTRACT_DISCOVERY_PASS = "Audit only false-passing validators, gates, fixtures, harnesses, and aggregate CLI commands. Treat changed test infrastructure as product code. For each imported predicate, use its supplied implementation to enumerate every rejection guard and state, then map each to the changed assertions; report any omitted reachable state, including pending or generating. For each new aggregate or UI-test path, compare supplied repository conventions and sibling entry points for canonical preflight or contract checks, and report a bypass. Anchor an omission to the changed case list or invocation block.";
+export const CONTRACT_SEARCH_PLANNER_INSTRUCTIONS = [
+  "Plan repository searches for a changed validator, gate, fixture, harness, or aggregate command.",
+  "Return strict JSON only: {\"queries\":[\"literal identifier or phrase\"]}.",
+  "Return at most four literal queries that locate imported predicate implementations and rejection guards, canonical sibling preflight/contract entry points, or scenario registries.",
+  "Use exact identifiers or short code phrases, never prose or GitHub search qualifiers.",
+].join("\n");
 
-export function getDiscoveryPasses(chunk: string): string[] {
+export const CONTRACT_SEARCH_DISCOVERY_PASS = "Audit only false-passing validators, gates, fixtures, harnesses, and aggregate CLI commands. Treat changed test infrastructure as product code. Use the supplied HEAD CONTRACT SEARCH MATCH evidence. Enumerate every imported predicate rejection guard and state, then map each to the changed assertions; report any omitted reachable state, including pending or generating. Compare new aggregate or UI-test paths with canonical preflight or contract entry points and report a bypass. Anchor an omission to the changed case list or invocation block.";
+
+export function isContractChunk(chunk: string): boolean {
   const paths = [...chunk.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
   const contractPath = paths.some((path) =>
     path.startsWith(".github/workflows/")
     || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|harness|validate|validator|validation|verify|check|checks|gate|gates|aggregate|preflight|e2e|ci)(?:[/_.-]|$)/i.test(path)
   );
   const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk);
-  if (!contractPath && !contractContent) {
-    return DISCOVERY_PASSES;
-  }
-  return [...DISCOVERY_PASSES.slice(0, -1), CONTRACT_DISCOVERY_PASS];
+  return contractPath || contractContent;
+}
+
+export function getDiscoveryPasses(chunk: string): string[] {
+  return isContractChunk(chunk)
+    ? [...DISCOVERY_PASSES.slice(0, -1), CONTRACT_SEARCH_DISCOVERY_PASS]
+    : DISCOVERY_PASSES;
+}
+
+export function getInitialDiscoveryPasses(chunk: string): string[] {
+  return isContractChunk(chunk)
+    ? [DISCOVERY_PASSES[0], DISCOVERY_PASSES[1], DISCOVERY_PASSES[3], DISCOVERY_PASSES[4]]
+    : DISCOVERY_PASSES;
 }
 
 export const VERIFICATION_INSTRUCTIONS = [
@@ -35,6 +51,9 @@ export const PRECISION_INSTRUCTIONS = [
   "Direct language semantics are evidence. Persisted or external input is reachable when changed code consumes it without enforcing its required invariant.",
   "An unsynchronized whole-value read-modify-write proves lost-update risk when overlap or re-entry is possible; reject it when supplied code proves serialization or atomic mutation.",
   "Reject pre-existing behavior, unseen-caller assumptions, hypothetical configurations, refactor requests, and third-party signatures or provider contracts not proven by repository context or build output. Keep changed required test and harness code when it can false-pass its contract or fail its required gate. High-confidence language standard-library and platform API semantics are valid evidence.",
+  "Reject missing key, translation, registry, schema, or symbol claims unless supplied repository evidence proves the absence; not seeing an entry is not evidence that it is missing.",
+  "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",
+  "Reject product-type, provider, and framework behavior claims without a supplied consumer or authoritative contract proving the behavior matters.",
   "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause. Repetition is not evidence.",
   "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
   "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",

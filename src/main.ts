@@ -751,7 +751,7 @@ async function runReviewPipeline(
       true
     );
     const changedPaths = changedHeadPaths(diff);
-    const evidence = await searchContracts(completeContractSearchPlan(plan.content, diff), changedPaths);
+    const evidence = await searchContracts(completeContractSearchPlan(plan.content, diff, context), changedPaths);
     discovery.push(await discover([
       CONTRACT_SEARCH_DISCOVERY_PASS,
       "CONTRACT SEARCH EVIDENCE:",
@@ -775,7 +775,7 @@ async function runReviewPipeline(
       [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"),
       true
     );
-    precisionEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff), changedHeadPaths(diff), true);
+    precisionEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff, context), changedHeadPaths(diff), true);
   }
   const precisionPrompt = [
     reviewInstructions,

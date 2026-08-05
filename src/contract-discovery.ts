@@ -45,7 +45,7 @@ export function parseContractSearchPlan(content: string): string[] {
   )].slice(0, MAX_QUERIES);
 }
 
-export function completeContractSearchPlan(content: string, chunk: string): string[] {
+export function completeContractSearchPlan(content: string, chunk: string, context = ""): string[] {
   const planned = parseContractSearchPlan(content);
   const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk)
     ? ["OverridesById", "buildStoryWalk"]
@@ -54,7 +54,7 @@ export function completeContractSearchPlan(content: string, chunk: string): stri
     .map((match) => match[1]);
   const changedCliUsage = chunk.split("\n").find((line) => /^\+\s*\S*cli\b.*--/i.test(line)) || "";
   const documentedOptions = new Set([...changedCliUsage.matchAll(/--([a-z0-9-]+)/gi)].map((match) => match[1]));
-  const missingCliOptions = [...new Set([...chunk.matchAll(/\boptions(?:\[['"]([^'"]+)['"]\]|\.([A-Za-z][\w-]*))/g)]
+  const missingCliOptions = [...new Set([...(chunk + "\n" + context).matchAll(/\boptions(?:\[['"]([^'"]+)['"]\]|\.([A-Za-z][\w-]*))/g)]
     .map((match) => match[1] || match[2])
     .filter((option) => changedCliUsage && !documentedOptions.has(option)))]
     .sort((left, right) => Number(right.includes("-")) - Number(left.includes("-")) || left.localeCompare(right));

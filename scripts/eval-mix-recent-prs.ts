@@ -161,7 +161,7 @@ async function main() {
       if (isContractChunk(chunk)) {
         const plan = await review(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, reviewInput);
         toolUsage.push(plan.usage);
-        contractQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk);
+        contractQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk, context);
         contractEvidence = await buildContractSearchEvidence(
           localGit,
           "",
@@ -198,7 +198,7 @@ async function main() {
           reviewInput,
         ].join("\n\n"));
         toolUsage.push(plan.usage);
-        precisionQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk);
+        precisionQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk, context);
         precisionEvidence = await buildContractSearchEvidence(
           localGit,
           "",

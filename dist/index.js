@@ -128,7 +128,7 @@ function parseContractSearchPlan(content) {
             .filter((query) => !/\b[A-Za-z][A-Za-z0-9_-]*:/.test(query))
             .filter((query) => /^[A-Za-z0-9_$./@+ -]+$/.test(query)))].slice(0, MAX_QUERIES);
 }
-function completeContractSearchPlan(content, chunk) {
+function completeContractSearchPlan(content, chunk, context = "") {
     const planned = parseContractSearchPlan(content);
     const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk)
         ? ["OverridesById", "buildStoryWalk"]
@@ -137,7 +137,7 @@ function completeContractSearchPlan(content, chunk) {
         .map((match) => match[1]);
     const changedCliUsage = chunk.split("\n").find((line) => /^\+\s*\S*cli\b.*--/i.test(line)) || "";
     const documentedOptions = new Set([...changedCliUsage.matchAll(/--([a-z0-9-]+)/gi)].map((match) => match[1]));
-    const missingCliOptions = [...new Set([...chunk.matchAll(/\boptions(?:\[['"]([^'"]+)['"]\]|\.([A-Za-z][\w-]*))/g)]
+    const missingCliOptions = [...new Set([...(chunk + "\n" + context).matchAll(/\boptions(?:\[['"]([^'"]+)['"]\]|\.([A-Za-z][\w-]*))/g)]
             .map((match) => match[1] || match[2])
             .filter((option) => changedCliUsage && !documentedOptions.has(option)))]
         .sort((left, right) => Number(right.includes("-")) - Number(left.includes("-")) || left.localeCompare(right));
@@ -1832,7 +1832,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     if ((0, review_prompts_1.isContractChunk)(diff)) {
         const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
         const changedPaths = (0, contract_discovery_1.changedHeadPaths)(diff);
-        const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff), changedPaths);
+        const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff, context), changedPaths);
         discovery.push(await discover([
             review_prompts_1.CONTRACT_SEARCH_DISCOVERY_PASS,
             "CONTRACT SEARCH EVIDENCE:",
@@ -1845,7 +1845,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     let precisionEvidence = "";
     if (precisionCandidates.length > 0) {
         const plan = await llm.chatCompletion(review_prompts_1.PRECISION_SEARCH_PLANNER_INSTRUCTIONS, [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"), true);
-        precisionEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff), (0, contract_discovery_1.changedHeadPaths)(diff), true);
+        precisionEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff, context), (0, contract_discovery_1.changedHeadPaths)(diff), true);
     }
     const precisionPrompt = [
         reviewInstructions,

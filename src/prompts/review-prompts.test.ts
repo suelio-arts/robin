@@ -29,6 +29,8 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("canonical release documentation");
     expect(DISCOVERY_PASSES.join("\n")).toContain("server handler and persistence serializer");
     expect(DISCOVERY_PASSES.join("\n")).toContain("one entity's display name or title");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("changed CLI usage or synopsis line");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("command handler's actual option reads");
     expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("server handler and persistence serializer");
     expect(DISCOVERY_PASSES.join("\n")).toContain("refresh only part of its transform");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");

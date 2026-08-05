@@ -1800,7 +1800,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     const verified = review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, [`CANDIDATE FINDINGS:\n${candidates}`, ...review_prompts_1.VERIFICATION_INSTRUCTIONS].join("\n\n"))).content);
     const precisionCandidates = (0, precision_gate_1.buildPrecisionCandidates)([...discovery, verified]);
     let precisionEvidence = "";
-    if (precisionCandidates.length > 0 && (0, review_prompts_1.isContractChunk)(diff)) {
+    if (precisionCandidates.length > 0) {
         const plan = await llm.chatCompletion(review_prompts_1.PRECISION_SEARCH_PLANNER_INSTRUCTIONS, [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"), true);
         precisionEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff), (0, contract_discovery_1.changedHeadPaths)(diff));
     }

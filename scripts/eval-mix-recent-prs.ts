@@ -189,7 +189,7 @@ async function main() {
       const precisionCandidates = buildPrecisionCandidates([...candidates, verified]);
       let precisionQueries: string[] = [];
       let precisionEvidence = "";
-      if (precisionCandidates.length > 0 && isContractChunk(chunk)) {
+      if (precisionCandidates.length > 0) {
         const plan = await review(PRECISION_SEARCH_PLANNER_INSTRUCTIONS, [
           "CANDIDATES:",
           JSON.stringify(precisionCandidates),

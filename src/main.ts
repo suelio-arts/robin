@@ -761,7 +761,7 @@ async function runReviewPipeline(
   )).content);
   const precisionCandidates = buildPrecisionCandidates([...discovery, verified]);
   let precisionEvidence = "";
-  if (precisionCandidates.length > 0 && isContractChunk(diff)) {
+  if (precisionCandidates.length > 0) {
     const plan = await llm.chatCompletion(
       PRECISION_SEARCH_PLANNER_INSTRUCTIONS,
       [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"),

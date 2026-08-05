@@ -54,6 +54,7 @@ export const PRECISION_INSTRUCTIONS = [
   "Reject missing key, translation, registry, schema, or symbol claims unless supplied repository evidence proves the absence; not seeing an entry is not evidence that it is missing.",
   "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",
   "Reject product-type, provider, and framework behavior claims without a supplied consumer or authoritative contract proving the behavior matters.",
+  "Reject mutation-test wish lists: a validator finding must prove that its changed contract claims a specific reachable state or boundary that it omits, not merely that a hypothetical future implementation change could pass. Do not demand exhaustive type, truthiness, or numeric-boundary cases without a repository requirement tying that exact case to the changed behavior.",
   "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause. Repetition is not evidence.",
   "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
   "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",

@@ -68,7 +68,7 @@ export async function buildFileContext(
   if (remaining > 0) {
     const paths = await git.getTreePaths(owner, repo, head);
     const configurations = paths
-      .filter((path) => /(?:^|\/)(?:AGENTS\.md|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
+      .filter((path) => /(?:^|\/)(?:AGENTS\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
     for (const path of configurations.slice(0, 4)) {
       const key = `${head}:${path}`;
@@ -134,7 +134,10 @@ function pathAffinity(path: string, changedPaths: string[]): number {
 function changedIdentifiers(diff: string): string[] {
   const counts = new Map<string, number>();
   for (const line of diff.split("\n")) {
-    if (!line.startsWith("+") || line.startsWith("+++")) continue;
+    if ((!line.startsWith("+") && !line.startsWith("-")) || line.startsWith("+++") || line.startsWith("---")) continue;
+    for (const hash of line.match(/\b[0-9a-f]{12,}\b/gi) || []) {
+      counts.set(hash, (counts.get(hash) || 0) + 1);
+    }
     for (const term of line.match(/[A-Za-z_$][A-Za-z0-9_$]{4,}/g) || []) {
       if (/^(const|return|function|async|await|false|true|undefined|interface|import|from)$/.test(term)) continue;
       counts.set(term, (counts.get(term) || 0) + 1);

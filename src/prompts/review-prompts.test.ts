@@ -29,6 +29,7 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("not seeing an entry is not evidence");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("arbitrarily huge caller-controlled");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Reject mutation-test wish lists");
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {

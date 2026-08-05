@@ -1927,6 +1927,7 @@ exports.PRECISION_INSTRUCTIONS = [
     "Reject missing key, translation, registry, schema, or symbol claims unless supplied repository evidence proves the absence; not seeing an entry is not evidence that it is missing.",
     "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",
     "Reject product-type, provider, and framework behavior claims without a supplied consumer or authoritative contract proving the behavior matters.",
+    "Reject mutation-test wish lists: a validator finding must prove that its changed contract claims a specific reachable state or boundary that it omits, not merely that a hypothetical future implementation change could pass. Do not demand exhaustive type, truthiness, or numeric-boundary cases without a repository requirement tying that exact case to the changed behavior.",
     "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause. Repetition is not evidence.",
     "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
     "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
@@ -2198,7 +2199,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     if (remaining > 0) {
         const paths = await git.getTreePaths(owner, repo, head);
         const configurations = paths
-            .filter((path) => /(?:^|\/)(?:AGENTS\.md|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
+            .filter((path) => /(?:^|\/)(?:AGENTS\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
         for (const path of configurations.slice(0, 4)) {
             const key = `${head}:${path}`;
@@ -2269,8 +2270,11 @@ function pathAffinity(path, changedPaths) {
 function changedIdentifiers(diff) {
     const counts = new Map();
     for (const line of diff.split("\n")) {
-        if (!line.startsWith("+") || line.startsWith("+++"))
+        if ((!line.startsWith("+") && !line.startsWith("-")) || line.startsWith("+++") || line.startsWith("---"))
             continue;
+        for (const hash of line.match(/\b[0-9a-f]{12,}\b/gi) || []) {
+            counts.set(hash, (counts.get(hash) || 0) + 1);
+        }
         for (const term of line.match(/[A-Za-z_$][A-Za-z0-9_$]{4,}/g) || []) {
             if (/^(const|return|function|async|await|false|true|undefined|interface|import|from)$/.test(term))
                 continue;

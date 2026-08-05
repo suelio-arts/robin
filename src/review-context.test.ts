@@ -101,6 +101,30 @@ describe("buildFileContext", () => {
     expect(context).toContain("value.trim()");
   });
 
+  it("searches removed hashes and includes nearby Firebase configuration", async () => {
+    const oldHash = "304b4dc52a563af576f1a6977958471f922701a62391487204dff976096c909a";
+    const files: Record<string, string> = {
+      "head:web/qr/page.ts": "const hash = \"new-hash\";",
+      "base:web/qr/page.ts": `const hash = "${oldHash}";`,
+      "head:docs/release.md": `Expected hash: ${oldHash}`,
+      "head:web/firebase.json": '{"headers":[{"source":"*-v@(1|2|3|4|5|6|7).mjs"}]}',
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => ["docs/release.md", "web/firebase.json"],
+      searchPaths: async (_owner: string, _repo: string, query: string) => query === oldHash ? ["docs/release.md"] : [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/web/qr/page.ts b/web/qr/page.ts",
+      "--- a/web/qr/page.ts",
+      "+++ b/web/qr/page.ts",
+      `-const hash = "${oldHash}";`,
+      '+const hash = "new-hash";',
+    ].join("\n"), "base", "head");
+    expect(context).toContain("HEAD REPOSITORY CONFIG: web/firebase.json");
+    expect(context).toContain("HEAD REPOSITORY SEARCH MATCH: docs/release.md");
+  });
+
   it("focuses oversized changed files on matching code beyond the head and tail", async () => {
     const lines = Array.from({length: 4000}, (_, index) => `const filler${index} = ${index};`);
     lines[2000] = "function canonicalOperation() { return persistedValue.trim(); }";

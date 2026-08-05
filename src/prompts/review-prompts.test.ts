@@ -33,6 +33,7 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("not seeing an entry is not evidence");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("arbitrarily huge caller-controlled");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("mixed-frame transform");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Exact-head repository context outranks");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Reject mutation-test wish lists");
   });
 

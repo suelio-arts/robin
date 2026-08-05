@@ -24,6 +24,9 @@ describe("precision gate", () => {
     expect(() => selectApprovedCandidates(candidates, '{"approved":[],"rejected":{}}')).toThrow(/every candidate/);
     expect(() => selectApprovedCandidates(candidates, '{"approved":["c1","c1"],"rejected":{}}')).toThrow(/every candidate/);
     expect(() => selectApprovedCandidates(candidates, '{"approved":["c1"],"rejected":{"c1":"no"}}')).toThrow(/every candidate/);
+    expect(() => selectApprovedCandidates(candidates, '{"approved":["c1"],"rejected":[]}')).toThrow(/rejected reason object/);
+    expect(() => selectApprovedCandidates(candidates, '{"approved":[],"rejected":{"c1":1}}')).toThrow(/rejected reason object/);
+    expect(buildPrecisionCandidates([{ high: 5 } as never])).toEqual([]);
     expect(buildPrecisionCandidates([{}])).toEqual([]);
   });
 });

@@ -32,9 +32,6 @@ export class LLMClient {
   private routerModel: boolean;
   private onProgress?: LlmProgressHandler;
   private reasoningEffort?: ReasoningEffort;
-  private baseUrl: string;
-  private apiKey: string;
-  private timeoutMs: number;
 
   constructor(
     baseUrl: string,
@@ -47,8 +44,6 @@ export class LLMClient {
     reasoningEffort?: ReasoningEffort
   ) {
     this.model = model;
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.apiKey = apiKey;
     this.routerModel = isOpenRouterRouterModel(model);
     this.onProgress = onProgress;
     this.reasoningEffort = reasoningEffort;
@@ -58,7 +53,6 @@ export class LLMClient {
         : undefined;
     this.maxAttempts = getLlmCompletionAttemptCount(maxAttempts, model);
     const effectiveTimeoutMs = resolveLlmTimeoutMs(model, timeoutMs);
-    this.timeoutMs = effectiveTimeoutMs;
 
     core.info(
       `Initializing LLM client: baseUrl=${baseUrl}, model=${model}, timeout=${effectiveTimeoutMs} ms, maxAttempts=${this.maxAttempts}`

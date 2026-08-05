@@ -15,8 +15,10 @@ export function buildPrecisionCandidates(reviews: Partial<StructuredReview>[]): 
 
   for (const review of reviews) {
     for (const severity of SEVERITIES) {
-      for (const finding of review[severity] || []) {
-        if (typeof finding.description !== "string") continue;
+      const findings = review[severity];
+      if (!Array.isArray(findings)) continue;
+      for (const finding of findings) {
+        if (!finding || typeof finding !== "object" || typeof finding.description !== "string") continue;
         const root = finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
         const key = `${finding.file}:${finding.line ?? 0}:${severity}:${root}`;
         if (seen.has(key)) continue;

@@ -2284,7 +2284,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     return sections.join("\n\n");
 }
 function isConfigurationPath(path) {
-    return /(?:^|\/)(?:AGENTS\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path);
+    return /(?:^|\/)(?:AGENTS\.md|CLAUDE\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path);
 }
 function pathAffinity(path, changedPaths) {
     return Math.max(0, ...changedPaths.map((changed) => {

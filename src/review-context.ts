@@ -122,7 +122,7 @@ export async function buildFileContext(
 }
 
 function isConfigurationPath(path: string): boolean {
-  return /(?:^|\/)(?:AGENTS\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path);
+  return /(?:^|\/)(?:AGENTS\.md|CLAUDE\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path);
 }
 
 function pathAffinity(path: string, changedPaths: string[]): number {

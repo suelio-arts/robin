@@ -35,6 +35,7 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("cross-entity identity mismatch");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("same-diff comment or test");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("A helper parameter is not a trust boundary");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("export keyword does not make");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("not seeing an entry is not evidence");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("arbitrarily huge caller-controlled");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("mixed-frame transform");

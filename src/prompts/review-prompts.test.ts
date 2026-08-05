@@ -28,6 +28,7 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("fire-and-forget callers");
     expect(DISCOVERY_PASSES.join("\n")).toContain("rejections to be awaited or handled");
     expect(DISCOVERY_PASSES.join("\n")).toContain("privacy text with the actual data and capability use");
+    expect(DISCOVERY_PASSES.join("\n")).toContain("keeps that sensor active to track it afterward");
     expect(DISCOVERY_PASSES.join("\n")).toContain("canonical release documentation");
     expect(DISCOVERY_PASSES.join("\n")).toContain("server handler and persistence serializer");
     expect(DISCOVERY_PASSES.join("\n")).toContain("one entity's display name or title");

@@ -1906,17 +1906,18 @@ function isContractChunk(chunk) {
     return contractPath || contractContent;
 }
 function getDiscoveryPasses(chunk) {
+    const passes = isContractChunk(chunk)
+        ? [...exports.DISCOVERY_PASSES.slice(0, -1), exports.CONTRACT_SEARCH_DISCOVERY_PASS]
+        : exports.DISCOVERY_PASSES;
     if (/^diff --git a\/(?:docs\/[^ ]+|(?:[^/]+\/)*README(?:\.[^/]+)?) /m.test(chunk)) {
-        return [DOCUMENTATION_CONSISTENCY_DISCOVERY_PASS, ...exports.DISCOVERY_PASSES.slice(1)];
+        return [DOCUMENTATION_CONSISTENCY_DISCOVERY_PASS, ...passes.slice(1)];
     }
     if (/\b(?:OverridesById|buildStoryWalk|round.?trip|reconstruct(?:ed|ion)?)\b/i.test(chunk)) {
-        return [ROUND_TRIP_DISCOVERY_PASS, ...exports.DISCOVERY_PASSES.slice(1)];
+        return [ROUND_TRIP_DISCOVERY_PASS, ...passes.slice(1)];
     }
-    if (isContractChunk(chunk))
-        return [...exports.DISCOVERY_PASSES.slice(0, -1), exports.CONTRACT_SEARCH_DISCOVERY_PASS];
     return /\b(?:ImageTargetEvent|anchor\.(?:position|rotation|scale)|didUpdate)\b/.test(chunk)
-        ? [TRACKING_TRANSFORM_DISCOVERY_PASS, ...exports.DISCOVERY_PASSES.slice(1)]
-        : exports.DISCOVERY_PASSES;
+        ? [TRACKING_TRANSFORM_DISCOVERY_PASS, ...passes.slice(1)]
+        : passes;
 }
 function getInitialDiscoveryPasses(chunk) {
     const passes = getDiscoveryPasses(chunk);
@@ -1940,7 +1941,7 @@ exports.PRECISION_INSTRUCTIONS = [
     "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",
     "Reject product-type, provider, and framework behavior claims without a supplied consumer or authoritative contract proving the behavior matters.",
     "Reject mutation-test wish lists: a validator finding must prove that its changed contract claims a specific reachable state or boundary that it omits, not merely that a hypothetical future implementation change could pass. Do not demand exhaustive type, truthiness, or numeric-boundary cases without a repository requirement tying that exact case to the changed behavior.",
-    "For CLI input claims, trace all downstream local validation and reject a candidate when the command fails before an external side effect; a less-specific error alone is not material unless repository evidence defines that exact error as a contract.",
+    "For CLI input claims, trace all downstream local validation. Reject a candidate only when its claimed external effect is unreachable; a less-specific error alone is not material unless repository evidence defines that exact error as a contract. Keep local validation, exit status, and error-output defects in scope when the repository defines them.",
     "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause, even when different malformed values reach the same missing guard and smallest fix. Repetition is not evidence.",
     "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
     "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
@@ -2211,12 +2212,10 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     }
     if (remaining > 0) {
         const paths = [...new Set((await Promise.all(terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term)))).flat())]
-            .filter((path) => !changedPaths.includes(path))
+            .filter((path) => !changedPaths.includes(path) && !isConfigurationPath(path) && !fetched.has(`${head}:${path}`))
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
         for (const path of paths.slice(0, 12)) {
             const key = `${head}:${path}`;
-            if (fetched.has(key))
-                continue;
             fetched.add(key);
             const content = await git.getFileContent(owner, repo, path, head);
             if (!content)
@@ -2233,7 +2232,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     if (remaining > 0) {
         const paths = await git.getTreePaths(owner, repo, head);
         const configurations = paths
-            .filter((path) => /(?:^|\/)(?:AGENTS\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
+            .filter(isConfigurationPath)
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
         for (const path of configurations.slice(0, 4)) {
             const key = `${head}:${path}`;
@@ -2272,6 +2271,9 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     }
     return sections.join("\n\n");
 }
+function isConfigurationPath(path) {
+    return /(?:^|\/)(?:AGENTS\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path);
+}
 function pathAffinity(path, changedPaths) {
     return Math.max(0, ...changedPaths.map((changed) => {
         const left = path.split("/");
@@ -2287,10 +2289,16 @@ function changedIdentifiers(diff) {
     for (const line of diff.split("\n")) {
         if ((!line.startsWith("+") && !line.startsWith("-")) || line.startsWith("+++") || line.startsWith("---"))
             continue;
-        for (const hash of line.match(/\b[0-9a-f]{12,}\b/gi) || []) {
-            counts.set(hash, (counts.get(hash) || 0) + 1);
+        const hashes = [...line.matchAll(/\b[0-9a-f]{12,}\b/gi)];
+        for (const hash of hashes) {
+            counts.set(hash[0], (counts.get(hash[0]) || 0) + 1);
         }
-        for (const term of line.match(/[A-Za-z_$][A-Za-z0-9_$]{4,}/g) || []) {
+        for (const match of line.matchAll(/[A-Za-z_$][A-Za-z0-9_$]{4,}/g)) {
+            const start = match.index;
+            const end = start + match[0].length;
+            if (hashes.some((hash) => start < (hash.index + hash[0].length) && end > hash.index))
+                continue;
+            const term = match[0];
             if (/^(const|return|function|async|await|false|true|undefined|interface|import|from)$/.test(term))
                 continue;
             counts.set(term, (counts.get(term) || 0) + 1);

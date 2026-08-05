@@ -31,16 +31,18 @@ export function isContractChunk(chunk: string): boolean {
 }
 
 export function getDiscoveryPasses(chunk: string): string[] {
+  const passes = isContractChunk(chunk)
+    ? [...DISCOVERY_PASSES.slice(0, -1), CONTRACT_SEARCH_DISCOVERY_PASS]
+    : DISCOVERY_PASSES;
   if (/^diff --git a\/(?:docs\/[^ ]+|(?:[^/]+\/)*README(?:\.[^/]+)?) /m.test(chunk)) {
-    return [DOCUMENTATION_CONSISTENCY_DISCOVERY_PASS, ...DISCOVERY_PASSES.slice(1)];
+    return [DOCUMENTATION_CONSISTENCY_DISCOVERY_PASS, ...passes.slice(1)];
   }
   if (/\b(?:OverridesById|buildStoryWalk|round.?trip|reconstruct(?:ed|ion)?)\b/i.test(chunk)) {
-    return [ROUND_TRIP_DISCOVERY_PASS, ...DISCOVERY_PASSES.slice(1)];
+    return [ROUND_TRIP_DISCOVERY_PASS, ...passes.slice(1)];
   }
-  if (isContractChunk(chunk)) return [...DISCOVERY_PASSES.slice(0, -1), CONTRACT_SEARCH_DISCOVERY_PASS];
   return /\b(?:ImageTargetEvent|anchor\.(?:position|rotation|scale)|didUpdate)\b/.test(chunk)
-    ? [TRACKING_TRANSFORM_DISCOVERY_PASS, ...DISCOVERY_PASSES.slice(1)]
-    : DISCOVERY_PASSES;
+    ? [TRACKING_TRANSFORM_DISCOVERY_PASS, ...passes.slice(1)]
+    : passes;
 }
 
 export function getInitialDiscoveryPasses(chunk: string): string[] {
@@ -67,7 +69,7 @@ export const PRECISION_INSTRUCTIONS = [
   "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",
   "Reject product-type, provider, and framework behavior claims without a supplied consumer or authoritative contract proving the behavior matters.",
   "Reject mutation-test wish lists: a validator finding must prove that its changed contract claims a specific reachable state or boundary that it omits, not merely that a hypothetical future implementation change could pass. Do not demand exhaustive type, truthiness, or numeric-boundary cases without a repository requirement tying that exact case to the changed behavior.",
-  "For CLI input claims, trace all downstream local validation and reject a candidate when the command fails before an external side effect; a less-specific error alone is not material unless repository evidence defines that exact error as a contract.",
+  "For CLI input claims, trace all downstream local validation. Reject a candidate only when its claimed external effect is unreachable; a less-specific error alone is not material unless repository evidence defines that exact error as a contract. Keep local validation, exit status, and error-output defects in scope when the repository defines them.",
   "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause, even when different malformed values reach the same missing guard and smallest fix. Repetition is not evidence.",
   "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
   "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",

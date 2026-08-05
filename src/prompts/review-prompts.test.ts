@@ -28,13 +28,16 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("privacy text with the actual data and capability use");
     expect(DISCOVERY_PASSES.join("\n")).toContain("canonical release documentation");
     expect(DISCOVERY_PASSES.join("\n")).toContain("server handler and persistence serializer");
+    expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("server handler and persistence serializer");
     expect(DISCOVERY_PASSES.join("\n")).toContain("refresh only part of its transform");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("not seeing an entry is not evidence");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("arbitrarily huge caller-controlled");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("mixed-frame transform");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("later anchor while retaining rotation from an earlier anchor");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Exact-head repository context outranks");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Reject mutation-test wish lists");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("specific reachable state or boundary that it omits");
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {
@@ -57,6 +60,9 @@ describe("getReviewPrompt", () => {
     const trackingPasses = getDiscoveryPasses("diff --git a/web/ar.mjs b/web/ar.mjs\n+anchor.position.copy(next.position);\n+ImageTargetEvent.UPDATED");
     expect(trackingPasses).toHaveLength(6);
     expect(trackingPasses[0]).toContain("mixed-frame transform");
+    const overlappingPasses = getDiscoveryPasses("diff --git a/e2e/ar.mjs b/e2e/ar.mjs\n+anchor.position.copy(next.position);\n+validator");
+    expect(overlappingPasses[0]).toContain("mixed-frame transform");
+    expect(overlappingPasses[5]).toContain("repository-contract gaps");
     const documentationPasses = getDiscoveryPasses("diff --git a/docs/release.md b/docs/release.md\n+Main Daily is manual");
     expect(documentationPasses[0]).toContain("repository documentation consistency");
     const roundTripPasses = getDiscoveryPasses("diff --git a/src/studio.ts b/src/studio.ts\n+navNodeOverridesById\n+buildStoryWalk");

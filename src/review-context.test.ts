@@ -112,7 +112,7 @@ describe("buildFileContext", () => {
     const git = {
       getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
       getTreePaths: async () => ["docs/release.md", "web/firebase.json"],
-      searchPaths: async (_owner: string, _repo: string, query: string) => query === oldHash ? ["docs/release.md"] : [],
+      searchPaths: async (_owner: string, _repo: string, query: string) => query === oldHash ? ["web/firebase.json", "docs/release.md"] : [],
     };
     const context = await buildFileContext(git, "o", "r", [
       "diff --git a/web/qr/page.ts b/web/qr/page.ts",
@@ -123,6 +123,8 @@ describe("buildFileContext", () => {
     ].join("\n"), "base", "head");
     expect(context).toContain("HEAD REPOSITORY CONFIG: web/firebase.json");
     expect(context).toContain("HEAD REPOSITORY SEARCH MATCH: docs/release.md");
+    expect(context).toContain(oldHash);
+    expect(context).toContain('"source":"*-v@(1|2|3|4|5|6|7).mjs"');
     expect(context.indexOf("HEAD REPOSITORY SEARCH MATCH")).toBeLessThan(context.indexOf("HEAD REPOSITORY CONFIG"));
   });
 

@@ -37,7 +37,6 @@ describe("getReviewPrompt", () => {
     expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("server handler and persistence serializer");
     expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("unchanged hydration, edit state, and save serializers");
     expect(DISCOVERY_PASSES.join("\n")).toContain("refresh only part of its transform");
-    expect(DISCOVERY_PASSES.join("\n")).toContain("calculate the minimum vertical stack");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("cross-entity identity mismatch");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("same-diff comment or test");

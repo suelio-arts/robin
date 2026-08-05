@@ -1909,7 +1909,7 @@ function getDiscoveryPasses(chunk) {
 }
 function getInitialDiscoveryPasses(chunk) {
     return isContractChunk(chunk)
-        ? [exports.DISCOVERY_PASSES[0], exports.DISCOVERY_PASSES[1], exports.DISCOVERY_PASSES[3], exports.DISCOVERY_PASSES[4]]
+        ? [exports.DISCOVERY_PASSES[0], exports.DISCOVERY_PASSES[1], exports.DISCOVERY_PASSES[2], exports.DISCOVERY_PASSES[3]]
         : exports.DISCOVERY_PASSES;
 }
 exports.VERIFICATION_INSTRUCTIONS = [
@@ -1928,7 +1928,8 @@ exports.PRECISION_INSTRUCTIONS = [
     "Reject resource-exhaustion claims based only on an arbitrarily huge caller-controlled string or payload when no reachable source or repository contract can produce that size.",
     "Reject product-type, provider, and framework behavior claims without a supplied consumer or authoritative contract proving the behavior matters.",
     "Reject mutation-test wish lists: a validator finding must prove that its changed contract claims a specific reachable state or boundary that it omits, not merely that a hypothetical future implementation change could pass. Do not demand exhaustive type, truthiness, or numeric-boundary cases without a repository requirement tying that exact case to the changed behavior.",
-    "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause. Repetition is not evidence.",
+    "For CLI input claims, trace all downstream local validation and reject a candidate when the command fails before an external side effect; a less-specific error alone is not material unless repository evidence defines that exact error as a contract.",
+    "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause, even when different malformed values reach the same missing guard and smallest fix. Repetition is not evidence.",
     "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
     "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
 ];

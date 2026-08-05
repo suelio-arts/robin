@@ -170,4 +170,48 @@ describe("robin-review CLI", () => {
   it("is tracked as an executable npm binary", () => {
     expect(fs.statSync(BIN).mode & 0o111).not.toBe(0);
   });
+
+  it("exposes exact-head PR review control", () => {
+    const output = cp.execFileSync("node", [BIN, "pr", "--help"], { encoding: "utf8" });
+    expect(output).toContain("robin-review pr [number|url]");
+    expect(output).toContain("--rerun");
+    expect(output).toContain("--json");
+  });
+
+  it("returns clean only for a successful exact-head approval", () => {
+    const fakeBin = path.join(dir, "bin");
+    const fakeGh = path.join(fakeBin, "gh");
+    fs.mkdirSync(fakeBin);
+    fs.writeFileSync(fakeGh, `#!/bin/sh
+case "$1 $2" in
+  "pr view") echo '{"number":7,"headRefOid":"abc123","url":"https://example/pr/7"}' ;;
+  "api repos/o/r/commits/abc123/check-runs?check_name=review&per_page=100") echo '{"check_runs":[{"id":9,"name":"review","status":"completed","conclusion":"success","started_at":"2026-01-01T00:00:00Z","html_url":"https://example/run/9","app":{"slug":"github-actions"}}]}' ;;
+  "api --paginate") printf '[[{"commit_id":"abc123","state":"%s","body":"## :bow_and_arrow: Robin","submitted_at":"2026-01-01T00:01:00Z","html_url":"https://example/review/1","user":{"login":"github-actions[bot]"}}]]\n' "$FAKE_VERDICT" ;;
+  *) echo "unexpected gh args: $*" >&2; exit 1 ;;
+esac
+`);
+    fs.chmodSync(fakeGh, 0o755);
+    const env = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}` };
+    const cleanRun = cp.spawnSync("node", [BIN, "pr", "7", "--repo", "o/r", "--json"], {
+      encoding: "utf8",
+      env: { ...env, FAKE_VERDICT: "APPROVED" },
+    });
+    expect({ status: cleanRun.status, stderr: cleanRun.stderr, stdout: cleanRun.stdout }).toEqual({
+      status: 0,
+      stderr: "",
+      stdout: cleanRun.stdout,
+    });
+    expect(JSON.parse(cleanRun.stdout)).toEqual(expect.objectContaining({ status: "clean", head: "abc123", verdict: "APPROVED" }));
+
+    try {
+      cp.execFileSync("node", [BIN, "pr", "7", "--repo", "o/r", "--json"], {
+        encoding: "utf8",
+        env: { ...env, FAKE_VERDICT: "CHANGES_REQUESTED" },
+      });
+      throw new Error("expected blocked exit");
+    } catch (error: any) {
+      expect(error.status).toBe(2);
+      expect(JSON.parse(error.stdout)).toEqual(expect.objectContaining({ status: "blocked", verdict: "CHANGES_REQUESTED" }));
+    }
+  });
 });

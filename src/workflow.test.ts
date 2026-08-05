@@ -114,7 +114,7 @@ describe("reusable review workflow", () => {
     expect(robinTemplate).toContain(
       "uses: antongulin/robin/.github/workflows/review.yml@main",
     );
-    expect(robinTemplate).toContain("types: [opened, reopened, ready_for_review]");
+    expect(robinTemplate).toContain("types: [opened, reopened, ready_for_review, synchronize]");
     expect(robinTemplate).toContain("actions: read");
     expect(robinTemplate).toContain("LLM_API_KEY: ${{ secrets.LLM_API_KEY }}");
     expect(robinTemplate).not.toContain("- uses: antongulin/robin@");

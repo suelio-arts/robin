@@ -49,6 +49,17 @@ From the target repository, run either:
 npx robin-review
 ```
 
+After installation, agents can wait for or rerun Robin on an exact PR head:
+
+```bash
+npx robin-review pr 123 --repo owner/repo --json
+npx robin-review pr 123 --repo owner/repo --rerun --json
+```
+
+The command exits `0` only when the current head has a successful Robin check
+and an exact-head `APPROVED` review. Findings exit `2`; missing or failed review
+infrastructure exits `1`. Consumer workflows review every synchronized PR head.
+
 or, without Node.js:
 
 ```bash
@@ -124,7 +135,7 @@ name: Robin
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
   issue_comment:
     types: [created]
 

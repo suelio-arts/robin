@@ -21,6 +21,7 @@
     "runUrl": "https://github.com/suelio-arts/mix-mono/actions/runs/31000526134",
     "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16",
     "conclusion": "success",
+    "benchmarkDisposition": "development regression used to tune the conditional parser-adversary pass; excluded from holdout parity scoring",
     "coderabbitUniqueRootCause": "comment-blind PBX property parsing in verify_async_algorithms_pin",
     "robinObservedFindingsForAdjudication": [
       {"commentId": 3720117263, "url": "https://github.com/suelio-arts/mix-mono/pull/322#discussion_r3720117263", "severity": "medium", "rootCause": "pipeline documentation omits the Android build stage", "scoreDisposition": "unscored_unique_robin_finding"},

@@ -19,6 +19,11 @@ const die = (msg) => {
   process.exit(1);
 };
 
+if (process.argv[2] === "pr") {
+  require("./robin-pr").main(process.argv.slice(3));
+  return;
+}
+
 const ref = process.env.ROBIN_REF || "main";
 if (!/^[A-Za-z0-9._/-]{1,100}$/.test(ref)) die("Invalid ROBIN_REF: " + JSON.stringify(ref));
 
@@ -84,7 +89,7 @@ name: Robin
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
   issue_comment:
     types: [created]
 

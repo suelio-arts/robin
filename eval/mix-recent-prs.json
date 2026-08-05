@@ -517,6 +517,14 @@
       "head": "964318fed1e6d075238e802ac08ac3d030f3ad85",
       "labels": [],
       "rejected": "CodeRabbit OAuth sorting claim was stale at this SHA"
+    },
+    {
+      "pr": 322,
+      "base": "17cd40d099949e60d88d738e7728b6902649f015",
+      "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16",
+      "labels": [
+        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "verify_async_algorithms_pin parses commented PBX properties and lets them overwrite active fields, allowing a moving dependency to pass the revision-pin gate", "source": "CodeRabbit"}
+      ]
     }
   ],
   "holdoutCases": [
@@ -690,7 +698,7 @@
     },
     {
       "pr": 304,
-      "base": "37cb4658fe418c6232742552c6218741411cacf5",
+      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
       "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
       "labels": [
         {"file": "backend/functions/src/endpoints/attribution.ts", "rootCause": "organic-to-paid reconciliation overwrites the original resolvedAt install timestamp with the later reconciliation time", "source": "CodeRabbit"},
@@ -699,7 +707,7 @@
     },
     {
       "pr": 304,
-      "base": "37cb4658fe418c6232742552c6218741411cacf5",
+      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
       "head": "44ecd13af4e5774814fc3a41c4719805b30070db",
       "labels": [
         {"file": "backend/functions/src/utils/types.ts", "rootCause": "the committed generated Swift request model omits singularAttribution even though the Zod and OpenAPI contracts include it", "source": "CodeRabbit"}
@@ -707,7 +715,7 @@
     },
     {
       "pr": 308,
-      "base": "6502905c6745e790c8fa039d0f2607c44fef5f75",
+      "base": "2aabd6ce2a4761ba9f39e9d0e2a3795902aef60c",
       "head": "d3e780caab03367390a95c95ff6d1e805c15d601",
       "labels": [
         {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "the cleanup gate feeds simctl's OpenStep plist output directly to plistlib, so parse failure is mistaken for an absent app", "source": "CodeRabbit"}
@@ -727,14 +735,6 @@
       "head": "c35d1fe276537d961e5ecc1187273076b310b61b",
       "labels": [
         {"file": "backend/functions/src/utils/types.ts", "rootCause": "root z.partialRecord calls use an API absent from the repository's locked Zod 3 runtime and can prevent the Functions module from loading", "source": "CodeRabbit"}
-      ]
-    },
-    {
-      "pr": 322,
-      "base": "37cb4658fe418c6232742552c6218741411cacf5",
-      "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16",
-      "labels": [
-        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "verify_async_algorithms_pin parses commented PBX properties and lets them overwrite active fields, allowing a moving dependency to pass the revision-pin gate", "source": "CodeRabbit"}
       ]
     },
     {
@@ -883,7 +883,7 @@
     },
     {
       "pr": 304,
-      "base": "37cb4658fe418c6232742552c6218741411cacf5",
+      "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
       "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
       "rejectedCandidates": [
         {

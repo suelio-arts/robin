@@ -148,10 +148,10 @@ async function main() {
         `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
       );
       const [firstPass, ...remainingPasses] = DISCOVERY_PASSES;
-      const discovery = [
-        await discover(firstPass),
-        ...await Promise.all(remainingPasses.map(discover)),
-      ];
+      const discovery = [await discover(firstPass)];
+      for (let pass = 0; pass < remainingPasses.length; pass += 2) {
+        discovery.push(...await Promise.all(remainingPasses.slice(pass, pass + 2).map(discover)));
+      }
       const candidates = discovery.map((candidate) =>
         asReview(JSON.parse(candidate.choices[0]?.message.content || "{}"))
       );

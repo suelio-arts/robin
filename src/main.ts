@@ -729,10 +729,10 @@ async function runReviewPipeline(
     )).content);
   };
   const [firstPass, ...remainingPasses] = DISCOVERY_PASSES;
-  const discovery = [
-    await discover(firstPass),
-    ...await Promise.all(remainingPasses.map(discover)),
-  ];
+  const discovery = [await discover(firstPass)];
+  for (let index = 0; index < remainingPasses.length; index += 2) {
+    discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
+  }
   const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
   const verified = ReviewParser.parse((await runReview(
     llm,

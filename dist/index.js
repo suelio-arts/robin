@@ -787,13 +787,8 @@ class LLMClient {
     routerModel;
     onProgress;
     reasoningEffort;
-    baseUrl;
-    apiKey;
-    timeoutMs;
     constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort) {
         this.model = model;
-        this.baseUrl = baseUrl.replace(/\/$/, "");
-        this.apiKey = apiKey;
         this.routerModel = (0, llm_retry_1.isOpenRouterRouterModel)(model);
         this.onProgress = onProgress;
         this.reasoningEffort = reasoningEffort;
@@ -803,7 +798,6 @@ class LLMClient {
                 : undefined;
         this.maxAttempts = (0, llm_retry_1.getLlmCompletionAttemptCount)(maxAttempts, model);
         const effectiveTimeoutMs = (0, llm_retry_1.resolveLlmTimeoutMs)(model, timeoutMs);
-        this.timeoutMs = effectiveTimeoutMs;
         core.info(`Initializing LLM client: baseUrl=${baseUrl}, model=${model}, timeout=${effectiveTimeoutMs} ms, maxAttempts=${this.maxAttempts}`);
         // ponytail: chatCompletion owns retries; SDK maxRetries × 10-min timeout burned whole job budgets
         this.client = new openai_1.OpenAI({
@@ -1630,10 +1624,10 @@ async function runReviewPipeline(llm, diff, context, reviewInstructions, jsonRes
         return review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
     };
     const [firstPass, ...remainingPasses] = review_prompts_1.DISCOVERY_PASSES;
-    const discovery = [
-        await discover(firstPass),
-        ...await Promise.all(remainingPasses.map(discover)),
-    ];
+    const discovery = [await discover(firstPass)];
+    for (let index = 0; index < remainingPasses.length; index += 2) {
+        discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
+    }
     const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
     const verified = review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, [`CANDIDATE FINDINGS:\n${candidates}`, ...review_prompts_1.VERIFICATION_INSTRUCTIONS].join("\n\n"))).content);
     const precisionCandidates = (0, precision_gate_1.buildPrecisionCandidates)([...discovery, verified]);
@@ -1731,8 +1725,11 @@ function buildPrecisionCandidates(reviews) {
     const seen = new Set();
     for (const review of reviews) {
         for (const severity of SEVERITIES) {
-            for (const finding of review[severity] || []) {
-                if (typeof finding.description !== "string")
+            const findings = review[severity];
+            if (!Array.isArray(findings))
+                continue;
+            for (const finding of findings) {
+                if (!finding || typeof finding !== "object" || typeof finding.description !== "string")
                     continue;
                 const root = finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
                 const key = `${finding.file}:${finding.line ?? 0}:${severity}:${root}`;
@@ -1813,6 +1810,7 @@ exports.PRECISION_INSTRUCTIONS = [
     "An unsynchronized whole-value read-modify-write proves lost-update risk when overlap or re-entry is possible; reject it when supplied code proves serialization or atomic mutation.",
     "Reject pre-existing behavior, unseen-caller assumptions, hypothetical configurations, refactor requests, and third-party signatures or provider contracts not proven by repository context or build output. Keep changed required test and harness code when it can false-pass its contract or fail its required gate. High-confidence language standard-library and platform API semantics are valid evidence.",
     "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause. Repetition is not evidence.",
+    "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
     "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
 ];
 function getReviewPrompt(extraInstructions = "") {

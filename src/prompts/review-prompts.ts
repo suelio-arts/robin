@@ -21,6 +21,7 @@ export const PRECISION_INSTRUCTIONS = [
   "An unsynchronized whole-value read-modify-write proves lost-update risk when overlap or re-entry is possible; reject it when supplied code proves serialization or atomic mutation.",
   "Reject pre-existing behavior, unseen-caller assumptions, hypothetical configurations, refactor requests, and third-party signatures or provider contracts not proven by repository context or build output. Keep changed required test and harness code when it can false-pass its contract or fail its required gate. High-confidence language standard-library and platform API semantics are valid evidence.",
   "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause. Repetition is not evidence.",
+  "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
   "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
 ];
 

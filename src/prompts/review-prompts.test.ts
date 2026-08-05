@@ -1,4 +1,4 @@
-import { DISCOVERY_PASSES, getReviewPrompt } from "./review-prompts";
+import { DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, getReviewPrompt } from "./review-prompts";
 
 describe("getReviewPrompt", () => {
   it("includes the focused review passes", () => {
@@ -22,5 +22,6 @@ describe("getReviewPrompt", () => {
     expect(DISCOVERY_PASSES.join("\n")).toContain("transient pending or generating states");
     expect(DISCOVERY_PASSES.join("\n")).toContain("losing timeout or operation is cancelled");
     expect(DISCOVERY_PASSES.join("\n")).toContain("privacy text with the actual data and capability use");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("every supplied candidate ID exactly once");
   });
 });

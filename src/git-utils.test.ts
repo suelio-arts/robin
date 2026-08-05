@@ -27,6 +27,17 @@ describe("GitUtils tree paths", () => {
     expect(code).toHaveBeenCalledTimes(1);
   });
 
+  it("coalesces repository file reads", async () => {
+    const getContent = jest.fn().mockResolvedValue({data: {content: Buffer.from("value").toString("base64")}});
+    const git = new GitUtils({rest: {repos: {getContent}}} as never);
+
+    await expect(Promise.all([
+      git.getFileContent("o", "r", "src/a.ts", "head"),
+      git.getFileContent("o", "r", "src/a.ts", "head"),
+    ])).resolves.toEqual(["value", "value"]);
+    expect(getContent).toHaveBeenCalledTimes(1);
+  });
+
   it("retries a failed repository code search", async () => {
     jest.useFakeTimers();
     const code = jest.fn()
@@ -40,27 +51,23 @@ describe("GitUtils tree paths", () => {
     expect(code).toHaveBeenCalledTimes(2);
   });
 
-  it("fails closed and evicts a search after three failures", async () => {
+  it("caches an unavailable search after three failures", async () => {
     jest.useFakeTimers();
     const code = jest.fn().mockRejectedValue(Object.assign(new Error("unavailable"), {status: 503}));
     const git = new GitUtils({rest: {search: {code}}} as never);
 
     const first = git.searchPaths("o", "r", "thing");
-    const firstFailure = expect(first).rejects.toThrow("unavailable");
     await jest.advanceTimersByTimeAsync(3000);
-    await firstFailure;
-    const second = git.searchPaths("o", "r", "thing");
-    const secondFailure = expect(second).rejects.toThrow("unavailable");
-    await jest.advanceTimersByTimeAsync(3000);
-    await secondFailure;
-    expect(code).toHaveBeenCalledTimes(6);
+    await expect(first).resolves.toEqual([]);
+    await expect(git.searchPaths("o", "r", "thing")).resolves.toEqual([]);
+    expect(code).toHaveBeenCalledTimes(3);
   });
 
-  it("does not retry a non-transient repository search failure", async () => {
+  it("continues without a non-transient repository search failure", async () => {
     const code = jest.fn().mockRejectedValue(Object.assign(new Error("invalid query"), {status: 422}));
     const git = new GitUtils({rest: {search: {code}}} as never);
 
-    await expect(git.searchPaths("o", "r", "thing")).rejects.toThrow("invalid query");
+    await expect(git.searchPaths("o", "r", "thing")).resolves.toEqual([]);
     expect(code).toHaveBeenCalledTimes(1);
   });
 });

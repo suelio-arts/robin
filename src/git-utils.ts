@@ -3,6 +3,7 @@ import * as core from "@actions/core";
 
 export class GitUtils {
   private octokit: Octokit;
+  private contents = new Map<string, Promise<string>>();
   private treePaths = new Map<string, Promise<string[]>>();
   private searches = new Map<string, Promise<string[]>>();
 
@@ -24,22 +25,9 @@ export class GitUtils {
   }
 
   async getFileContent(owner: string, repo: string, path: string, ref: string): Promise<string> {
-    try {
-      const { data } = await this.octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path,
-        ref,
-      });
-
-      if ("content" in data) {
-        return Buffer.from(data.content, "base64").toString("utf-8");
-      }
-      
-      return "";
-    } catch {
-      return "";
-    }
+    const key = `${owner}/${repo}@${ref}:${path}`;
+    if (!this.contents.has(key)) this.contents.set(key, this.fetchFileContent(owner, repo, path, ref));
+    return this.contents.get(key) as Promise<string>;
   }
 
   async getTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {
@@ -59,12 +47,21 @@ export class GitUtils {
     const key = `${owner}/${repo}:${query}`;
     if (!this.searches.has(key)) {
       const pending = this.fetchSearchPaths(owner, repo, query).catch((error) => {
-        this.searches.delete(key);
-        throw error;
+        core.warning(`Repository search unavailable for ${owner}/${repo} (${query}); continuing without it: ${error}`);
+        return [];
       });
       this.searches.set(key, pending);
     }
     return this.searches.get(key) as Promise<string[]>;
+  }
+
+  private async fetchFileContent(owner: string, repo: string, path: string, ref: string): Promise<string> {
+    try {
+      const {data} = await this.octokit.rest.repos.getContent({owner, repo, path, ref});
+      return "content" in data ? Buffer.from(data.content, "base64").toString("utf-8") : "";
+    } catch {
+      return "";
+    }
   }
 
   private async fetchSearchPaths(owner: string, repo: string, query: string): Promise<string[]> {

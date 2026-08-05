@@ -582,6 +582,7 @@ exports.GitUtils = void 0;
 const core = __importStar(__nccwpck_require__(7484));
 class GitUtils {
     octokit;
+    contents = new Map();
     treePaths = new Map();
     searches = new Map();
     constructor(octokit) {
@@ -599,21 +600,10 @@ class GitUtils {
         return String(response.data);
     }
     async getFileContent(owner, repo, path, ref) {
-        try {
-            const { data } = await this.octokit.rest.repos.getContent({
-                owner,
-                repo,
-                path,
-                ref,
-            });
-            if ("content" in data) {
-                return Buffer.from(data.content, "base64").toString("utf-8");
-            }
-            return "";
-        }
-        catch {
-            return "";
-        }
+        const key = `${owner}/${repo}@${ref}:${path}`;
+        if (!this.contents.has(key))
+            this.contents.set(key, this.fetchFileContent(owner, repo, path, ref));
+        return this.contents.get(key);
     }
     async getTreePaths(owner, repo, ref) {
         const key = `${owner}/${repo}@${ref}`;
@@ -631,12 +621,21 @@ class GitUtils {
         const key = `${owner}/${repo}:${query}`;
         if (!this.searches.has(key)) {
             const pending = this.fetchSearchPaths(owner, repo, query).catch((error) => {
-                this.searches.delete(key);
-                throw error;
+                core.warning(`Repository search unavailable for ${owner}/${repo} (${query}); continuing without it: ${error}`);
+                return [];
             });
             this.searches.set(key, pending);
         }
         return this.searches.get(key);
+    }
+    async fetchFileContent(owner, repo, path, ref) {
+        try {
+            const { data } = await this.octokit.rest.repos.getContent({ owner, repo, path, ref });
+            return "content" in data ? Buffer.from(data.content, "base64").toString("utf-8") : "";
+        }
+        catch {
+            return "";
+        }
     }
     async fetchSearchPaths(owner, repo, query) {
         let lastError;

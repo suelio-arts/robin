@@ -20,7 +20,7 @@ skip-paths:
 | `max-diff-size` | Used when the workflow still passes the action default (`50000`) |
 | `max-comments` | Used when the workflow still passes the action default (`15`) |
 | `json-response-mode` | Used when `use-json-response-mode` is empty (action default defers to this file) |
-| `request-changes` | Used when `request-changes` input is empty. `true` (default) blocks on high findings; `false` posts advisor-only comments |
+| `request-changes` | Used when `request-changes` input is empty. `true` (default) requests changes on high findings and approves clean heads; `false` posts advisor-only comments |
 | `skip-paths` | Extra paths removed from the diff before the LLM call |
 
 Lockfiles (npm, yarn, pnpm, Cargo, Gemfile, poetry), `dist/`, `node_modules/`, and minified assets are always skipped automatically. If every changed file is skipped, the action posts a status comment and skips the LLM call.
@@ -111,7 +111,7 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `model` / `LLM_MODEL` | — | Model name (required) |
 | `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
 | `fail-on-high` | `false` | Fail the check if high-severity issues are found |
-| `request-changes` | omit → `true` (defer to repo config) | `true` submits a blocking REQUEST_CHANGES review on high findings; `false` posts a non-blocking COMMENT (advisor mode). Reusable workflow input is a boolean with no default — omit it to let `.github/robin.yml` win |
+| `request-changes` | omit → `true` (defer to repo config) | `true` submits REQUEST_CHANGES on high findings and APPROVE on a clean head; `false` posts a non-blocking COMMENT. Reusable workflow input is a boolean with no default — omit it to let `.github/robin.yml` win |
 | `max-diff-size` | `50000` | Max diff characters sent to the model |
 | `max-output-tokens` | empty | Cap response tokens (optional) |
 | `llm-timeout-ms` | `600000` | LLM timeout (10 minutes) |

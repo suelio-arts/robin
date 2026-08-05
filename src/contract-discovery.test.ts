@@ -48,4 +48,13 @@ describe("contract discovery", () => {
     }, "o", "r", "head", ["large"]);
     expect(evidence.length).toBeLessThanOrEqual(30000);
   });
+
+  it("keeps literal matches from the middle of large files", async () => {
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async () => ["large.ts"],
+      getFileContent: async () => `${"a".repeat(7000)}buildStoryWalk(payload)${"z".repeat(7000)}`,
+    }, "o", "r", "head", ["buildStoryWalk"]);
+
+    expect(evidence).toContain("buildStoryWalk(payload)");
+  });
 });

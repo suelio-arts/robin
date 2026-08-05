@@ -4,7 +4,7 @@ describe("GitHubReviewer", () => {
   it("resolves review event from high findings and request-changes mode", () => {
     expect(GitHubReviewer.resolveReviewEvent(true, true)).toBe("REQUEST_CHANGES");
     expect(GitHubReviewer.resolveReviewEvent(true, false)).toBe("COMMENT");
-    expect(GitHubReviewer.resolveReviewEvent(false, true)).toBe("COMMENT");
+    expect(GitHubReviewer.resolveReviewEvent(false, true)).toBe("APPROVE");
     expect(GitHubReviewer.resolveReviewEvent(false, false)).toBe("COMMENT");
   });
 

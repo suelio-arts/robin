@@ -14,7 +14,7 @@ on:
         type: string
         default: ""
       request-changes:
-        description: "Whether a high severity finding submits a blocking REQUEST_CHANGES review. true posts REQUEST_CHANGES; false always posts COMMENT (advisor mode). Omit to use the repo config, which defaults to true."
+        description: "Whether Robin posts REQUEST_CHANGES for high findings and APPROVE for a clean head. false always posts COMMENT. Omit to use the repo config, which defaults to true."
         required: false
         type: boolean
         # No default: omitted must stay unset so .github/robin.yml can still win.

@@ -29,7 +29,7 @@ inputs:
     required: false
     default: "false"
   request-changes:
-    description: "Whether a high severity finding submits a blocking REQUEST_CHANGES review. true posts REQUEST_CHANGES; false always posts a non-blocking COMMENT (advisor mode). Leave empty to use the repo config, which defaults to true."
+    description: "Whether Robin acts as a gatekeeper. true posts REQUEST_CHANGES for high findings and APPROVE for a clean head; false always posts COMMENT. Leave empty to use the repo config, which defaults to true."
     required: false
     default: ""
   max-diff-size:

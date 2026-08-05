@@ -89,6 +89,20 @@ const MAX_PATHS_PER_QUERY = 4;
 const MAX_PATHS = 10;
 const FILE_LIMIT = 6000;
 const TOTAL_LIMIT = 30000;
+function excerptMatches(content, query, limit) {
+    if (content.length <= limit)
+        return content;
+    const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+    const matches = [...content.matchAll(pattern)].slice(0, 4);
+    if (matches.length === 0)
+        return content.slice(0, limit);
+    const separator = "\n[... omitted ...]\n";
+    const windowSize = Math.floor((limit - separator.length * (matches.length - 1)) / matches.length);
+    return matches.map(({ index = 0 }) => {
+        const start = Math.max(0, Math.min(index - Math.floor(windowSize / 2), content.length - windowSize));
+        return content.slice(start, start + windowSize);
+    }).join(separator);
+}
 function parseContractSearchPlan(content) {
     let value;
     try {
@@ -140,13 +154,7 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries) {
             if (!content)
                 continue;
             const limit = Math.min(FILE_LIMIT, remaining);
-            const marker = "\n[... middle omitted ...]\n";
-            const available = limit - marker.length;
-            const excerpt = content.length <= limit
-                ? content
-                : available > 0
-                    ? `${content.slice(0, Math.floor(available * 0.75))}${marker}${content.slice(-Math.ceil(available * 0.25))}`
-                    : content.slice(0, limit);
+            const excerpt = excerptMatches(content, query, limit);
             sections.push(`HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n${excerpt}`);
             remaining -= excerpt.length;
         }
@@ -523,9 +531,11 @@ class GitHubReviewer {
         this.octokit = octokit;
         this.maxComments = Number.isFinite(maxComments) ? Math.max(0, maxComments) : 25;
     }
-    /** COMMENT unless a High finding exists AND request-changes is enabled (gatekeeper mode). */
+    /** Gatekeeper mode requests changes for High findings and approves clean heads. */
     static resolveReviewEvent(hasHigh, requestChanges) {
-        return hasHigh && requestChanges ? "REQUEST_CHANGES" : "COMMENT";
+        if (!requestChanges)
+            return "COMMENT";
+        return hasHigh ? "REQUEST_CHANGES" : "APPROVE";
     }
     /** A prior Robin CHANGES_REQUESTED review that a newly posted review supersedes. */
     static isStaleRobinReview(review, newReviewId) {
@@ -2145,7 +2155,7 @@ function resolveJsonResponseMode(actionInput, repoConfig) {
         return false;
     return repoConfig?.jsonResponseMode ?? true;
 }
-/** Whether a High finding submits a blocking REQUEST_CHANGES review. Default true (gatekeeper). */
+/** Whether Robin requests changes on High findings and approves clean heads. Default true. */
 function resolveRequestChanges(actionInput, repoConfig) {
     if (actionInput === "true")
         return true;

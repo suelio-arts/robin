@@ -14,9 +14,10 @@ export class GitHubReviewer {
     this.maxComments = Number.isFinite(maxComments) ? Math.max(0, maxComments) : 25;
   }
 
-  /** COMMENT unless a High finding exists AND request-changes is enabled (gatekeeper mode). */
-  static resolveReviewEvent(hasHigh: boolean, requestChanges: boolean): "REQUEST_CHANGES" | "COMMENT" {
-    return hasHigh && requestChanges ? "REQUEST_CHANGES" : "COMMENT";
+  /** Gatekeeper mode requests changes for High findings and approves clean heads. */
+  static resolveReviewEvent(hasHigh: boolean, requestChanges: boolean): "REQUEST_CHANGES" | "APPROVE" | "COMMENT" {
+    if (!requestChanges) return "COMMENT";
+    return hasHigh ? "REQUEST_CHANGES" : "APPROVE";
   }
 
   /** A prior Robin CHANGES_REQUESTED review that a newly posted review supersedes. */

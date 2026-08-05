@@ -9,6 +9,19 @@ const MAX_PATHS = 10;
 const FILE_LIMIT = 6000;
 const TOTAL_LIMIT = 30000;
 
+function excerptMatches(content: string, query: string, limit: number): string {
+  if (content.length <= limit) return content;
+  const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+  const matches = [...content.matchAll(pattern)].slice(0, 4);
+  if (matches.length === 0) return content.slice(0, limit);
+  const separator = "\n[... omitted ...]\n";
+  const windowSize = Math.floor((limit - separator.length * (matches.length - 1)) / matches.length);
+  return matches.map(({index = 0}) => {
+    const start = Math.max(0, Math.min(index - Math.floor(windowSize / 2), content.length - windowSize));
+    return content.slice(start, start + windowSize);
+  }).join(separator);
+}
+
 export function parseContractSearchPlan(content: string): string[] {
   let value: unknown;
   try {
@@ -63,13 +76,7 @@ export async function buildContractSearchEvidence(
       }
       if (!content) continue;
       const limit = Math.min(FILE_LIMIT, remaining);
-      const marker = "\n[... middle omitted ...]\n";
-      const available = limit - marker.length;
-      const excerpt = content.length <= limit
-        ? content
-        : available > 0
-          ? `${content.slice(0, Math.floor(available * 0.75))}${marker}${content.slice(-Math.ceil(available * 0.25))}`
-          : content.slice(0, limit);
+      const excerpt = excerptMatches(content, query, limit);
       sections.push(`HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n${excerpt}`);
       remaining -= excerpt.length;
     }

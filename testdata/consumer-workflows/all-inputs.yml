@@ -20,6 +20,7 @@ jobs:
     uses: ./.github/workflows/review.yml
     with:
       pr-number: ""
+      expected-head-sha: ""
       fail-on-high: false
       reasoning-effort: low
       # String input preserves omission as empty so repository config can win.

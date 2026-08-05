@@ -592,6 +592,7 @@ function chunkOversizedFile(content, maxChunkSize) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.isPullRequestReviewEvent = isPullRequestReviewEvent;
 exports.workflowDispatchPrNumber = workflowDispatchPrNumber;
+exports.validateExpectedHeadSha = validateExpectedHeadSha;
 function isPullRequestReviewEvent(eventName) {
     return eventName === "pull_request" || eventName === "pull_request_target";
 }
@@ -602,6 +603,16 @@ function workflowDispatchPrNumber(eventName, input) {
         throw new Error("workflow_dispatch requires a positive integer pr-number input");
     }
     return Number(input);
+}
+function validateExpectedHeadSha(input, currentHeadSha) {
+    if (!input)
+        return;
+    if (!/^[0-9a-f]{40}$/.test(input)) {
+        throw new Error("expected-head-sha must be a full 40-character lowercase hexadecimal SHA");
+    }
+    if (input !== currentHeadSha) {
+        throw new Error(`Pull request head advanced: expected ${input}, current ${currentHeadSha}`);
+    }
 }
 //# sourceMappingURL=events.js.map
 
@@ -1558,6 +1569,7 @@ async function run() {
     try {
         const eventName = github.context.eventName;
         const payload = github.context.payload;
+        const expectedHeadSha = core.getInput("expected-head-sha");
         const token = core.getInput("github-token", { required: true });
         octokit = github.getOctokit(token);
         const minCommandPermission = core.getInput("min-command-permission") || "write";
@@ -1599,13 +1611,8 @@ async function run() {
                 core.warning(`Ignoring /${parsedCommand} from ${commentAuthor || "unknown user"}; minimum permission is ${minCommandPermission}.`);
                 return;
             }
-            await addEyesReaction(octokit, owner, repo, payload.comment?.id);
             command = parsedCommand;
             prNumber = payload.issue.number;
-            if (command === "help") {
-                await postHelpComment(octokit, payload);
-                return;
-            }
             shouldRun = true;
         }
         else {
@@ -1620,6 +1627,15 @@ async function run() {
             return;
         }
         pullNumber = prNumber;
+        const { data: pullRequest } = await octokit.rest.pulls.get({ owner, repo, pull_number: prNumber });
+        (0, events_1.validateExpectedHeadSha)(expectedHeadSha, pullRequest.head.sha);
+        if (eventName === "issue_comment") {
+            await addEyesReaction(octokit, owner, repo, payload.comment?.id);
+        }
+        if (command === "help") {
+            await postHelpComment(octokit, payload);
+            return;
+        }
         const apiKey = core.getInput("llm-api-key") || "ollama";
         const baseUrl = core.getInput("llm-base-url") || "";
         const model = core.getInput("model") || "";
@@ -1673,7 +1689,6 @@ async function run() {
             throw new Error("Input required and not supplied: model");
         }
         const gitUtils = new git_utils_1.GitUtils(octokit);
-        const { data: pullRequest } = await octokit.rest.pulls.get({ owner, repo, pull_number: prNumber });
         const baseRef = pullRequest.base.sha;
         const headRef = pullRequest.head.sha;
         const repoConfig = await loadRepoConfig(octokit, gitUtils, owner, repo, prNumber, configFile, baseRef);

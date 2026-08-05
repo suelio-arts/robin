@@ -107,6 +107,7 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | --- | --- | --- |
 | `github-token` | `${{ github.token }}` | Token for PR API and comments (direct action only; reusable workflow uses `github.token`) |
 | `pr-number` | empty | Exact PR number for a trusted `workflow_dispatch` review; ignored for PR and comment events |
+| `expected-head-sha` | empty | Optional full PR head SHA; fail before posting anything if the PR has advanced |
 | `llm-api-key` / `LLM_API_KEY` | `ollama` | Provider API key |
 | `llm-base-url` / `LLM_BASE_URL` | — | OpenAI-compatible base URL (required) |
 | `model` / `LLM_MODEL` | — | Model name (required) |

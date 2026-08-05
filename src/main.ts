@@ -689,10 +689,14 @@ async function runReview(
   diff: string,
   reviewInstructions: string,
   jsonResponseMode: boolean,
-  context = ""
+  context = "",
+  focusInstructions = ""
 ) {
   const systemPrompt = getReviewPrompt(reviewInstructions);
-  const userContent = buildReviewInput(diff, context);
+  const userContent = [
+    buildReviewInput(diff, context),
+    focusInstructions && `REVIEW FOCUS:\n${focusInstructions}`,
+  ].filter(Boolean).join("\n\n");
   core.info("Getting full code review...");
   return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
 }
@@ -704,32 +708,40 @@ async function runReviewPipeline(
   reviewInstructions: string,
   jsonResponseMode: boolean
 ): Promise<StructuredReview> {
-  const discovery = await Promise.all(
-    DISCOVERY_PASSES.map(async (instructions) => {
-      const response = await runReview(
-        llm,
-        diff,
-        [reviewInstructions, instructions].filter(Boolean).join("\n\n"),
-        jsonResponseMode,
-        context
-      );
-      const parsed = ReviewParser.parseDetailed(response.content);
-      if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
-      return ReviewParser.parse((await runReview(
-        llm,
-        diff,
-        `${reviewInstructions}\n\n${instructions}\n\nReturn ONLY a single valid JSON object.`,
-        true,
-        context
-      )).content);
-    })
-  );
+  const discover = async (instructions: string) => {
+    const response = await runReview(
+      llm,
+      diff,
+      reviewInstructions,
+      jsonResponseMode,
+      context,
+      instructions
+    );
+    const parsed = ReviewParser.parseDetailed(response.content);
+    if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
+    return ReviewParser.parse((await runReview(
+      llm,
+      diff,
+      reviewInstructions,
+      true,
+      context,
+      `${instructions}\n\nReturn ONLY a single valid JSON object.`
+    )).content);
+  };
+  const [firstPass, ...remainingPasses] = DISCOVERY_PASSES;
+  const discovery = [
+    await discover(firstPass),
+    ...await Promise.all(remainingPasses.map(discover)),
+  ];
   const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
-  const input = `${buildReviewInput(diff, context)}\n\nCANDIDATE FINDINGS:\n${candidates}`;
-  const verified = ReviewParser.parse((await llm.chatCompletion(getReviewPrompt([
+  const verified = ReviewParser.parse((await runReview(
+    llm,
+    diff,
     reviewInstructions,
-    ...VERIFICATION_INSTRUCTIONS,
-  ].filter(Boolean).join("\n\n")), input, true)).content);
+    true,
+    context,
+    [`CANDIDATE FINDINGS:\n${candidates}`, ...VERIFICATION_INSTRUCTIONS].join("\n\n")
+  )).content);
   const precisionCandidates = buildPrecisionCandidates([...discovery, verified]);
   const precisionPrompt = [
     reviewInstructions,

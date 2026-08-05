@@ -53,6 +53,7 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("directly forwards an already validated identifier");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("exact counted collection");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("no reachable unvalidated writer");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("reasserts that whole contract");
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {
@@ -76,6 +77,7 @@ describe("getReviewPrompt", () => {
     expect(cliHelpPasses[0]).toContain("same command handler's actual option reads");
     expect(cliHelpPasses[5]).toContain("repository-contract gaps");
     expect(CONTRACT_SEARCH_DISCOVERY_PASS).toContain("supported flag omitted from help");
+    expect(getReviewPrompt()).toContain("changed complete CLI synopsis");
     const trackingPasses = getDiscoveryPasses("diff --git a/web/ar.mjs b/web/ar.mjs\n+anchor.position.copy(next.position);\n+ImageTargetEvent.UPDATED");
     expect(trackingPasses).toHaveLength(6);
     expect(trackingPasses[0]).toContain("mixed-frame transform");

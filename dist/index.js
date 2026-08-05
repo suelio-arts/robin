@@ -1918,14 +1918,15 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     for (let index = 0; index < remainingPasses.length; index += 2) {
         discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
     }
+    let contractEvidence = "";
     if ((0, review_prompts_1.isContractChunk)(diff)) {
         const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
         const changedPaths = (0, contract_discovery_1.changedHeadPaths)(diff);
-        const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff, context), changedPaths);
+        contractEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff, context), changedPaths);
         discovery.push(await discover([
             (0, review_prompts_1.getContractSearchDiscoveryPass)(diff),
             "CONTRACT SEARCH EVIDENCE:",
-            (0, contract_discovery_1.wrapContractSearchEvidence)(evidence),
+            (0, contract_discovery_1.wrapContractSearchEvidence)(contractEvidence),
         ].join("\n\n")));
     }
     const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
@@ -1943,6 +1944,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     const precisionInput = [
         "CANDIDATES:",
         JSON.stringify(precisionCandidates),
+        contractEvidence && `DISCOVERY CONTRACT EVIDENCE:\n${(0, contract_discovery_1.wrapContractSearchEvidence)(contractEvidence)}`,
         precisionEvidence && `CANDIDATE COUNTEREVIDENCE:\n${(0, contract_discovery_1.wrapContractSearchEvidence)(precisionEvidence)}`,
         buildReviewInput(diff, context),
     ].filter(Boolean).join("\n\n");

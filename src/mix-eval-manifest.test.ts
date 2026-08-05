@@ -37,5 +37,6 @@ describe("MIX review benchmark", () => {
     expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
     expect(source).toContain("{prioritizePlanned: true}");
     expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");
+    expect(source).toContain("DISCOVERY CONTRACT EVIDENCE");
   });
 });

@@ -218,6 +218,7 @@ async function main() {
       const precisionInput = [
         "CANDIDATES:",
         JSON.stringify(precisionCandidates),
+        contractEvidence && `DISCOVERY CONTRACT EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
         precisionEvidence && `CANDIDATE COUNTEREVIDENCE:\n${wrapContractSearchEvidence(precisionEvidence)}`,
         reviewInput,
       ].filter(Boolean).join("\n\n");

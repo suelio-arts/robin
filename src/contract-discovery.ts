@@ -27,6 +27,14 @@ export function parseContractSearchPlan(content: string): string[] {
   )].slice(0, MAX_QUERIES);
 }
 
+export function completeContractSearchPlan(content: string, chunk: string): string[] {
+  const planned = parseContractSearchPlan(content);
+  const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk)
+    ? ["OverridesById", "buildStoryWalk"]
+    : [];
+  return [...new Set([...projectionQueries, ...planned])].slice(0, MAX_QUERIES);
+}
+
 export async function buildContractSearchEvidence(
   git: ContractSearchGit,
   owner: string,

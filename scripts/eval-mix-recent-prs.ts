@@ -8,7 +8,7 @@ import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, P
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
-import { buildContractSearchEvidence, parseContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
+import { buildContractSearchEvidence, completeContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
 
 type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
@@ -162,7 +162,7 @@ async function main() {
           "",
           "",
           testCase.head,
-          parseContractSearchPlan(plan.choices[0]?.message.content || "")
+          completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk)
         );
         discovery.push(await discover([
           CONTRACT_SEARCH_DISCOVERY_PASS,

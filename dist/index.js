@@ -81,6 +81,7 @@ function parseLLMTimeout(input) {
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.parseContractSearchPlan = parseContractSearchPlan;
+exports.completeContractSearchPlan = completeContractSearchPlan;
 exports.buildContractSearchEvidence = buildContractSearchEvidence;
 exports.wrapContractSearchEvidence = wrapContractSearchEvidence;
 const MAX_QUERIES = 4;
@@ -105,6 +106,13 @@ function parseContractSearchPlan(content) {
             .filter((query) => query.length >= 2 && query.length <= 80)
             .filter((query) => !/\b[A-Za-z][A-Za-z0-9_-]*:/.test(query))
             .filter((query) => /^[A-Za-z0-9_$./@+ -]+$/.test(query)))].slice(0, MAX_QUERIES);
+}
+function completeContractSearchPlan(content, chunk) {
+    const planned = parseContractSearchPlan(content);
+    const projectionQueries = /^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk)
+        ? ["OverridesById", "buildStoryWalk"]
+        : [];
+    return [...new Set([...projectionQueries, ...planned])].slice(0, MAX_QUERIES);
 }
 async function buildContractSearchEvidence(git, owner, repo, head, queries) {
     const seen = new Set();
@@ -1709,7 +1717,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     }
     if ((0, review_prompts_1.isContractChunk)(diff)) {
         const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
-        const evidence = await searchContracts((0, contract_discovery_1.parseContractSearchPlan)(plan.content));
+        const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff));
         discovery.push(await discover([
             review_prompts_1.CONTRACT_SEARCH_DISCOVERY_PASS,
             "CONTRACT SEARCH EVIDENCE:",

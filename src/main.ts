@@ -22,7 +22,7 @@ import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./com
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
-import { buildContractSearchEvidence, parseContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
+import { buildContractSearchEvidence, completeContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -742,7 +742,7 @@ async function runReviewPipeline(
       buildReviewInput(diff, context),
       true
     );
-    const evidence = await searchContracts(parseContractSearchPlan(plan.content));
+    const evidence = await searchContracts(completeContractSearchPlan(plan.content, diff));
     discovery.push(await discover([
       CONTRACT_SEARCH_DISCOVERY_PASS,
       "CONTRACT SEARCH EVIDENCE:",

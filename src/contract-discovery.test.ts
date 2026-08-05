@@ -70,4 +70,19 @@ describe("contract discovery", () => {
 
     expect(evidence.length).toBeLessThan(31000);
   });
+
+  it("prioritizes contract matches related to the changed path", async () => {
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async () => [
+        "studio/web/js/walk-manager.mjs",
+        "studio/web/js/walk-creator.mjs",
+        "studio/web/core/walk-creator-core.mjs",
+        "studio/web/js/walk-editor.mjs",
+        "studio/web/js/simulator.mjs",
+      ],
+      getFileContent: async (_owner, _repo, path) => `${path}\nnavNodeOverridesById`,
+    }, "o", "r", "head", ["navNodeOverridesById"], ["backend/functions/src/endpoints/studio-simulator.ts"]);
+
+    expect(evidence).toContain("studio/web/js/simulator.mjs");
+  });
 });

@@ -308,7 +308,7 @@ async function run(): Promise<void> {
           const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
           return runReviewPipeline(
             llm,
-            async (queries) => buildContractSearchEvidence(gitUtils, owner, repo, headRef, queries),
+            async (queries, changedPaths) => buildContractSearchEvidence(gitUtils, owner, repo, headRef, queries, changedPaths),
             chunk,
             context,
             reviewInstructions,
@@ -705,7 +705,7 @@ async function runReview(
 
 async function runReviewPipeline(
   llm: LLMClient,
-  searchContracts: (queries: string[]) => Promise<string>,
+  searchContracts: (queries: string[], changedPaths: string[]) => Promise<string>,
   diff: string,
   context: string,
   reviewInstructions: string,
@@ -742,7 +742,8 @@ async function runReviewPipeline(
       buildReviewInput(diff, context),
       true
     );
-    const evidence = await searchContracts(completeContractSearchPlan(plan.content, diff));
+    const changedPaths = [...diff.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
+    const evidence = await searchContracts(completeContractSearchPlan(plan.content, diff), changedPaths);
     discovery.push(await discover([
       CONTRACT_SEARCH_DISCOVERY_PASS,
       "CONTRACT SEARCH EVIDENCE:",

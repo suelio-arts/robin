@@ -54,7 +54,8 @@ export async function buildContractSearchEvidence(
   owner: string,
   repo: string,
   head: string,
-  queries: string[]
+  queries: string[],
+  changedPaths: string[] = []
 ): Promise<string> {
   const seen = new Set<string>();
   const sections: string[] = [];
@@ -66,6 +67,7 @@ export async function buildContractSearchEvidence(
     } catch {
       continue;
     }
+    paths.sort((left, right) => contractPathAffinity(right, changedPaths) - contractPathAffinity(left, changedPaths) || left.localeCompare(right));
     for (const path of paths.slice(0, MAX_PATHS_PER_QUERY)) {
       if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0) continue;
       seen.add(path);
@@ -83,6 +85,19 @@ export async function buildContractSearchEvidence(
     }
   }
   return sections.join("\n\n");
+}
+
+function contractPathAffinity(path: string, changedPaths: string[]): number {
+  const tokens = new Set(path.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4));
+  return Math.max(0, ...changedPaths.map((changed) => {
+    const changedTokens = changed.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
+    const tokenMatches = changedTokens.filter((token) => tokens.has(token)).length;
+    const left = path.split("/");
+    const right = changed.split("/");
+    let shared = 0;
+    while (left[shared] && left[shared] === right[shared]) shared += 1;
+    return tokenMatches * 100 + shared;
+  }));
 }
 
 export function wrapContractSearchEvidence(evidence: string): string {

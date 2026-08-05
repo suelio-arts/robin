@@ -129,7 +129,7 @@ function completeContractSearchPlan(content, chunk) {
         : [];
     return [...new Set([...projectionQueries, ...planned])].slice(0, MAX_QUERIES);
 }
-async function buildContractSearchEvidence(git, owner, repo, head, queries) {
+async function buildContractSearchEvidence(git, owner, repo, head, queries, changedPaths = []) {
     const seen = new Set();
     const sections = [];
     let remaining = TOTAL_LIMIT;
@@ -141,6 +141,7 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries) {
         catch {
             continue;
         }
+        paths.sort((left, right) => contractPathAffinity(right, changedPaths) - contractPathAffinity(left, changedPaths) || left.localeCompare(right));
         for (const path of paths.slice(0, MAX_PATHS_PER_QUERY)) {
             if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0)
                 continue;
@@ -161,6 +162,19 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries) {
         }
     }
     return sections.join("\n\n");
+}
+function contractPathAffinity(path, changedPaths) {
+    const tokens = new Set(path.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4));
+    return Math.max(0, ...changedPaths.map((changed) => {
+        const changedTokens = changed.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
+        const tokenMatches = changedTokens.filter((token) => tokens.has(token)).length;
+        const left = path.split("/");
+        const right = changed.split("/");
+        let shared = 0;
+        while (left[shared] && left[shared] === right[shared])
+            shared += 1;
+        return tokenMatches * 100 + shared;
+    }));
 }
 function wrapContractSearchEvidence(evidence) {
     return `<contract-search-evidence>\n${evidence || "No repository search matches were available."}\n</contract-search-evidence>`;
@@ -1407,7 +1421,7 @@ async function run() {
                 const reviews = await Promise.all(batch.map(async (chunk, offset) => {
                     core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
                     const context = await (0, review_context_1.buildFileContext)(gitUtils, owner, repo, chunk, baseRef, headRef);
-                    return runReviewPipeline(llm, async (queries) => (0, contract_discovery_1.buildContractSearchEvidence)(gitUtils, owner, repo, headRef, queries), chunk, context, reviewInstructions, useJsonMode);
+                    return runReviewPipeline(llm, async (queries, changedPaths) => (0, contract_discovery_1.buildContractSearchEvidence)(gitUtils, owner, repo, headRef, queries, changedPaths), chunk, context, reviewInstructions, useJsonMode);
                 }));
                 for (const review of reviews) {
                     findings.summary += `${review.summary}\n`;
@@ -1730,7 +1744,8 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     }
     if ((0, review_prompts_1.isContractChunk)(diff)) {
         const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
-        const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff));
+        const changedPaths = [...diff.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
+        const evidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff), changedPaths);
         discovery.push(await discover([
             review_prompts_1.CONTRACT_SEARCH_DISCOVERY_PASS,
             "CONTRACT SEARCH EVIDENCE:",

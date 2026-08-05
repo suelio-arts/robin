@@ -1919,16 +1919,17 @@ function buildPrecisionCandidates(reviews) {
 function selectApprovedCandidates(candidates, response, summary = "") {
     const json = response.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const parsed = JSON.parse(json);
-    if (!Array.isArray(parsed.approved) || !parsed.approved.every((id) => typeof id === "string")) {
-        throw new Error("Precision gate response must contain an approved string array");
+    if (!parsed.approved || typeof parsed.approved !== "object" || Array.isArray(parsed.approved)
+        || !Object.values(parsed.approved).every((proof) => isApprovalProof(proof))) {
+        throw new Error("Precision gate response must contain approved proof objects");
     }
     if (!parsed.rejected || typeof parsed.rejected !== "object" || Array.isArray(parsed.rejected)
         || !Object.values(parsed.rejected).every((reason) => typeof reason === "string")) {
         throw new Error("Precision gate response must contain a rejected reason object");
     }
-    const approved = new Set(parsed.approved);
+    const approved = new Set(Object.keys(parsed.approved));
     const rejected = Object.keys(parsed.rejected);
-    const dispositions = [...parsed.approved, ...rejected];
+    const dispositions = [...approved, ...rejected];
     const candidateIds = new Set(candidates.map(({ id }) => id));
     if (new Set(dispositions).size !== dispositions.length
         || dispositions.some((id) => !candidateIds.has(id))
@@ -1948,6 +1949,12 @@ function selectApprovedCandidates(candidates, response, summary = "") {
             result[candidate.severity].push(candidate.finding);
     }
     return result;
+}
+function isApprovalProof(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value))
+        return false;
+    const proof = value;
+    return ["trigger", "path", "impact", "evidence"].every((key) => typeof proof[key] === "string" && proof[key].trim().length > 0);
 }
 //# sourceMappingURL=precision-gate.js.map
 
@@ -2044,7 +2051,8 @@ exports.PRECISION_INSTRUCTIONS = [
     "For CLI input claims, trace all downstream local validation. Reject a candidate only when its claimed external effect is unreachable; a less-specific error alone is not material unless repository evidence defines that exact error as a contract. Keep local validation, exit status, and error-output defects in scope when the repository defines them.",
     "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause, even when different malformed values reach the same missing guard and smallest fix. Repetition is not evidence.",
     "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
-    "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
+    "For every approval, state four non-empty proof strings: trigger, path through the changed code, material impact, and exact supplied evidence. If any proof element is missing, reject the candidate.",
+    "Return strict JSON only: {\"approved\":{\"c1\":{\"trigger\":\"...\",\"path\":\"...\",\"impact\":\"...\",\"evidence\":\"...\"}},\"rejected\":{\"c2\":\"short reason\"}}",
 ];
 function getReviewPrompt(extraInstructions = "") {
     const prompt = [

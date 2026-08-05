@@ -87,7 +87,8 @@ export const PRECISION_INSTRUCTIONS = [
   "For CLI input claims, trace all downstream local validation. Reject a candidate only when its claimed external effect is unreachable; a less-specific error alone is not material unless repository evidence defines that exact error as a contract. Keep local validation, exit status, and error-output defects in scope when the repository defines them.",
   "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause, even when different malformed values reach the same missing guard and smallest fix. Repetition is not evidence.",
   "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
-  "Return strict JSON only: {\"approved\":[\"c1\"],\"rejected\":{\"c2\":\"short reason\"}}",
+  "For every approval, state four non-empty proof strings: trigger, path through the changed code, material impact, and exact supplied evidence. If any proof element is missing, reject the candidate.",
+  "Return strict JSON only: {\"approved\":{\"c1\":{\"trigger\":\"...\",\"path\":\"...\",\"impact\":\"...\",\"evidence\":\"...\"}},\"rejected\":{\"c2\":\"short reason\"}}",
 ];
 
 export function getReviewPrompt(extraInstructions = ""): string {

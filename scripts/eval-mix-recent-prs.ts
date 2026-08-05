@@ -155,21 +155,24 @@ async function main() {
         discovery.push(...await Promise.all(remainingPasses.slice(pass, pass + 2).map(discover)));
       }
       const toolUsage: unknown[] = [];
+      let contractQueries: string[] = [];
+      let contractEvidence = "";
       if (isContractChunk(chunk)) {
         const plan = await review(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, reviewInput);
         toolUsage.push(plan.usage);
-        const evidence = await buildContractSearchEvidence(
+        contractQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk);
+        contractEvidence = await buildContractSearchEvidence(
           localGit,
           "",
           "",
           testCase.head,
-          completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk),
+          contractQueries,
           changedHeadPaths(chunk)
         );
         discovery.push(await discover([
           CONTRACT_SEARCH_DISCOVERY_PASS,
           "CONTRACT SEARCH EVIDENCE:",
-          wrapContractSearchEvidence(evidence),
+          wrapContractSearchEvidence(contractEvidence),
         ].join("\n\n")));
       }
       const candidates = discovery.map((candidate) =>
@@ -184,6 +187,7 @@ async function main() {
       ].join("\n\n"));
       const verified = asReview(JSON.parse(verification.choices[0]?.message.content || "{}"));
       const precisionCandidates = buildPrecisionCandidates([...candidates, verified]);
+      let precisionQueries: string[] = [];
       let precisionEvidence = "";
       if (precisionCandidates.length > 0 && isContractChunk(chunk)) {
         const plan = await review(PRECISION_SEARCH_PLANNER_INSTRUCTIONS, [
@@ -192,12 +196,13 @@ async function main() {
           reviewInput,
         ].join("\n\n"));
         toolUsage.push(plan.usage);
+        precisionQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk);
         precisionEvidence = await buildContractSearchEvidence(
           localGit,
           "",
           "",
           testCase.head,
-          completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk),
+          precisionQueries,
           changedHeadPaths(chunk)
         );
       }
@@ -233,6 +238,10 @@ async function main() {
       responses.push({
         candidates,
         response: approved,
+        contractQueries,
+        contractEvidence,
+        precisionQueries,
+        precisionEvidence,
         usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
       });
     }

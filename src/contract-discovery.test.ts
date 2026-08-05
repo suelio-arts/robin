@@ -225,7 +225,7 @@ describe("contract discovery", () => {
       getFileContent: async (_owner, _repo, path) => `${path}\n/preview/city`,
     }, "o", "r", "head", ["/preview/city"], ["studio/web/routes/new.ts"]);
 
-    expect(evidence).toContain("studio/web/routes/a.ts");
+    expect(evidence).toContain("studio/web/routes/new.ts");
     expect(evidence).toContain("ios/App/Route.swift");
     expect(evidence).toContain("backend/api/routes.ts");
     expect(evidence).toContain(".github/workflows/release.yml");
@@ -247,5 +247,21 @@ describe("contract discovery", () => {
     });
 
     expect(evidence).toContain("studio/web/js/walk-manager.mjs [CHANGED IN THIS PR]");
+  });
+
+  it("searches changed files at the exact head when repository search only sees the base branch", async () => {
+    const refs: string[] = [];
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async () => ["backend/base-only.ts"],
+      getFileContent: async (_owner, _repo, path, ref) => {
+        refs.push(`${ref}:${path}`);
+        return path === "studio/web/js/new-editor.mjs" ? "requiredChild" : "unrelated";
+      },
+    }, "o", "r", "head-sha", ["requiredChild"], ["studio/web/js/validator.mjs"], {
+      reviewedPaths: ["studio/web/js/validator.mjs", "studio/web/js/new-editor.mjs"],
+    });
+
+    expect(evidence).toContain("studio/web/js/new-editor.mjs [CHANGED IN THIS PR]");
+    expect(refs).toContain("head-sha:studio/web/js/new-editor.mjs");
   });
 });

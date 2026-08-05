@@ -101,12 +101,14 @@ function workflowCallInputBlock(source: string, name: string): string | undefine
 }
 
 describe("reusable review workflow", () => {
-  it.each([
-    ["review.yml", reviewWorkflow],
-    ["self-test.yml", selfTestWorkflow],
-  ])("accepts /robin comment triggers in %s", (_name, workflow) => {
-    expect(workflow).toContain(slashCommandGate);
-    expect(workflow).toContain("startsWith(github.event.comment.body, '/review')");
+  it("accepts /robin comment triggers in review.yml", () => {
+    expect(reviewWorkflow).toContain(slashCommandGate);
+    expect(reviewWorkflow).toContain("startsWith(github.event.comment.body, '/review')");
+  });
+
+  it("keeps self-test deterministic and subscription/API free", () => {
+    expect(selfTestWorkflow).not.toContain("LLM_API_KEY");
+    expect(selfTestWorkflow).not.toContain("Use the action on itself");
   });
 
   it("keeps the consumer template on the canonical reusable workflow", () => {

@@ -3,19 +3,14 @@ name: "Self-Test"
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-  issue_comment:
-    types: [created]
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      HAS_LLM: ${{ secrets.LLM_API_KEY != '' && secrets.LLM_BASE_URL != '' && secrets.LLM_MODEL != '' }}
     steps:
       - uses: actions/checkout@v4
       
@@ -59,42 +54,3 @@ jobs:
 
       - name: Verify committed bundle
         run: git diff --exit-code dist/index.js
-      
-      - name: Use the action on itself
-        if: github.event_name == 'pull_request' && env.HAS_LLM == 'true'
-        continue-on-error: true
-        uses: ./
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          llm-api-key: ${{ secrets.LLM_API_KEY }}
-          llm-base-url: ${{ secrets.LLM_BASE_URL }}
-          model: ${{ secrets.LLM_MODEL }}
-          fail-on-high: "false"
-
-  command-test:
-    if: |
-      github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
-      (
-        startsWith(github.event.comment.body, '/review') ||
-        startsWith(github.event.comment.body, '/robin') ||
-        startsWith(github.event.comment.body, '/summary') ||
-        startsWith(github.event.comment.body, '/help')
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      HAS_LLM: ${{ secrets.LLM_API_KEY != '' && secrets.LLM_BASE_URL != '' && secrets.LLM_MODEL != '' }}
-    steps:
-      - uses: actions/checkout@v4
-       
-      - name: Run Robin command
-        if: env.HAS_LLM == 'true'
-        continue-on-error: true
-        uses: ./
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          llm-api-key: ${{ secrets.LLM_API_KEY }}
-          llm-base-url: ${{ secrets.LLM_BASE_URL }}
-          model: ${{ secrets.LLM_MODEL }}

@@ -756,11 +756,7 @@ async function runReviewPipeline(
       `${instructions}\n\nReturn ONLY a single valid JSON object.`
     )).content);
   };
-  const [firstPass, ...remainingPasses] = getInitialDiscoveryPasses(diff);
-  const discovery = [await discover(firstPass)];
-  for (let index = 0; index < remainingPasses.length; index += 2) {
-    discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
-  }
+  const discovery = await Promise.all(getInitialDiscoveryPasses(diff).map(discover));
   let contractEvidence = "";
   if (isContractChunk(diff)) {
     const plan = await llm.chatCompletion(

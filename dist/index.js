@@ -232,8 +232,19 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries, chan
             paths = await git.searchPaths(owner, repo, query);
         }
         catch {
-            continue;
+            paths = [];
         }
+        const exactHeadPaths = [];
+        for (const path of [...new Set([...changedPaths, ...(options.reviewedPaths || [])])].slice(0, 40)) {
+            try {
+                if ((await git.getFileContent(owner, repo, path, head)).includes(query))
+                    exactHeadPaths.push(path);
+            }
+            catch {
+                // Default-branch search evidence remains useful when an exact changed file is unavailable.
+            }
+        }
+        paths = [...new Set([...exactHeadPaths, ...paths])];
         paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
         const selectedPaths = options.counterevidence
             ? paths.slice(0, MAX_PATHS_PER_QUERY)
@@ -1090,7 +1101,19 @@ const openai_1 = __nccwpck_require__(2583);
 const config_1 = __nccwpck_require__(4008);
 const llm_retry_1 = __nccwpck_require__(4069);
 const core = __importStar(__nccwpck_require__(7484));
+const child_process_1 = __nccwpck_require__(5317);
+const promises_1 = __nccwpck_require__(1943);
+const os_1 = __nccwpck_require__(857);
+const path_1 = __nccwpck_require__(6928);
+const ROLLY_AGENT_URL = "rolly-agent";
+const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
+function runFile(file, args, options) {
+    return new Promise((resolve, reject) => {
+        (0, child_process_1.execFile)(file, args, options, (error, stdout) => error ? reject(error) : resolve(String(stdout)));
+    });
+}
 class LLMClient {
+    static localQueue = Promise.resolve();
     client;
     model;
     maxOutputTokens;
@@ -1098,8 +1121,11 @@ class LLMClient {
     routerModel;
     onProgress;
     reasoningEffort;
+    localAgent;
+    timeoutMs;
     constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort) {
         this.model = model;
+        this.localAgent = baseUrl === ROLLY_AGENT_URL;
         this.routerModel = (0, llm_retry_1.isOpenRouterRouterModel)(model);
         this.onProgress = onProgress;
         this.reasoningEffort = reasoningEffort;
@@ -1109,6 +1135,7 @@ class LLMClient {
                 : undefined;
         this.maxAttempts = (0, llm_retry_1.getLlmCompletionAttemptCount)(maxAttempts, model);
         const effectiveTimeoutMs = (0, llm_retry_1.resolveLlmTimeoutMs)(model, timeoutMs);
+        this.timeoutMs = effectiveTimeoutMs;
         core.info(`Initializing LLM client: baseUrl=${baseUrl}, model=${model}, timeout=${effectiveTimeoutMs} ms, maxAttempts=${this.maxAttempts}`);
         // ponytail: chatCompletion owns retries; SDK maxRetries × 10-min timeout burned whole job budgets
         this.client = new openai_1.OpenAI({
@@ -1135,6 +1162,8 @@ class LLMClient {
         }
     }
     async chatCompletion(systemPrompt, userContent, jsonResponseMode = false) {
+        if (this.localAgent)
+            return this.localAgentCompletion(systemPrompt, userContent);
         let lastFinishReason = "unknown";
         let lastError;
         for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
@@ -1176,6 +1205,47 @@ class LLMClient {
             throw new Error(`Failed to get response from LLM after ${this.maxAttempts} attempts: ${lastError}`);
         }
         throw new Error(`Empty response from LLM after ${this.maxAttempts} attempts (finish_reason=${lastFinishReason})`);
+    }
+    async localAgentCompletion(systemPrompt, userContent) {
+        let release;
+        const previous = LLMClient.localQueue;
+        LLMClient.localQueue = new Promise((resolve) => { release = resolve; });
+        await previous;
+        let root;
+        try {
+            root = await (0, promises_1.mkdtemp)((0, path_1.join)(process.env.RUNNER_TEMP || (0, os_1.tmpdir)(), "robin-agent-"));
+            const prompt = (0, path_1.join)(root, "prompt.md");
+            const workdir = (0, path_1.join)(root, "context");
+            await (0, promises_1.mkdir)(workdir, { mode: 0o700 });
+            await (0, promises_1.writeFile)(prompt, ["# System", systemPrompt, "# User", userContent].join("\n\n"), { mode: 0o600 });
+            const timeoutSeconds = Math.max(1, Math.floor(this.timeoutMs / 1000));
+            const stdout = await runFile(ROLLY_BIN, [
+                "agent", "run",
+                "--agent", this.model,
+                "--mode", "read",
+                "--caller", "github",
+                "--user", "deniz",
+                "--workdir", workdir,
+                "--prompt", prompt,
+                "--timeout", String(timeoutSeconds),
+            ], { timeout: this.timeoutMs, maxBuffer: 10 * 1024 * 1024 });
+            const resultPath = JSON.parse(stdout).result;
+            if (typeof resultPath !== "string" || !resultPath)
+                throw new Error("Rolly agent returned no result path");
+            const content = await (0, promises_1.readFile)(resultPath, "utf8");
+            if (!content.trim())
+                throw new Error("Rolly agent returned an empty result");
+            return { content, model: this.model };
+        }
+        finally {
+            try {
+                if (root)
+                    await (0, promises_1.rm)(root, { recursive: true, force: true });
+            }
+            finally {
+                release();
+            }
+        }
     }
     async blockingChatCompletion(request) {
         const response = await this.client.chat.completions.create({
@@ -1948,11 +2018,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
             return parsed.findings;
         return review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
     };
-    const [firstPass, ...remainingPasses] = (0, review_prompts_1.getInitialDiscoveryPasses)(diff);
-    const discovery = [await discover(firstPass)];
-    for (let index = 0; index < remainingPasses.length; index += 2) {
-        discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
-    }
+    const discovery = await Promise.all((0, review_prompts_1.getInitialDiscoveryPasses)(diff).map(discover));
     let contractEvidence = "";
     if ((0, review_prompts_1.isContractChunk)(diff)) {
         const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
@@ -53288,6 +53354,14 @@ module.exports = require("events");
 
 "use strict";
 module.exports = require("fs");
+
+/***/ }),
+
+/***/ 1943:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("fs/promises");
 
 /***/ }),
 

@@ -273,6 +273,7 @@ offer it as a separate next step. Source: [skills/robin/SKILL.md](skills/robin/S
 | --- | --- | --- |
 | **OpenRouter (free)** | `https://openrouter.ai/api/v1` | `openrouter/free` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
+| Rolly subscription (trusted self-hosted runner only) | `rolly-agent` | `opus-5-high-subscription` |
 | Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
 | Ollama (your server) | `http://YOUR_SERVER:11434/v1` | `llama3.2` |
 

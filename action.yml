@@ -15,10 +15,10 @@ inputs:
     required: false
     default: "ollama"
   llm-base-url:
-    description: "Base URL for OpenAI-compatible API. Examples: https://api.openai.com/v1, http://your-server:11434/v1"
+    description: "OpenAI-compatible base URL, or rolly-agent on a trusted self-hosted Rolly runner."
     required: true
   model:
-    description: "Model name to use. Examples: gpt-4o, llama3.2, codellama:13b, or your provider-specific model name."
+    description: "Provider model name, or a subscription profile such as opus-5-high-subscription with rolly-agent."
     required: true
   reasoning-effort:
     description: "Optional reasoning effort for compatible models: low, medium, or high."

@@ -9,7 +9,9 @@ describe("getReviewPrompt", () => {
     expect(prompt).toContain("Compare changed schemas");
     expect(prompt).toContain("valueless CLI options becoming boolean true");
     expect(prompt).toContain("repository registries and sibling entry points");
-    expect(prompt).toContain("Never report standalone requests for tests");
+    expect(prompt).toContain("Never report standalone requests for more tests");
+    expect(prompt).toContain("compare every imported predicate and canonical preflight");
+    expect(prompt).toContain("omits a reachable changed state or canonical preflight");
   });
 
   it("keeps repository-wide contract checks in the fixed-cost discovery passes", () => {

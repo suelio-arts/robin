@@ -103,7 +103,9 @@ describe("chunkDiffByFile", () => {
 
     expect(() => chunkDiffByFile(diff, header.length)).toThrow(/must exceed.*diff header/);
     const chunks = chunkDiffByFile(diff, header.length + 1);
+    expect(chunks).not.toHaveLength(0);
     expect(chunks.every((chunk) => chunk.startsWith(header))).toBe(true);
     expect(chunks.every((chunk) => chunk.length <= header.length + 1)).toBe(true);
+    expect(chunks.map((chunk) => chunk.slice(header.length)).join("")).toContain("+change");
   });
 });

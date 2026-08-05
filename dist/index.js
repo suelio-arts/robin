@@ -2197,6 +2197,25 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
         }
     }
     if (remaining > 0) {
+        const paths = [...new Set((await Promise.all(terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term)))).flat())].filter((path) => !changedPaths.includes(path));
+        for (const path of paths.slice(0, 12)) {
+            const key = `${head}:${path}`;
+            if (fetched.has(key))
+                continue;
+            fetched.add(key);
+            const content = await git.getFileContent(owner, repo, path, head);
+            if (!content)
+                continue;
+            const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
+            if (!focused)
+                continue;
+            sections.push(`HEAD REPOSITORY SEARCH MATCH: ${path}\n${focused}`);
+            remaining -= focused.length;
+            if (remaining <= 0)
+                break;
+        }
+    }
+    if (remaining > 0) {
         const paths = await git.getTreePaths(owner, repo, head);
         const configurations = paths
             .filter((path) => /(?:^|\/)(?:AGENTS\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
@@ -2209,7 +2228,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
             const content = await git.getFileContent(owner, repo, path, head);
             if (!content)
                 continue;
-            const value = excerpt(content, Math.min(6000, remaining));
+            const value = excerpt(content, Math.min(RELATED_LIMIT, remaining));
             sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
             remaining -= value.length;
             if (remaining <= 0)
@@ -2231,25 +2250,6 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
             if (!focused)
                 continue;
             sections.push(`HEAD CONVENTION FILE: ${path}\n${focused}`);
-            remaining -= focused.length;
-            if (remaining <= 0)
-                break;
-        }
-    }
-    if (remaining > 0) {
-        const paths = [...new Set((await Promise.all(terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term)))).flat())].filter((path) => !changedPaths.includes(path));
-        for (const path of paths.slice(0, 12)) {
-            const key = `${head}:${path}`;
-            if (fetched.has(key))
-                continue;
-            fetched.add(key);
-            const content = await git.getFileContent(owner, repo, path, head);
-            if (!content)
-                continue;
-            const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
-            if (!focused)
-                continue;
-            sections.push(`HEAD REPOSITORY SEARCH MATCH: ${path}\n${focused}`);
             remaining -= focused.length;
             if (remaining <= 0)
                 break;

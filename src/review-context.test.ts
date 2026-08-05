@@ -123,6 +123,7 @@ describe("buildFileContext", () => {
     ].join("\n"), "base", "head");
     expect(context).toContain("HEAD REPOSITORY CONFIG: web/firebase.json");
     expect(context).toContain("HEAD REPOSITORY SEARCH MATCH: docs/release.md");
+    expect(context.indexOf("HEAD REPOSITORY SEARCH MATCH")).toBeLessThan(context.indexOf("HEAD REPOSITORY CONFIG"));
   });
 
   it("focuses oversized changed files on matching code beyond the head and tail", async () => {

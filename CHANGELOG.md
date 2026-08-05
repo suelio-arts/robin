@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.8.0](https://github.com/suelio-arts/robin/compare/v2.7.0...v2.8.0) (2026-08-05)
+
+
+### Features
+
+* add evidence-gated repository review ([ef23eb8](https://github.com/suelio-arts/robin/commit/ef23eb81e446bbf6bbc4a577797651216afc5eb7))
+* add exact-head repository search ([e4e44a6](https://github.com/suelio-arts/robin/commit/e4e44a637d4397c62e384e6db2f2051e238265bd))
+* adversarial repository-aware Robin review ([c81c6c6](https://github.com/suelio-arts/robin/commit/c81c6c60d8acd46660141922648a491a7bb14617))
+* improve review discovery coverage ([a453112](https://github.com/suelio-arts/robin/commit/a453112875eaf1cc306393051031895ae70bc5e0))
+* search repository contracts ([5674822](https://github.com/suelio-arts/robin/commit/56748229f0ca5f0688b3787e84833bc1c271e8ba))
+* specialize rendering and lifecycle review ([1fc267c](https://github.com/suelio-arts/robin/commit/1fc267ccf783c2411be322acdfcaaefacbdd10ac))
+
+
+### Bug Fixes
+
+* align exact review harness ([79bf328](https://github.com/suelio-arts/robin/commit/79bf32809ce30aa8e413ea05b103b67c8a18b088))
+* block reviews without red checks ([#11](https://github.com/suelio-arts/robin/issues/11)) ([5a91380](https://github.com/suelio-arts/robin/commit/5a9138099408cfce280346803f25a0e87632eb99))
+* bound contract pass routing ([9fe9d0a](https://github.com/suelio-arts/robin/commit/9fe9d0a1bfd422283b18537e3d3d59a6e222dfb7))
+* bound review discovery ([6b8d70e](https://github.com/suelio-arts/robin/commit/6b8d70ea8d5aa2215e2263b50ca20698b12049f9))
+* cache historical review context ([0636f0f](https://github.com/suelio-arts/robin/commit/0636f0f477d855817d38383cf697c37e852c437a))
+* close strict review gaps ([f33836c](https://github.com/suelio-arts/robin/commit/f33836c69c8298759fd78bcb0b170b79c31cddcc))
+* expose repository review contracts ([a2639b6](https://github.com/suelio-arts/robin/commit/a2639b6c062470040de10bb71c67a5164d2623df))
+* focus contract review passes ([ef0ecd7](https://github.com/suelio-arts/robin/commit/ef0ecd712efb31737cdd7a7c596e7e2f61557ed3))
+* focus fixed-cost discovery passes ([f190088](https://github.com/suelio-arts/robin/commit/f190088b08fa0ffebb07e4fd3c50cbf6db8d7314))
+* harden evidence-gated reviews ([dae5fdf](https://github.com/suelio-arts/robin/commit/dae5fdf7eae15d0109d1ffeb95c3b311fd7b28bb))
+* harden review approval checks ([1b8b359](https://github.com/suelio-arts/robin/commit/1b8b35970fd4f10fc59795cbf128970939fb6039))
+* harden review evidence boundaries ([bae241a](https://github.com/suelio-arts/robin/commit/bae241a8df33dc57358efc33db991398953ad896))
+* isolate repository search evidence ([46ded6c](https://github.com/suelio-arts/robin/commit/46ded6c0242a7d2fba0649a5a8e8a5369f78e647))
+* preserve contract-gap findings ([0b95032](https://github.com/suelio-arts/robin/commit/0b95032f95c8ac90ad6ef2c15577e1562bcd9157))
+* preserve required test findings ([daf46d1](https://github.com/suelio-arts/robin/commit/daf46d18a563370576f790cef0c8bc6a515b7891))
+* survive GitHub repository-search rate limits ([ab7311d](https://github.com/suelio-arts/robin/commit/ab7311d30227a6645df83585e207e6d60b3890cb))
+
 ## [2.7.0](https://github.com/suelio-arts/robin/compare/v2.6.0...v2.7.0) (2026-08-03)
 
 

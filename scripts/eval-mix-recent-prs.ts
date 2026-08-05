@@ -102,7 +102,8 @@ async function main() {
       .flatMap(({ content }) => chunkDiffByFile(content, 50000))
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     const reviewedPaths = changedHeadPaths(diff);
-    const responses = [];
+    const responses: unknown[] = [];
+    results.push({pr: testCase.pr, head: testCase.head, chunks: responses});
     console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
     for (const [index, chunk] of reviewChunks.entries()) {
       console.log(`PR ${testCase.pr}: reviewing chunk ${index + 1}/${reviewChunks.length}`);
@@ -154,11 +155,7 @@ async function main() {
         reviewPrompt,
         `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
       );
-      const [firstPass, ...remainingPasses] = getInitialDiscoveryPasses(chunk);
-      const discovery = [await discover(firstPass)];
-      for (let pass = 0; pass < remainingPasses.length; pass += 2) {
-        discovery.push(...await Promise.all(remainingPasses.slice(pass, pass + 2).map(discover)));
-      }
+      const discovery = await Promise.all(getInitialDiscoveryPasses(chunk).map(discover));
       const toolUsage: unknown[] = [];
       let contractQueries: string[] = [];
       let contractEvidence = "";
@@ -245,6 +242,7 @@ async function main() {
             candidates,
             usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
           });
+          writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
           continue;
         }
       }
@@ -257,13 +255,8 @@ async function main() {
         precisionEvidence,
         usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
       });
+      writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
     }
-    results.push({
-      pr: testCase.pr,
-      head: testCase.head,
-      chunks: responses,
-    });
-    writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
   }
   if (evalSet === "holdout" && selectedChunks.size === 0) {
     for (const testCase of manifest.holdoutNegativeControls.filter(

@@ -160,8 +160,17 @@ export async function buildContractSearchEvidence(
     try {
       paths = await git.searchPaths(owner, repo, query);
     } catch {
-      continue;
+      paths = [];
     }
+    const exactHeadPaths: string[] = [];
+    for (const path of [...new Set([...changedPaths, ...(options.reviewedPaths || [])])].slice(0, 40)) {
+      try {
+        if ((await git.getFileContent(owner, repo, path, head)).includes(query)) exactHeadPaths.push(path);
+      } catch {
+        // Default-branch search evidence remains useful when an exact changed file is unavailable.
+      }
+    }
+    paths = [...new Set([...exactHeadPaths, ...paths])];
     paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
     const selectedPaths = options.counterevidence
       ? paths.slice(0, MAX_PATHS_PER_QUERY)

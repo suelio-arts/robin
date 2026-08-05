@@ -15,6 +15,18 @@ import {
   shouldUseJsonResponseMode,
 } from "./llm-retry";
 import * as core from "@actions/core";
+import { execFile } from "child_process";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+const ROLLY_AGENT_URL = "rolly-agent";
+const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
+
+function runFile(file: string, args: string[], options: { timeout: number; maxBuffer: number }): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(file, args, options, (error, stdout) => error ? reject(error) : resolve(String(stdout)));
+  });
+}
 
 export interface ChatCompletionResult {
   content: string;
@@ -25,6 +37,7 @@ export type LlmProgressHandler = (detail: string) => void | Promise<void>;
 export type ReasoningEffort = "low" | "medium" | "high";
 
 export class LLMClient {
+  private static localQueue: Promise<void> = Promise.resolve();
   private client: OpenAI;
   private model: string;
   private maxOutputTokens?: number;
@@ -32,6 +45,8 @@ export class LLMClient {
   private routerModel: boolean;
   private onProgress?: LlmProgressHandler;
   private reasoningEffort?: ReasoningEffort;
+  private localAgent: boolean;
+  private timeoutMs: number;
 
   constructor(
     baseUrl: string,
@@ -44,6 +59,7 @@ export class LLMClient {
     reasoningEffort?: ReasoningEffort
   ) {
     this.model = model;
+    this.localAgent = baseUrl === ROLLY_AGENT_URL;
     this.routerModel = isOpenRouterRouterModel(model);
     this.onProgress = onProgress;
     this.reasoningEffort = reasoningEffort;
@@ -53,6 +69,7 @@ export class LLMClient {
         : undefined;
     this.maxAttempts = getLlmCompletionAttemptCount(maxAttempts, model);
     const effectiveTimeoutMs = resolveLlmTimeoutMs(model, timeoutMs);
+    this.timeoutMs = effectiveTimeoutMs;
 
     core.info(
       `Initializing LLM client: baseUrl=${baseUrl}, model=${model}, timeout=${effectiveTimeoutMs} ms, maxAttempts=${this.maxAttempts}`
@@ -91,6 +108,7 @@ export class LLMClient {
     userContent: string,
     jsonResponseMode = false
   ): Promise<ChatCompletionResult> {
+    if (this.localAgent) return this.localAgentCompletion(systemPrompt, userContent);
     let lastFinishReason = "unknown";
     let lastError: unknown;
 
@@ -149,6 +167,47 @@ export class LLMClient {
     throw new Error(
       `Empty response from LLM after ${this.maxAttempts} attempts (finish_reason=${lastFinishReason})`
     );
+  }
+
+  private async localAgentCompletion(
+    systemPrompt: string,
+    userContent: string
+  ): Promise<ChatCompletionResult> {
+    let release!: () => void;
+    const previous = LLMClient.localQueue;
+    LLMClient.localQueue = new Promise<void>((resolve) => { release = resolve; });
+    await previous;
+
+    let root: string | undefined;
+    try {
+      root = await mkdtemp(join(process.env.RUNNER_TEMP || tmpdir(), "robin-agent-"));
+      const prompt = join(root, "prompt.md");
+      const workdir = join(root, "context");
+      await mkdir(workdir, { mode: 0o700 });
+      await writeFile(prompt, ["# System", systemPrompt, "# User", userContent].join("\n\n"), { mode: 0o600 });
+      const timeoutSeconds = Math.max(1, Math.floor(this.timeoutMs / 1000));
+      const stdout = await runFile(ROLLY_BIN, [
+        "agent", "run",
+        "--agent", this.model,
+        "--mode", "read",
+        "--caller", "github",
+        "--user", "deniz",
+        "--workdir", workdir,
+        "--prompt", prompt,
+        "--timeout", String(timeoutSeconds),
+      ], { timeout: this.timeoutMs, maxBuffer: 10 * 1024 * 1024 });
+      const resultPath = JSON.parse(stdout).result;
+      if (typeof resultPath !== "string" || !resultPath) throw new Error("Rolly agent returned no result path");
+      const content = await readFile(resultPath, "utf8");
+      if (!content.trim()) throw new Error("Rolly agent returned an empty result");
+      return { content, model: this.model };
+    } finally {
+      try {
+        if (root) await rm(root, { recursive: true, force: true });
+      } finally {
+        release();
+      }
+    }
   }
 
   private async blockingChatCompletion(

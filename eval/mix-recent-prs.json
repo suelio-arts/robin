@@ -114,6 +114,11 @@
           "file": "backend/functions/src/endpoints/walk-links.ts",
           "rootCause": "first-stop fallback incorrectly treats node array order as display order",
           "source": "Greptile"
+        },
+        {
+          "file": "backend/functions/src/endpoints/walk-links.ts",
+          "rootCause": "the row click hides its list before dialog focus capture, so dismiss restores focus to the now-hidden row",
+          "source": "Greptile"
         }
       ]
     },
@@ -148,6 +153,11 @@
           "file": "docs/subsystems/xcode-cloud-trigger.md",
           "rootCause": "blanket backend-only exclusion contradicts user-visible iOS-effect trigger rule",
           "source": "CodeRabbit"
+        },
+        {
+          "file": "docs/subsystems/xcode-cloud-trigger.md",
+          "rootCause": "the canonical runbook says PR TestFlights and Xcode Cloud Test are disabled while release-pipeline.md still marks both enabled and automatic",
+          "source": "Greptile"
         }
       ]
     },
@@ -733,6 +743,11 @@
           "file": "studio/cli/mix-studio-cli.mjs",
           "rootCause": "survival verification compares a trimmed persisted navigation title with the raw untrimmed requested title and falsely reports a failed save",
           "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/endpoints/studio-simulator.ts",
+          "rootCause": "Studio projects existing navigation titles but both save surfaces omit title from navNodeOverridesById, so rebuild discards authored titles and hidden beats fall back",
+          "source": "Greptile"
         }
       ]
     },
@@ -868,6 +883,62 @@
       "head": "4ef6393035c885266198705e84f62996f5d7c582",
       "labels": [
         {"file": "web/qr/800/experience-v9.mjs", "rootCause": "UPDATED image-target events reapply position and scale while retaining the recognition heading, destabilizing world-fixed placement", "source": "Greptile"}
+      ]
+    },
+    {
+      "pr": 317,
+      "base": "fa6dc8a0cd650d9da021854668ded1578420aae7",
+      "head": "c0c41345d8837973c077472be8aa9cf0ec0d9123",
+      "labels": [
+        {"file": "studio/tests/walk-manager.spec.mjs", "rootCause": "the auth race test emits signed-in and signed-out events synchronously, invalidating the epoch before catalog loading starts and never exercising an in-flight stale catalog response", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 316,
+      "base": "d327e6421fc7e9d74189e8bcfe1f54458077cfc5",
+      "head": "70ea58705f167a1fa74524c6302e5394a83e28c5",
+      "labels": [
+        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "a standalone negated classifier command suppresses errexit, so an unexpectedly successful negative case continues to print PASS and exits zero", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 274,
+      "base": "065ff57c7d1e344cb0d1ebdfa49f9e691300e3b3",
+      "head": "f4387ed210cb8b45f5b842c634aae6f55a641076",
+      "labels": [
+        {"file": "studio/ingestion_backend/store.py", "rootCause": "prompt or keyterm transcription forces universal-3-pro while forwarding unsupported language codes unchanged instead of validating or selecting the compatible model", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 314,
+      "base": "3ad1aca1307b386fe2b2651c7f227a8329bc7e1f",
+      "head": "a972064a70157536d3bd9b20be35459a161e9e93",
+      "labels": [
+        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "the workflow checks out a Robin SHA different from the immutable robinHead declared by the loaded benchmark manifest, so results are attributed to the wrong review pipeline", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 263,
+      "base": "20703acae2ce0e6cbf6ab3a7ffaa8add7a240757",
+      "head": "96385d40d006f93a25afb92aefa7829c5cd9469c",
+      "labels": [
+        {"file": "docs/subsystems/800-ar-release.md", "rootCause": "the release runbook retains an obsolete canonical 800 layout hash while generated code, assets, layout JSON, and verifiers pin the new hash", "source": "Greptile"}
+      ]
+    },
+    {
+      "pr": 94,
+      "base": "0d98e743a18bbfcfa83873438cd1de1075a77c81",
+      "head": "b7446c0c102c0e46fa58e750fe2969d0f09e5612",
+      "labels": [
+        {"file": "AR/MIX iOS/Views/NarrativeDebugView.swift", "rootCause": "the primary button is labeled Stop but still calls playLastNarrative while a second real Stop button is rendered", "source": "CodeRabbit"}
+      ]
+    },
+    {
+      "pr": 307,
+      "base": "2aabd6ce2a4761ba9f39e9d0e2a3795902aef60c",
+      "head": "e5e3c576c19fb6c34af7f2efeea8947d2e5ce676",
+      "labels": [
+        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "benchmark inputs accept mutable or abbreviated refs and record them as exact snapshots without requiring immutable 40-character commit SHAs", "source": "CodeRabbit"}
       ]
     }
   ],
@@ -1035,6 +1106,38 @@
           "source": "CodeRabbit",
           "reason": "false at exact head: loadEngagementData catches its fetch and parse failures and resolves after rendering the error state"
         }
+      ]
+    },
+    {
+      "pr": 281,
+      "base": "519529ee455cc557b804cb58e44d46d5c32a95ec",
+      "head": "0673e370a9b5d13f98203e79c54551062b9a39e6",
+      "rejectedCandidates": [
+        {"file": "scripts/periphery.sh", "rootCause": "macOS lacks /usr/bin/lockf and the command treats descriptor 9 as a pathname", "source": "CodeRabbit", "reason": "false on the target platform: /usr/bin/lockf exists and its native syntax explicitly accepts an already-open file descriptor"}
+      ]
+    },
+    {
+      "pr": 246,
+      "base": "89fa3d79b1ba4409cfa3517ea67865202ad24dd2",
+      "head": "41fe662b218a685214d742fd26d42112498108de",
+      "rejectedCandidates": [
+        {"file": "ios/AR/Shared/UI/EightHundred/EightHundredScene.swift", "rootCause": "motion is defective because applyMotion runs only at the intentional 12 Hz visual update cadence", "source": "CodeRabbit", "reason": "unproven: exact code intentionally gates material and motion together at 12 Hz and no contract requires per-render motion"}
+      ]
+    },
+    {
+      "pr": 259,
+      "base": "a1f8c07b178bdd158d782bbe262dfc6621b4e9aa",
+      "head": "234e7dba78b6f8677a4b583a6fc47644b8d28cff",
+      "rejectedCandidates": [
+        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "omitting branding from the rebuilt payload clears persisted walk branding", "source": "Greptile", "reason": "false and retracted: WalkSchema has no branding field and buildStoryWalk does not persist one"}
+      ]
+    },
+    {
+      "pr": 250,
+      "base": "283bd5b0e29ef71ee6e0cf58a73075268f7e5c24",
+      "head": "5517c28ad940808ff8038d57fc91a468e82e5f5e",
+      "rejectedCandidates": [
+        {"file": "studio/ingestion_backend/tests/test_cli.py", "rootCause": "parseCommand has no empty-argument test", "source": "CodeRabbit", "reason": "stale at exact head: parseCommand([]) is asserted verbatim in the final test file"}
       ]
     }
   ]

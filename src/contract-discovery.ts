@@ -12,9 +12,10 @@ const TOTAL_LIMIT = 30000;
 function excerptMatches(content: string, query: string, limit: number): string {
   if (content.length <= limit) return content;
   const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-  const matches = [...content.matchAll(pattern)].slice(0, 4);
-  if (matches.length === 0) return content.slice(0, limit);
   const separator = "\n[... omitted ...]\n";
+  const maxWindows = Math.max(1, Math.floor((limit + separator.length) / (separator.length + 1)));
+  const matches = [...content.matchAll(pattern)].slice(0, Math.min(4, maxWindows));
+  if (matches.length === 0) return content.slice(0, limit);
   const windowSize = Math.floor((limit - separator.length * (matches.length - 1)) / matches.length);
   return matches.map(({index = 0}) => {
     const start = Math.max(0, Math.min(index - Math.floor(windowSize / 2), content.length - windowSize));

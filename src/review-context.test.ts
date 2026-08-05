@@ -127,7 +127,45 @@ describe("buildFileContext", () => {
     expect(context).toContain("HEAD REPOSITORY SEARCH MATCH: docs/release.md");
     expect(context).toContain(oldHash);
     expect(context).toContain('"source":"*-v@(1|2|3|4|5|6|7).mjs"');
-    expect(context.indexOf("HEAD REPOSITORY SEARCH MATCH")).toBeLessThan(context.indexOf("HEAD REPOSITORY CONFIG"));
+    expect(context.indexOf("HEAD REPOSITORY CONFIG")).toBeLessThan(context.indexOf("HEAD REPOSITORY SEARCH MATCH"));
+  });
+
+  it("reserves context for configuration before repository search matches", async () => {
+    const files: Record<string, string> = {
+      "head:src/change.ts": "canonicalOperation();",
+      "head:firebase.json": '{"hosting":{"headers":[]}}',
+      ...Object.fromEntries(Array.from({length: 12}, (_, index) => [
+        `head:src/match-${index}.ts`,
+        `canonicalOperation\n${"x".repeat(20000)}`,
+      ])),
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => ["firebase.json"],
+      searchPaths: async () => Array.from({length: 12}, (_, index) => `src/match-${index}.ts`),
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/src/change.ts b/src/change.ts",
+      "+++ b/src/change.ts",
+      "+canonicalOperation();",
+    ].join("\n"), "base", "head");
+
+    expect(context).toContain("HEAD REPOSITORY CONFIG: firebase.json");
+  });
+
+  it("searches identifiers from source lines beginning with increment operators", async () => {
+    const queries: string[] = [];
+    await buildFileContext({
+      getFileContent: async () => "",
+      getTreePaths: async () => [],
+      searchPaths: async (_owner: string, _repo: string, query: string) => { queries.push(query); return []; },
+    }, "o", "r", [
+      "diff --git a/src/counter.ts b/src/counter.ts",
+      "+++ b/src/counter.ts",
+      "+++counterValue;",
+    ].join("\n"), "base", "head");
+
+    expect(queries).toContain("counterValue");
   });
 
   it("focuses oversized changed files on matching code beyond the head and tail", async () => {

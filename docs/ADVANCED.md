@@ -111,7 +111,7 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `model` / `LLM_MODEL` | — | Model name (required) |
 | `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
 | `fail-on-high` | `false` | Fail the check if high-severity issues are found |
-| `request-changes` | omit → `true` (defer to repo config) | `true` submits REQUEST_CHANGES on high findings and APPROVE on a clean head; `false` posts a non-blocking COMMENT. Reusable workflow input is a boolean with no default — omit it to let `.github/robin.yml` win |
+| `request-changes` | empty → repo config → `true` | `"true"` submits REQUEST_CHANGES on high findings and APPROVE only when there are no findings; `"false"` posts a non-blocking COMMENT. The reusable workflow uses a string with an empty default so omission defers to `.github/robin.yml` |
 | `max-diff-size` | `50000` | Max diff characters sent to the model |
 | `max-output-tokens` | empty | Cap response tokens (optional) |
 | `llm-timeout-ms` | `600000` | LLM timeout (10 minutes) |
@@ -140,7 +140,7 @@ jobs:
   review:
     uses: antongulin/robin/.github/workflows/review.yml@main
     with:
-      request-changes: false   # boolean; omit this line to defer to .github/robin.yml
+      request-changes: "false" # string; omit this line to defer to .github/robin.yml
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}

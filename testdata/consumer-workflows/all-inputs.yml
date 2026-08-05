@@ -21,9 +21,8 @@ jobs:
     with:
       fail-on-high: false
       reasoning-effort: low
-      # Boolean workflow_call input — bare false matches real consumer YAML
-      # (e.g. request-changes: false). Omit to defer to .github/robin.yml.
-      request-changes: false
+      # String input preserves omission as empty so repository config can win.
+      request-changes: "false"
       max-diff-size: "25000"
       max-comments: "10"
       max-output-tokens: ""

@@ -65,6 +65,25 @@ export async function buildFileContext(
     }
   }
 
+  let treePaths: string[] = [];
+  if (remaining > 0) {
+    treePaths = await git.getTreePaths(owner, repo, head);
+    const configurations = treePaths
+      .filter(isConfigurationPath)
+      .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+    for (const path of configurations.slice(0, 4)) {
+      const key = `${head}:${path}`;
+      if (fetched.has(key)) continue;
+      fetched.add(key);
+      const content = await git.getFileContent(owner, repo, path, head);
+      if (!content) continue;
+      const value = excerpt(content, Math.min(RELATED_LIMIT, remaining));
+      sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
+      remaining -= value.length;
+      if (remaining <= 0) break;
+    }
+  }
+
   if (remaining > 0) {
     const paths = [...new Set((await Promise.all(
       terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term))
@@ -85,22 +104,7 @@ export async function buildFileContext(
   }
 
   if (remaining > 0) {
-    const paths = await git.getTreePaths(owner, repo, head);
-    const configurations = paths
-      .filter(isConfigurationPath)
-      .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-    for (const path of configurations.slice(0, 4)) {
-      const key = `${head}:${path}`;
-      if (fetched.has(key)) continue;
-      fetched.add(key);
-      const content = await git.getFileContent(owner, repo, path, head);
-      if (!content) continue;
-      const value = excerpt(content, Math.min(RELATED_LIMIT, remaining));
-      sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
-      remaining -= value.length;
-      if (remaining <= 0) break;
-    }
-    const conventions = paths
+    const conventions = treePaths
       .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
     for (const path of conventions.slice(0, 12)) {
@@ -143,7 +147,7 @@ function repositorySearchAffinity(path: string, changedPaths: string[]): number 
 function changedIdentifiers(diff: string): string[] {
   const counts = new Map<string, number>();
   for (const line of diff.split("\n")) {
-    if ((!line.startsWith("+") && !line.startsWith("-")) || line.startsWith("+++") || line.startsWith("---")) continue;
+    if ((!line.startsWith("+") && !line.startsWith("-")) || /^(?:\+\+\+|---) (?:[ab]\/|\/dev\/null)/.test(line)) continue;
     const hashes = [...line.matchAll(/\b[0-9a-f]{12,}\b/gi)];
     for (const hash of hashes) {
       counts.set(hash[0], (counts.get(hash[0]) || 0) + 1);

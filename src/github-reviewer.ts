@@ -15,9 +15,10 @@ export class GitHubReviewer {
   }
 
   /** Gatekeeper mode requests changes for High findings and approves clean heads. */
-  static resolveReviewEvent(hasHigh: boolean, requestChanges: boolean): "REQUEST_CHANGES" | "APPROVE" | "COMMENT" {
+  static resolveReviewEvent(hasHigh: boolean, hasFindings: boolean, requestChanges: boolean): "REQUEST_CHANGES" | "APPROVE" | "COMMENT" {
     if (!requestChanges) return "COMMENT";
-    return hasHigh ? "REQUEST_CHANGES" : "APPROVE";
+    if (hasHigh) return "REQUEST_CHANGES";
+    return hasFindings ? "COMMENT" : "APPROVE";
   }
 
   /** A prior Robin CHANGES_REQUESTED review that a newly posted review supersedes. */
@@ -96,7 +97,11 @@ export class GitHubReviewer {
       const body = this.buildReviewBody(findings, postedFindings);
       
       // Determine review event type
-      const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, requestChanges);
+      const event = GitHubReviewer.resolveReviewEvent(
+        findings.high.length > 0,
+        findings.high.length + findings.medium.length + findings.low.length + findings.suggestions.length > 0,
+        requestChanges
+      );
       
       let review;
       let postedInlineComments = comments.length;

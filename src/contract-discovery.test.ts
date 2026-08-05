@@ -57,4 +57,17 @@ describe("contract discovery", () => {
 
     expect(evidence).toContain("buildStoryWalk(payload)");
   });
+
+  it("keeps the last match excerpt inside a tiny remaining budget", async () => {
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async (_owner, _repo, query) => query === "first"
+        ? ["a", "b", "c", "d"]
+        : query === "second" ? ["e"] : ["f"],
+      getFileContent: async (_owner, _repo, path) => path === "e"
+        ? "x".repeat(5999)
+        : path === "f" ? "needle".repeat(10000) : "x".repeat(6000),
+    }, "o", "r", "head", ["first", "second", "needle"]);
+
+    expect(evidence.length).toBeLessThan(31000);
+  });
 });

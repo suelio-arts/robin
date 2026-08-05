@@ -93,10 +93,11 @@ function excerptMatches(content, query, limit) {
     if (content.length <= limit)
         return content;
     const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
-    const matches = [...content.matchAll(pattern)].slice(0, 4);
+    const separator = "\n[... omitted ...]\n";
+    const maxWindows = Math.max(1, Math.floor((limit + separator.length) / (separator.length + 1)));
+    const matches = [...content.matchAll(pattern)].slice(0, Math.min(4, maxWindows));
     if (matches.length === 0)
         return content.slice(0, limit);
-    const separator = "\n[... omitted ...]\n";
     const windowSize = Math.floor((limit - separator.length * (matches.length - 1)) / matches.length);
     return matches.map(({ index = 0 }) => {
         const start = Math.max(0, Math.min(index - Math.floor(windowSize / 2), content.length - windowSize));
@@ -532,10 +533,12 @@ class GitHubReviewer {
         this.maxComments = Number.isFinite(maxComments) ? Math.max(0, maxComments) : 25;
     }
     /** Gatekeeper mode requests changes for High findings and approves clean heads. */
-    static resolveReviewEvent(hasHigh, requestChanges) {
+    static resolveReviewEvent(hasHigh, hasFindings, requestChanges) {
         if (!requestChanges)
             return "COMMENT";
-        return hasHigh ? "REQUEST_CHANGES" : "APPROVE";
+        if (hasHigh)
+            return "REQUEST_CHANGES";
+        return hasFindings ? "COMMENT" : "APPROVE";
     }
     /** A prior Robin CHANGES_REQUESTED review that a newly posted review supersedes. */
     static isStaleRobinReview(review, newReviewId) {
@@ -593,7 +596,7 @@ class GitHubReviewer {
             // Build the review summary body (high-level)
             const body = this.buildReviewBody(findings, postedFindings);
             // Determine review event type
-            const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, requestChanges);
+            const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, findings.high.length + findings.medium.length + findings.low.length + findings.suggestions.length > 0, requestChanges);
             let review;
             let postedInlineComments = comments.length;
             try {
@@ -2232,6 +2235,27 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
             }
         }
     }
+    let treePaths = [];
+    if (remaining > 0) {
+        treePaths = await git.getTreePaths(owner, repo, head);
+        const configurations = treePaths
+            .filter(isConfigurationPath)
+            .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+        for (const path of configurations.slice(0, 4)) {
+            const key = `${head}:${path}`;
+            if (fetched.has(key))
+                continue;
+            fetched.add(key);
+            const content = await git.getFileContent(owner, repo, path, head);
+            if (!content)
+                continue;
+            const value = excerpt(content, Math.min(RELATED_LIMIT, remaining));
+            sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
+            remaining -= value.length;
+            if (remaining <= 0)
+                break;
+        }
+    }
     if (remaining > 0) {
         const paths = [...new Set((await Promise.all(terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term)))).flat())]
             .filter((path) => !changedPaths.includes(path) && !isConfigurationPath(path) && !fetched.has(`${head}:${path}`))
@@ -2252,25 +2276,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
         }
     }
     if (remaining > 0) {
-        const paths = await git.getTreePaths(owner, repo, head);
-        const configurations = paths
-            .filter(isConfigurationPath)
-            .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-        for (const path of configurations.slice(0, 4)) {
-            const key = `${head}:${path}`;
-            if (fetched.has(key))
-                continue;
-            fetched.add(key);
-            const content = await git.getFileContent(owner, repo, path, head);
-            if (!content)
-                continue;
-            const value = excerpt(content, Math.min(RELATED_LIMIT, remaining));
-            sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
-            remaining -= value.length;
-            if (remaining <= 0)
-                break;
-        }
-        const conventions = paths
+        const conventions = treePaths
             .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
         for (const path of conventions.slice(0, 12)) {
@@ -2313,7 +2319,7 @@ function repositorySearchAffinity(path, changedPaths) {
 function changedIdentifiers(diff) {
     const counts = new Map();
     for (const line of diff.split("\n")) {
-        if ((!line.startsWith("+") && !line.startsWith("-")) || line.startsWith("+++") || line.startsWith("---"))
+        if ((!line.startsWith("+") && !line.startsWith("-")) || /^(?:\+\+\+|---) (?:[ab]\/|\/dev\/null)/.test(line))
             continue;
         const hashes = [...line.matchAll(/\b[0-9a-f]{12,}\b/gi)];
         for (const hash of hashes) {

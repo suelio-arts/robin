@@ -4,13 +4,13 @@ import { resolve } from "path";
 import OpenAI from "openai";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
-import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
+import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
-import { buildContractSearchEvidence, parseContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
+import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
 
-type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}> };
+type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
 type NegativeControl = EvalCase & { rejectedCandidates: RejectedCandidate[] };
 
@@ -56,7 +56,8 @@ function validateSnapshot(testCase: EvalCase): void {
   if (mergeBase !== testCase.base) {
     throw new Error(`PR ${testCase.pr}: base ${testCase.base} is not the merge base of ${testCase.head}`);
   }
-  for (const {file} of testCase.labels || []) {
+  for (const {file} of [...(testCase.labels || []), ...(testCase.rejectedCandidates || [])]) {
+    if (!file) throw new Error(`PR ${testCase.pr}: benchmark candidate is missing its file path`);
     execFileSync("git", ["cat-file", "-e", `${testCase.head}:${file}`], {cwd: mixRepo});
   }
 }
@@ -96,6 +97,7 @@ async function main() {
     const reviewChunks = splitDiffIntoFiles(diff)
       .filter(({ path }) => selectedFiles.size === 0 || selectedFiles.has(path))
       .flatMap(({ content }) => chunkDiffByFile(content, 50000));
+    const reviewedPaths = changedHeadPaths(diff);
     const responses = [];
     console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
     for (const [index, chunk] of reviewChunks.entries()) {
@@ -154,20 +156,25 @@ async function main() {
         discovery.push(...await Promise.all(remainingPasses.slice(pass, pass + 2).map(discover)));
       }
       const toolUsage: unknown[] = [];
+      let contractQueries: string[] = [];
+      let contractEvidence = "";
       if (isContractChunk(chunk)) {
         const plan = await review(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, reviewInput);
         toolUsage.push(plan.usage);
-        const evidence = await buildContractSearchEvidence(
+        contractQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk, context);
+        contractEvidence = await buildContractSearchEvidence(
           localGit,
           "",
           "",
           testCase.head,
-          parseContractSearchPlan(plan.choices[0]?.message.content || "")
+          contractQueries,
+          changedHeadPaths(chunk),
+          {reviewedPaths}
         );
         discovery.push(await discover([
-          CONTRACT_SEARCH_DISCOVERY_PASS,
+          getContractSearchDiscoveryPass(chunk),
           "CONTRACT SEARCH EVIDENCE:",
-          wrapContractSearchEvidence(evidence),
+          wrapContractSearchEvidence(contractEvidence),
         ].join("\n\n")));
       }
       const candidates = discovery.map((candidate) =>
@@ -182,8 +189,39 @@ async function main() {
       ].join("\n\n"));
       const verified = asReview(JSON.parse(verification.choices[0]?.message.content || "{}"));
       const precisionCandidates = buildPrecisionCandidates([...candidates, verified]);
+      let precisionQueries: string[] = [];
+      let precisionEvidence = "";
+      if (precisionCandidates.length > 0) {
+        const plan = await review(PRECISION_SEARCH_PLANNER_INSTRUCTIONS, [
+          "CANDIDATES:",
+          JSON.stringify(precisionCandidates),
+          reviewInput,
+        ].join("\n\n"));
+        toolUsage.push(plan.usage);
+        precisionQueries = completeContractSearchPlan(
+          plan.choices[0]?.message.content || "",
+          chunk,
+          context,
+          {prioritizePlanned: true}
+        );
+        precisionEvidence = await buildContractSearchEvidence(
+          localGit,
+          "",
+          "",
+          testCase.head,
+          precisionQueries,
+          changedHeadPaths(chunk),
+          {counterevidence: true, reviewedPaths}
+        );
+      }
       const precisionPrompt = PRECISION_INSTRUCTIONS.join("\n");
-      const precisionInput = ["CANDIDATES:", JSON.stringify(precisionCandidates), reviewInput].join("\n\n");
+      const precisionInput = [
+        "CANDIDATES:",
+        JSON.stringify(precisionCandidates),
+        contractEvidence && `DISCOVERY CONTRACT EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
+        precisionEvidence && `CANDIDATE COUNTEREVIDENCE:\n${wrapContractSearchEvidence(precisionEvidence)}`,
+        reviewInput,
+      ].filter(Boolean).join("\n\n");
       let precision = await review(precisionPrompt, precisionInput);
       const precisionUsage: unknown[] = [precision.usage];
       let approved;
@@ -209,6 +247,10 @@ async function main() {
       responses.push({
         candidates,
         response: approved,
+        contractQueries,
+        contractEvidence,
+        precisionQueries,
+        precisionEvidence,
         usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
       });
     }

@@ -79,4 +79,33 @@ describe("chunkDiffByFile", () => {
     expect(chunks[0]).toContain("a.ts");
     expect(chunks[1]).toContain("b.ts");
   });
+
+  it("paginates every hunk of an oversized file", () => {
+    const diff = [
+      "diff --git a/large.ts b/large.ts\n+++ b/large.ts\n",
+      "@@ -1 +1 @@\n+first-change\n",
+      `@@ -2 +2 @@\n+${"middle".repeat(20)}\n`,
+      "@@ -3 +3 @@\n+last-change\n",
+    ].join("");
+
+    const chunks = chunkDiffByFile(diff, 100);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.length <= 100)).toBe(true);
+    expect(chunks.join("\n")).toContain("first-change");
+    expect(chunks.join("\n")).toContain("last-change");
+    expect(chunks.every((chunk) => chunk.startsWith("diff --git a/large.ts b/large.ts"))).toBe(true);
+  });
+
+  it("rejects a chunk limit that cannot preserve the complete file header", () => {
+    const header = "diff --git a/large.ts b/large.ts\n+++ b/large.ts\n";
+    const diff = `${header}@@ -1 +1 @@\n+change\n`;
+
+    expect(() => chunkDiffByFile(diff, header.length)).toThrow(/must exceed.*diff header/);
+    const chunks = chunkDiffByFile(diff, header.length + 1);
+    expect(chunks).not.toHaveLength(0);
+    expect(chunks.every((chunk) => chunk.startsWith(header))).toBe(true);
+    expect(chunks.every((chunk) => chunk.length <= header.length + 1)).toBe(true);
+    expect(chunks.map((chunk) => chunk.slice(header.length)).join("")).toContain("+change");
+  });
 });

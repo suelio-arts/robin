@@ -94,11 +94,45 @@ export function chunkDiffByFile(diff: string, maxChunkSize: number): string[] {
       current = "";
     }
     if (file.content.length > maxChunkSize) {
-      chunks.push(`${file.content.slice(0, maxChunkSize)}\n\n[... File diff truncated]`);
+      chunks.push(...chunkOversizedFile(file.content, maxChunkSize));
     } else {
       current += file.content;
     }
   }
   if (current) chunks.push(current);
   return chunks;
+}
+
+function chunkOversizedFile(content: string, maxChunkSize: number): string[] {
+  const firstHunk = content.search(/^@@ /m);
+  const header = firstHunk === -1 ? "" : content.slice(0, firstHunk);
+  const bodies = firstHunk === -1
+    ? [content]
+    : content.slice(firstHunk).split(/(?=^@@ )/m).filter(Boolean);
+  if (header && maxChunkSize <= header.length) {
+    throw new RangeError(`maxChunkSize must exceed the ${header.length}-character diff header`);
+  }
+  const prefix = header;
+  const bodyLimit = Math.max(1, maxChunkSize - prefix.length);
+  const pages: string[] = [];
+  let page = prefix;
+
+  const flush = () => {
+    if (page.length > prefix.length || (prefix === "" && page)) pages.push(page);
+    page = prefix;
+  };
+
+  for (const body of bodies) {
+    if (body.length > bodyLimit) {
+      flush();
+      for (let offset = 0; offset < body.length; offset += bodyLimit) {
+        pages.push(prefix + body.slice(offset, offset + bodyLimit));
+      }
+      continue;
+    }
+    if (page.length + body.length > maxChunkSize) flush();
+    page += body;
+  }
+  flush();
+  return pages;
 }

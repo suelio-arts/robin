@@ -14,11 +14,10 @@ on:
         type: string
         default: ""
       request-changes:
-        description: "Whether a high severity finding submits a blocking REQUEST_CHANGES review. true posts REQUEST_CHANGES; false always posts COMMENT (advisor mode). Omit to use the repo config, which defaults to true."
+        description: "Whether Robin posts REQUEST_CHANGES for high findings and APPROVE for a clean head. false always posts COMMENT."
         required: false
         type: boolean
-        # No default: omitted must stay unset so .github/robin.yml can still win.
-        # A boolean default of true would override repo-config advisor mode.
+        default: false
       max-diff-size:
         description: "Maximum diff characters sent to the model."
         required: false

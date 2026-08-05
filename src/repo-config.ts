@@ -92,7 +92,7 @@ export function resolveJsonResponseMode(actionInput: string, repoConfig?: RepoCo
   return repoConfig?.jsonResponseMode ?? true;
 }
 
-/** Whether a High finding submits a blocking REQUEST_CHANGES review. Default true (gatekeeper). */
+/** Whether Robin requests changes on High findings and approves clean heads. Default true. */
 export function resolveRequestChanges(actionInput: string, repoConfig?: RepoConfig): boolean {
   if (actionInput === "true") return true;
   if (actionInput === "false") return false;

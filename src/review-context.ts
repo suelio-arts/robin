@@ -65,26 +65,49 @@ export async function buildFileContext(
     }
   }
 
+  let treePaths: string[] = [];
   if (remaining > 0) {
-    const paths = await git.getTreePaths(owner, repo, head);
-    const configurations = paths
-      .filter((path) => /(?:^|\/)(?:AGENTS\.md|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path))
+    treePaths = await git.getTreePaths(owner, repo, head);
+    const configurations = treePaths
+      .filter(isConfigurationPath)
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-    for (const path of configurations.slice(0, 4)) {
+    for (const path of configurations.filter((path) => !fetched.has(`${head}:${path}`)).slice(0, 4)) {
       const key = `${head}:${path}`;
       if (fetched.has(key)) continue;
       fetched.add(key);
       const content = await git.getFileContent(owner, repo, path, head);
       if (!content) continue;
-      const value = excerpt(content, Math.min(6000, remaining));
+      const value = excerpt(content, Math.min(RELATED_LIMIT, remaining));
       sections.push(`HEAD REPOSITORY CONFIG: ${path}\n${value}`);
       remaining -= value.length;
       if (remaining <= 0) break;
     }
-    const conventions = paths
+  }
+
+  if (remaining > 0) {
+    const paths = [...new Set((await Promise.all(
+      terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term))
+    )).flat())]
+      .filter((path) => !changedPaths.includes(path) && !isConfigurationPath(path) && !fetched.has(`${head}:${path}`))
+      .sort((left, right) => repositorySearchAffinity(right, changedPaths) - repositorySearchAffinity(left, changedPaths) || left.localeCompare(right));
+    for (const path of paths.slice(0, 12)) {
+      const key = `${head}:${path}`;
+      fetched.add(key);
+      const content = await git.getFileContent(owner, repo, path, head);
+      if (!content) continue;
+      const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
+      if (!focused) continue;
+      sections.push(`HEAD REPOSITORY SEARCH MATCH: ${path}\n${focused}`);
+      remaining -= focused.length;
+      if (remaining <= 0) break;
+    }
+  }
+
+  if (remaining > 0) {
+    const conventions = treePaths
       .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-    for (const path of conventions.slice(0, 12)) {
+    for (const path of conventions.filter((path) => !fetched.has(`${head}:${path}`)).slice(0, 12)) {
       const key = `${head}:${path}`;
       if (fetched.has(key)) continue;
       fetched.add(key);
@@ -99,26 +122,11 @@ export async function buildFileContext(
     }
   }
 
-  if (remaining > 0) {
-    const paths = [...new Set((await Promise.all(
-      terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term))
-    )).flat())].filter((path) => !changedPaths.includes(path));
-    for (const path of paths.slice(0, 12)) {
-      const key = `${head}:${path}`;
-      if (fetched.has(key)) continue;
-      fetched.add(key);
-      const content = await git.getFileContent(owner, repo, path, head);
-      if (!content) continue;
-      const focused = matchingNeighborhoods(content, terms, Math.min(RELATED_LIMIT, remaining));
-      if (!focused) continue;
-      sections.push(`HEAD REPOSITORY SEARCH MATCH: ${path}\n${focused}`);
-      remaining -= focused.length;
-      if (remaining <= 0) break;
-    }
-  }
-
-
   return sections.join("\n\n");
+}
+
+function isConfigurationPath(path: string): boolean {
+  return /(?:^|\/)(?:AGENTS\.md|CLAUDE\.md|firebase\.json|package\.json|pyproject\.toml|ruff\.toml|tsconfig(?:\.[^.]+)?\.json|\.eslintrc(?:\.[^.]+)?|\.swiftlint\.yml)$/i.test(path);
 }
 
 function pathAffinity(path: string, changedPaths: string[]): number {
@@ -131,11 +139,24 @@ function pathAffinity(path: string, changedPaths: string[]): number {
   }));
 }
 
+function repositorySearchAffinity(path: string, changedPaths: string[]): number {
+  const documentationPriority = changedPaths.some((changed) => changed.startsWith("docs/")) && /(?:^|\/)README(?:\.|$)/i.test(path) ? 100 : 0;
+  return documentationPriority + pathAffinity(path, changedPaths);
+}
+
 function changedIdentifiers(diff: string): string[] {
   const counts = new Map<string, number>();
   for (const line of diff.split("\n")) {
-    if (!line.startsWith("+") || line.startsWith("+++")) continue;
-    for (const term of line.match(/[A-Za-z_$][A-Za-z0-9_$]{4,}/g) || []) {
+    if ((!line.startsWith("+") && !line.startsWith("-")) || /^(?:\+\+\+|---) (?:[ab]\/|\/dev\/null)/.test(line)) continue;
+    const hashes = [...line.matchAll(/\b[0-9a-f]{12,}\b/gi)];
+    for (const hash of hashes) {
+      counts.set(hash[0], (counts.get(hash[0]) || 0) + 1);
+    }
+    for (const match of line.matchAll(/[A-Za-z_$][A-Za-z0-9_$]{4,}/g)) {
+      const start = match.index;
+      const end = start + match[0].length;
+      if (hashes.some((hash) => start < (hash.index + hash[0].length) && end > hash.index)) continue;
+      const term = match[0];
       if (/^(const|return|function|async|await|false|true|undefined|interface|import|from)$/.test(term)) continue;
       counts.set(term, (counts.get(term) || 0) + 1);
     }

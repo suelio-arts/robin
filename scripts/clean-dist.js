@@ -24,6 +24,14 @@ function main() {
     process.exit(1);
   }
 
+  const bundlePath = path.join(distDir, "index.js");
+  if (fs.existsSync(bundlePath)) {
+    const bundle = fs.readFileSync(bundlePath, "utf8")
+      .replace(/\r\n/g, "\n")
+      .replace(/[ \t]+$/gm, "");
+    fs.writeFileSync(bundlePath, bundle);
+  }
+
   for (const ent of entries) {
     if (ent.name === "index.js") {
       continue;

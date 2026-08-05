@@ -101,6 +101,75 @@ describe("buildFileContext", () => {
     expect(context).toContain("value.trim()");
   });
 
+  it("searches removed hashes and includes nearby Firebase configuration", async () => {
+    const oldHash = "304b4dc52a563af576f1a6977958471f922701a62391487204dff976096c909a";
+    const files: Record<string, string> = {
+      "head:web/qr/page.ts": "const hash = \"new-hash\";",
+      "base:web/qr/page.ts": `const hash = "${oldHash}";`,
+      "head:docs/release.md": `Expected hash: ${oldHash}`,
+      "head:web/CLAUDE.md": "Studio saves rebuild complete projected state.",
+      "head:web/firebase.json": '{"headers":[{"source":"*-v@(1|2|3|4|5|6|7).mjs"}]}',
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => ["docs/release.md", "web/CLAUDE.md", "web/firebase.json"],
+      searchPaths: async (_owner: string, _repo: string, query: string) => query === oldHash ? ["web/firebase.json", "docs/release.md"] : [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/web/qr/page.ts b/web/qr/page.ts",
+      "--- a/web/qr/page.ts",
+      "+++ b/web/qr/page.ts",
+      `-const hash = "${oldHash}";`,
+      '+const hash = "new-hash";',
+    ].join("\n"), "base", "head");
+    expect(context).toContain("HEAD REPOSITORY CONFIG: web/firebase.json");
+    expect(context).toContain("HEAD REPOSITORY CONFIG: web/CLAUDE.md");
+    expect(context).toContain("HEAD REPOSITORY SEARCH MATCH: docs/release.md");
+    expect(context).toContain(oldHash);
+    expect(context).toContain('"source":"*-v@(1|2|3|4|5|6|7).mjs"');
+    expect(context.indexOf("HEAD REPOSITORY CONFIG")).toBeLessThan(context.indexOf("HEAD REPOSITORY SEARCH MATCH"));
+  });
+
+  it("reserves context for configuration before repository search matches", async () => {
+    const files: Record<string, string> = {
+      "head:src/change.ts": "canonicalOperation();",
+      "head:firebase.json": '{"hosting":{"headers":[]}}',
+      ...Object.fromEntries(Array.from({length: 12}, (_, index) => [
+        `head:src/match-${index}.ts`,
+        Array.from({length: 2000}, () => "canonicalOperation").join("\n"),
+      ])),
+    };
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => ["firebase.json"],
+      searchPaths: async () => Array.from({length: 12}, (_, index) => `src/match-${index}.ts`),
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/src/change.ts b/src/change.ts",
+      "+++ b/src/change.ts",
+      "+canonicalOperation();",
+    ].join("\n"), "base", "head");
+
+    expect(context).toContain("HEAD REPOSITORY CONFIG: firebase.json");
+    expect(context).toContain("HEAD REPOSITORY SEARCH MATCH");
+    expect(context.indexOf("HEAD REPOSITORY CONFIG")).toBeLessThan(context.indexOf("HEAD REPOSITORY SEARCH MATCH"));
+  });
+
+  it("searches identifiers from source lines beginning with increment operators", async () => {
+    const queries: string[] = [];
+    await buildFileContext({
+      getFileContent: async () => "",
+      getTreePaths: async () => [],
+      searchPaths: async (_owner: string, _repo: string, query: string) => { queries.push(query); return []; },
+    }, "o", "r", [
+      "diff --git a/src/counter.ts b/src/counter.ts",
+      "+++ b/src/counter.ts",
+      "+++counterValue;",
+    ].join("\n"), "base", "head");
+
+    expect(queries).toContain("counterValue");
+  });
+
   it("focuses oversized changed files on matching code beyond the head and tail", async () => {
     const lines = Array.from({length: 4000}, (_, index) => `const filler${index} = ${index};`);
     lines[2000] = "function canonicalOperation() { return persistedValue.trim(); }";

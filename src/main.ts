@@ -17,12 +17,12 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
+import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
-import { buildContractSearchEvidence, parseContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
+import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -237,6 +237,7 @@ async function run(): Promise<void> {
       );
       return;
     }
+    const reviewedPaths = changedHeadPaths(reviewDiff);
 
     const reviewChunks = splitDiffIntoFiles(reviewDiff).flatMap(({ content }) =>
       chunkDiffByFile(content, maxDiffSize)
@@ -308,7 +309,15 @@ async function run(): Promise<void> {
           const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
           return runReviewPipeline(
             llm,
-            async (queries) => buildContractSearchEvidence(gitUtils, owner, repo, headRef, queries),
+            async (queries, changedPaths, counterevidence = false) => buildContractSearchEvidence(
+              gitUtils,
+              owner,
+              repo,
+              headRef,
+              queries,
+              changedPaths,
+              {counterevidence, reviewedPaths}
+            ),
             chunk,
             context,
             reviewInstructions,
@@ -705,7 +714,7 @@ async function runReview(
 
 async function runReviewPipeline(
   llm: LLMClient,
-  searchContracts: (queries: string[]) => Promise<string>,
+  searchContracts: (queries: string[], changedPaths: string[], counterevidence?: boolean) => Promise<string>,
   diff: string,
   context: string,
   reviewInstructions: string,
@@ -736,17 +745,19 @@ async function runReviewPipeline(
   for (let index = 0; index < remainingPasses.length; index += 2) {
     discovery.push(...await Promise.all(remainingPasses.slice(index, index + 2).map(discover)));
   }
+  let contractEvidence = "";
   if (isContractChunk(diff)) {
     const plan = await llm.chatCompletion(
       CONTRACT_SEARCH_PLANNER_INSTRUCTIONS,
       buildReviewInput(diff, context),
       true
     );
-    const evidence = await searchContracts(parseContractSearchPlan(plan.content));
+    const changedPaths = changedHeadPaths(diff);
+    contractEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff, context), changedPaths);
     discovery.push(await discover([
-      CONTRACT_SEARCH_DISCOVERY_PASS,
+      getContractSearchDiscoveryPass(diff),
       "CONTRACT SEARCH EVIDENCE:",
-      wrapContractSearchEvidence(evidence),
+      wrapContractSearchEvidence(contractEvidence),
     ].join("\n\n")));
   }
   const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
@@ -759,6 +770,19 @@ async function runReviewPipeline(
     [`CANDIDATE FINDINGS:\n${candidates}`, ...VERIFICATION_INSTRUCTIONS].join("\n\n")
   )).content);
   const precisionCandidates = buildPrecisionCandidates([...discovery, verified]);
+  let precisionEvidence = "";
+  if (precisionCandidates.length > 0) {
+    const plan = await llm.chatCompletion(
+      PRECISION_SEARCH_PLANNER_INSTRUCTIONS,
+      [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"),
+      true
+    );
+    precisionEvidence = await searchContracts(
+      completeContractSearchPlan(plan.content, diff, context, {prioritizePlanned: true}),
+      changedHeadPaths(diff),
+      true
+    );
+  }
   const precisionPrompt = [
     reviewInstructions,
     ...PRECISION_INSTRUCTIONS,
@@ -766,8 +790,10 @@ async function runReviewPipeline(
   const precisionInput = [
     "CANDIDATES:",
     JSON.stringify(precisionCandidates),
+    contractEvidence && `DISCOVERY CONTRACT EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
+    precisionEvidence && `CANDIDATE COUNTEREVIDENCE:\n${wrapContractSearchEvidence(precisionEvidence)}`,
     buildReviewInput(diff, context),
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
   let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
   let precise: StructuredReview;
   try {

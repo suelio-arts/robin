@@ -142,16 +142,25 @@ async function main() {
         context,
         "```",
       ].join("\n");
-      const discovery = await Promise.all(DISCOVERY_PASSES.map((instructions) =>
-        review(getReviewPrompt(instructions), reviewInput)
-      ));
+      const reviewPrompt = getReviewPrompt();
+      const discover = (instructions: string) => review(
+        reviewPrompt,
+        `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
+      );
+      const [firstPass, ...remainingPasses] = DISCOVERY_PASSES;
+      const discovery = [
+        await discover(firstPass),
+        ...await Promise.all(remainingPasses.map(discover)),
+      ];
       const candidates = discovery.map((candidate) =>
         asReview(JSON.parse(candidate.choices[0]?.message.content || "{}"))
       );
-      const verification = await review(getReviewPrompt(VERIFICATION_INSTRUCTIONS.join("\n")), [
+      const verification = await review(reviewPrompt, [
         reviewInput,
         "CANDIDATE FINDINGS:",
         JSON.stringify(candidates),
+        "REVIEW FOCUS:",
+        VERIFICATION_INSTRUCTIONS.join("\n"),
       ].join("\n\n"));
       const verified = asReview(JSON.parse(verification.choices[0]?.message.content || "{}"));
       const precisionCandidates = buildPrecisionCandidates([...candidates, verified]);

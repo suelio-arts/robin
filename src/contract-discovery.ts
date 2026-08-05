@@ -161,7 +161,10 @@ export async function buildContractSearchEvidence(
       continue;
     }
     paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
-    for (const path of selectLayerDiversePaths(paths, MAX_PATHS_PER_QUERY)) {
+    const selectedPaths = options.counterevidence
+      ? paths.slice(0, MAX_PATHS_PER_QUERY)
+      : selectLayerDiversePaths(paths, MAX_PATHS_PER_QUERY);
+    for (const path of selectedPaths) {
       if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0) continue;
       seen.add(path);
       let content: string;

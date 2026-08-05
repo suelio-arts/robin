@@ -187,6 +187,23 @@ describe("contract discovery", () => {
     expect(evidence).toContain("backend/types/schema.ts [CHANGED IN THIS PR]");
   });
 
+  it("keeps multiple authoritative same-layer files for counterevidence", async () => {
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async () => [
+        "studio/web/js/editor.mjs",
+        "backend/types/schema.ts",
+        "backend/api/story-writer.ts",
+        "backend/api/story-handler.ts",
+        "ios/App/Story.swift",
+      ],
+      getFileContent: async (_owner, _repo, path) => path,
+    }, "o", "r", "head", ["title"], ["backend/functions/studio-simulator.ts"], {counterevidence: true});
+
+    expect(evidence).toContain("backend/types/schema.ts");
+    expect(evidence).toContain("backend/api/story-writer.ts");
+    expect(evidence).toContain("backend/api/story-handler.ts");
+  });
+
   it("keeps cross-layer consumers instead of filling evidence from one directory", async () => {
     const evidence = await buildContractSearchEvidence({
       searchPaths: async () => [

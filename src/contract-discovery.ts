@@ -92,7 +92,8 @@ export async function buildContractSearchEvidence(
   repo: string,
   head: string,
   queries: string[],
-  changedPaths: string[] = []
+  changedPaths: string[] = [],
+  options: {counterevidence?: boolean; reviewedPaths?: string[]} = {}
 ): Promise<string> {
   const seen = new Set<string>();
   const sections: string[] = [];
@@ -104,7 +105,7 @@ export async function buildContractSearchEvidence(
     } catch {
       continue;
     }
-    paths.sort((left, right) => contractPathAffinity(right, changedPaths) - contractPathAffinity(left, changedPaths) || left.localeCompare(right));
+    paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
     for (const path of paths.slice(0, MAX_PATHS_PER_QUERY)) {
       if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0) continue;
       seen.add(path);
@@ -115,7 +116,8 @@ export async function buildContractSearchEvidence(
         continue;
       }
       if (!content) continue;
-      const header = `HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n`;
+      const changedMarker = options.reviewedPaths?.includes(path) ? " [CHANGED IN THIS PR]" : "";
+      const header = `HEAD CONTRACT SEARCH MATCH (${query}): ${path}${changedMarker}\n`;
       const framing = header.length + (sections.length ? 2 : 0);
       const limit = Math.min(FILE_LIMIT, remaining - framing);
       if (limit <= 0) continue;
@@ -125,6 +127,13 @@ export async function buildContractSearchEvidence(
     }
   }
   return sections.join("\n\n");
+}
+
+function contractPathScore(path: string, changedPaths: string[], counterevidence = false): number {
+  const authority = counterevidence && /(?:^|[/_.-])(?:schema|types?|validator|validation|generator|generate|serializer|writer)(?:[/_.-]|$)/i.test(path)
+    ? 1000
+    : counterevidence && /(?:^|\/)(?:backend|server|api)(?:\/|$)/i.test(path) ? 300 : 0;
+  return authority + contractPathAffinity(path, changedPaths);
 }
 
 function contractPathAffinity(path: string, changedPaths: string[]): number {

@@ -169,7 +169,7 @@ function decodeGitQuotedPath(value) {
     }
     return Buffer.from(bytes).toString("utf8");
 }
-async function buildContractSearchEvidence(git, owner, repo, head, queries, changedPaths = []) {
+async function buildContractSearchEvidence(git, owner, repo, head, queries, changedPaths = [], options = {}) {
     const seen = new Set();
     const sections = [];
     let remaining = TOTAL_LIMIT;
@@ -181,7 +181,7 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries, chan
         catch {
             continue;
         }
-        paths.sort((left, right) => contractPathAffinity(right, changedPaths) - contractPathAffinity(left, changedPaths) || left.localeCompare(right));
+        paths.sort((left, right) => contractPathScore(right, changedPaths, options.counterevidence) - contractPathScore(left, changedPaths, options.counterevidence) || left.localeCompare(right));
         for (const path of paths.slice(0, MAX_PATHS_PER_QUERY)) {
             if (seen.has(path) || seen.size >= MAX_PATHS || remaining <= 0)
                 continue;
@@ -195,7 +195,8 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries, chan
             }
             if (!content)
                 continue;
-            const header = `HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n`;
+            const changedMarker = options.reviewedPaths?.includes(path) ? " [CHANGED IN THIS PR]" : "";
+            const header = `HEAD CONTRACT SEARCH MATCH (${query}): ${path}${changedMarker}\n`;
             const framing = header.length + (sections.length ? 2 : 0);
             const limit = Math.min(FILE_LIMIT, remaining - framing);
             if (limit <= 0)
@@ -206,6 +207,12 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries, chan
         }
     }
     return sections.join("\n\n");
+}
+function contractPathScore(path, changedPaths, counterevidence = false) {
+    const authority = counterevidence && /(?:^|[/_.-])(?:schema|types?|validator|validation|generator|generate|serializer|writer)(?:[/_.-]|$)/i.test(path)
+        ? 1000
+        : counterevidence && /(?:^|\/)(?:backend|server|api)(?:\/|$)/i.test(path) ? 300 : 0;
+    return authority + contractPathAffinity(path, changedPaths);
 }
 function contractPathAffinity(path, changedPaths) {
     const tokens = new Set(path.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4));
@@ -1465,7 +1472,7 @@ async function run() {
                 const reviews = await Promise.all(batch.map(async (chunk, offset) => {
                     core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
                     const context = await (0, review_context_1.buildFileContext)(gitUtils, owner, repo, chunk, baseRef, headRef);
-                    return runReviewPipeline(llm, async (queries, changedPaths) => (0, contract_discovery_1.buildContractSearchEvidence)(gitUtils, owner, repo, headRef, queries, changedPaths), chunk, context, reviewInstructions, useJsonMode);
+                    return runReviewPipeline(llm, async (queries, changedPaths, counterevidence = false) => (0, contract_discovery_1.buildContractSearchEvidence)(gitUtils, owner, repo, headRef, queries, changedPaths, { counterevidence, reviewedPaths: diffFiles.map(({ path }) => path) }), chunk, context, reviewInstructions, useJsonMode);
                 }));
                 for (const review of reviews) {
                     findings.summary += `${review.summary}\n`;
@@ -1802,7 +1809,7 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
     let precisionEvidence = "";
     if (precisionCandidates.length > 0) {
         const plan = await llm.chatCompletion(review_prompts_1.PRECISION_SEARCH_PLANNER_INSTRUCTIONS, [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"), true);
-        precisionEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff), (0, contract_discovery_1.changedHeadPaths)(diff));
+        precisionEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff), (0, contract_discovery_1.changedHeadPaths)(diff), true);
     }
     const precisionPrompt = [
         reviewInstructions,
@@ -2039,6 +2046,7 @@ exports.PRECISION_INSTRUCTIONS = [
     "Reject pre-existing behavior, unseen-caller assumptions, hypothetical configurations, refactor requests, and third-party signatures or provider contracts not proven by repository context or build output. Keep changed required test and harness code when it can false-pass its contract or fail its required gate. High-confidence language standard-library and platform API semantics are valid evidence.",
     "Reject missing key, translation, registry, schema, or symbol claims unless supplied repository evidence proves the absence; not seeing an entry is not evidence that it is missing.",
     "Exact-head repository context outranks omission from a filtered diff. Reject claims that a matching asset, schema, or companion file was not updated when supplied HEAD context proves its current value already matches the change.",
+    "Search evidence marked CHANGED IN THIS PR is code under review, not independent authority. A changed assertion can share the implementation bug and cannot by itself refute a candidate; trace the changed behavior through its unchanged consumers.",
     "For a claimed round-trip loss, require exact evidence that the value exists in the read projection and that the current writer persists it. An accepted request field, legacy recipe, transient build flag, or manually possible stored value is not proof of persisted state. Reject a bundled omission finding when any field used to establish its material impact is contradicted or unproven.",
     "A CLI option is required only when the supplied parser, validator, or invoked handler requires it; an older example command is not evidence. Before claiming malformed CLI input reaches a callable or mutation, trace every invoked payload-assembly and validation helper; reject the downstream-corruption claim if any helper blocks it, while keeping a proven opaque wrong-error finding distinct. Do not invent create/empty behavior for a command whose handler first loads an existing entity. Trace seeded maps through the final serializer before claiming removed keys fail validation, because serializers may iterate only selected IDs.",
     "Reject a missing mock-argument assertion when the changed implementation directly forwards the already validated input without a changed transformation, branch, or demonstrated wrong-target path. Keep incomplete contract assertions when the changed test explicitly claims full preservation but omits persisted fields represented by its fixture.",
@@ -2051,7 +2059,7 @@ exports.PRECISION_INSTRUCTIONS = [
     "For CLI input claims, trace all downstream local validation. Reject a candidate only when its claimed external effect is unreachable; a less-specific error alone is not material unless repository evidence defines that exact error as a contract. Keep local validation, exit status, and error-output defects in scope when the repository defines them.",
     "Return every passing root cause, not a ranked subset, but approve at most one representative ID per root cause, even when different malformed values reach the same missing guard and smallest fix. Repetition is not evidence.",
     "List every supplied candidate ID exactly once, either in approved or as a key of rejected. Do not omit or invent IDs.",
-    "For every approval, state four non-empty proof strings: trigger, path through the changed code, material impact, and exact supplied evidence. If any proof element is missing, reject the candidate.",
+    "For every approval, state four non-empty proof strings: trigger, path through the changed code, material impact, and exact supplied evidence establishing trigger reachability. The changed consumer, comments, and tests are not reachability evidence for a corrupt-type trigger; cite its producer, persisted writer, schema gap, or unvalidated external boundary. If any proof element is missing, reject the candidate.",
     "Return strict JSON only: {\"approved\":{\"c1\":{\"trigger\":\"...\",\"path\":\"...\",\"impact\":\"...\",\"evidence\":\"...\"}},\"rejected\":{\"c2\":\"short reason\"}}",
 ];
 function getReviewPrompt(extraInstructions = "") {

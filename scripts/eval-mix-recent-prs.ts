@@ -97,6 +97,7 @@ async function main() {
     const reviewChunks = splitDiffIntoFiles(diff)
       .filter(({ path }) => selectedFiles.size === 0 || selectedFiles.has(path))
       .flatMap(({ content }) => chunkDiffByFile(content, 50000));
+    const reviewedPaths = splitDiffIntoFiles(diff).map(({path}) => path);
     const responses = [];
     console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
     for (const [index, chunk] of reviewChunks.entries()) {
@@ -167,7 +168,8 @@ async function main() {
           "",
           testCase.head,
           contractQueries,
-          changedHeadPaths(chunk)
+          changedHeadPaths(chunk),
+          {reviewedPaths}
         );
         discovery.push(await discover([
           CONTRACT_SEARCH_DISCOVERY_PASS,
@@ -203,7 +205,8 @@ async function main() {
           "",
           testCase.head,
           precisionQueries,
-          changedHeadPaths(chunk)
+          changedHeadPaths(chunk),
+          {counterevidence: true, reviewedPaths}
         );
       }
       const precisionPrompt = PRECISION_INSTRUCTIONS.join("\n");

@@ -102,4 +102,16 @@ describe("contract discovery", () => {
 
     expect(evidence).toContain("studio/web/js/simulator.mjs");
   });
+
+  it("prioritizes cross-layer authority and marks reviewed files for precision", async () => {
+    const evidence = await buildContractSearchEvidence({
+      searchPaths: async () => ["studio/web/js/a.mjs", "studio/web/js/b.mjs", "studio/web/js/c.mjs", "backend/types/schema.ts", "studio/web/js/d.mjs"],
+      getFileContent: async (_owner, _repo, path) => path,
+    }, "o", "r", "head", ["title"], ["studio/web/js/editor.mjs"], {
+      counterevidence: true,
+      reviewedPaths: ["backend/types/schema.ts"],
+    });
+
+    expect(evidence).toContain("backend/types/schema.ts [CHANGED IN THIS PR]");
+  });
 });

@@ -308,7 +308,15 @@ async function run(): Promise<void> {
           const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
           return runReviewPipeline(
             llm,
-            async (queries, changedPaths) => buildContractSearchEvidence(gitUtils, owner, repo, headRef, queries, changedPaths),
+            async (queries, changedPaths, counterevidence = false) => buildContractSearchEvidence(
+              gitUtils,
+              owner,
+              repo,
+              headRef,
+              queries,
+              changedPaths,
+              {counterevidence, reviewedPaths: diffFiles.map(({path}) => path)}
+            ),
             chunk,
             context,
             reviewInstructions,
@@ -705,7 +713,7 @@ async function runReview(
 
 async function runReviewPipeline(
   llm: LLMClient,
-  searchContracts: (queries: string[], changedPaths: string[]) => Promise<string>,
+  searchContracts: (queries: string[], changedPaths: string[], counterevidence?: boolean) => Promise<string>,
   diff: string,
   context: string,
   reviewInstructions: string,
@@ -767,7 +775,7 @@ async function runReviewPipeline(
       [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"),
       true
     );
-    precisionEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff), changedHeadPaths(diff));
+    precisionEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff), changedHeadPaths(diff), true);
   }
   const precisionPrompt = [
     reviewInstructions,

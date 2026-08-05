@@ -10,7 +10,7 @@ import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, completeContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
 
-type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}> };
+type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
 type NegativeControl = EvalCase & { rejectedCandidates: RejectedCandidate[] };
 
@@ -56,7 +56,8 @@ function validateSnapshot(testCase: EvalCase): void {
   if (mergeBase !== testCase.base) {
     throw new Error(`PR ${testCase.pr}: base ${testCase.base} is not the merge base of ${testCase.head}`);
   }
-  for (const {file} of testCase.labels || []) {
+  for (const {file} of [...(testCase.labels || []), ...(testCase.rejectedCandidates || [])]) {
+    if (!file) throw new Error(`PR ${testCase.pr}: benchmark candidate is missing its file path`);
     execFileSync("git", ["cat-file", "-e", `${testCase.head}:${file}`], {cwd: mixRepo});
   }
 }

@@ -22,7 +22,7 @@ import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./com
 import { isPullRequestReviewEvent } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
-import { buildContractSearchEvidence, parseContractSearchPlan } from "./contract-discovery";
+import { buildContractSearchEvidence, parseContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -746,7 +746,7 @@ async function runReviewPipeline(
     discovery.push(await discover([
       CONTRACT_SEARCH_DISCOVERY_PASS,
       "CONTRACT SEARCH EVIDENCE:",
-      evidence || "No repository search matches were available.",
+      wrapContractSearchEvidence(evidence),
     ].join("\n\n")));
   }
   const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));

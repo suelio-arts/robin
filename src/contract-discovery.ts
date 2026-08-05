@@ -22,8 +22,8 @@ export function parseContractSearchPlan(content: string): string[] {
     .filter((query): query is string => typeof query === "string")
     .map((query) => query.trim())
     .filter((query) => query.length >= 2 && query.length <= 80)
-    .filter((query) => !/\b(?:repo|org|user|language|path):/i.test(query))
-    .filter((query) => /^[A-Za-z0-9_$./@:+ -]+$/.test(query))
+    .filter((query) => !/\b[A-Za-z][A-Za-z0-9_-]*:/.test(query))
+    .filter((query) => /^[A-Za-z0-9_$./@+ -]+$/.test(query))
   )].slice(0, MAX_QUERIES);
 }
 
@@ -55,12 +55,20 @@ export async function buildContractSearchEvidence(
       }
       if (!content) continue;
       const limit = Math.min(FILE_LIMIT, remaining);
+      const marker = "\n[... middle omitted ...]\n";
+      const available = limit - marker.length;
       const excerpt = content.length <= limit
         ? content
-        : `${content.slice(0, Math.floor(limit * 0.75))}\n[... middle omitted ...]\n${content.slice(-Math.floor(limit * 0.25))}`;
+        : available > 0
+          ? `${content.slice(0, Math.floor(available * 0.75))}${marker}${content.slice(-Math.ceil(available * 0.25))}`
+          : content.slice(0, limit);
       sections.push(`HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n${excerpt}`);
       remaining -= excerpt.length;
     }
   }
   return sections.join("\n\n");
+}
+
+export function wrapContractSearchEvidence(evidence: string): string {
+  return `<contract-search-evidence>\n${evidence || "No repository search matches were available."}\n</contract-search-evidence>`;
 }

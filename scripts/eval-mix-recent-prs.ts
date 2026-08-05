@@ -8,7 +8,7 @@ import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, P
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
-import { buildContractSearchEvidence, parseContractSearchPlan } from "../src/contract-discovery";
+import { buildContractSearchEvidence, parseContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
 
 type EvalCase = { pr: number; base: string; head: string; labels?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
@@ -167,7 +167,7 @@ async function main() {
         discovery.push(await discover([
           CONTRACT_SEARCH_DISCOVERY_PASS,
           "CONTRACT SEARCH EVIDENCE:",
-          evidence || "No repository search matches were available.",
+          wrapContractSearchEvidence(evidence),
         ].join("\n\n")));
       }
       const candidates = discovery.map((candidate) =>

@@ -32,10 +32,9 @@ const WORKFLOW_ONLY_INPUTS = new Set(["runner"]);
 /**
  * Defer-to-config knobs must not force a boolean default of true/false on the
  * reusable workflow — that would override `.github/robin.yml`.
- * - request-changes: string, default "" (omit → empty → repo config)
  * - use-json-response-mode: string, default ""
  */
-const DEFER_STRING_EMPTY_DEFAULT = ["request-changes", "use-json-response-mode"] as const;
+const DEFER_STRING_EMPTY_DEFAULT = ["use-json-response-mode"] as const;
 
 function parseActionInputs(source: string): string[] {
   // Scope to the inputs: section so a future outputs: block cannot pollute parity.
@@ -161,6 +160,12 @@ describe("reusable review workflow", () => {
       expect(block).toContain("type: string");
       expect(block).toContain('default: ""');
     }
+  });
+
+  it("keeps the reusable request-changes input boolean-compatible", () => {
+    const block = workflowCallInputBlock(reviewWorkflow, "request-changes");
+    expect(block).toContain("type: boolean");
+    expect(block).toContain("default: false");
   });
 
   it("documents every public action input in ADVANCED.md", () => {

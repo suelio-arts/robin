@@ -71,7 +71,7 @@ export async function buildFileContext(
     const configurations = treePaths
       .filter(isConfigurationPath)
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-    for (const path of configurations.slice(0, 4)) {
+    for (const path of configurations.filter((path) => !fetched.has(`${head}:${path}`)).slice(0, 4)) {
       const key = `${head}:${path}`;
       if (fetched.has(key)) continue;
       fetched.add(key);
@@ -107,7 +107,7 @@ export async function buildFileContext(
     const conventions = treePaths
       .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
       .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-    for (const path of conventions.slice(0, 12)) {
+    for (const path of conventions.filter((path) => !fetched.has(`${head}:${path}`)).slice(0, 12)) {
       const key = `${head}:${path}`;
       if (fetched.has(key)) continue;
       fetched.add(key);

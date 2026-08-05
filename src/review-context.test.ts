@@ -136,7 +136,7 @@ describe("buildFileContext", () => {
       "head:firebase.json": '{"hosting":{"headers":[]}}',
       ...Object.fromEntries(Array.from({length: 12}, (_, index) => [
         `head:src/match-${index}.ts`,
-        `canonicalOperation\n${"x".repeat(20000)}`,
+        Array.from({length: 2000}, () => "canonicalOperation").join("\n"),
       ])),
     };
     const git = {
@@ -151,6 +151,8 @@ describe("buildFileContext", () => {
     ].join("\n"), "base", "head");
 
     expect(context).toContain("HEAD REPOSITORY CONFIG: firebase.json");
+    expect(context).toContain("HEAD REPOSITORY SEARCH MATCH");
+    expect(context.indexOf("HEAD REPOSITORY CONFIG")).toBeLessThan(context.indexOf("HEAD REPOSITORY SEARCH MATCH"));
   });
 
   it("searches identifiers from source lines beginning with increment operators", async () => {

@@ -96,7 +96,12 @@ function excerptMatches(content, query, limit) {
     const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
     const separator = "\n[... omitted ...]\n";
     const maxWindows = Math.max(1, Math.floor((limit + separator.length) / (separator.length + 1)));
-    const matches = [...content.matchAll(pattern)].slice(0, Math.min(4, maxWindows));
+    const matches = [];
+    for (const match of content.matchAll(pattern)) {
+        matches.push(match);
+        if (matches.length === Math.min(4, maxWindows))
+            break;
+    }
     if (matches.length === 0)
         return content.slice(0, limit);
     const windowSize = Math.floor((limit - separator.length * (matches.length - 1)) / matches.length);
@@ -159,10 +164,14 @@ async function buildContractSearchEvidence(git, owner, repo, head, queries, chan
             }
             if (!content)
                 continue;
-            const limit = Math.min(FILE_LIMIT, remaining);
+            const header = `HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n`;
+            const framing = header.length + (sections.length ? 2 : 0);
+            const limit = Math.min(FILE_LIMIT, remaining - framing);
+            if (limit <= 0)
+                continue;
             const excerpt = excerptMatches(content, query, limit);
-            sections.push(`HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n${excerpt}`);
-            remaining -= excerpt.length;
+            sections.push(`${header}${excerpt}`);
+            remaining -= framing + excerpt.length;
         }
     }
     return sections.join("\n\n");
@@ -2266,7 +2275,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
         const configurations = treePaths
             .filter(isConfigurationPath)
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-        for (const path of configurations.slice(0, 4)) {
+        for (const path of configurations.filter((path) => !fetched.has(`${head}:${path}`)).slice(0, 4)) {
             const key = `${head}:${path}`;
             if (fetched.has(key))
                 continue;
@@ -2304,7 +2313,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
         const conventions = treePaths
             .filter((path) => /(?:^|[-_./])(registry|schema|schemas|contract|contracts|manifest|agents|package|pyproject|ruff|eslint|swiftlint|tsconfig)(?:[-_./]|$)/i.test(path))
             .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
-        for (const path of conventions.slice(0, 12)) {
+        for (const path of conventions.filter((path) => !fetched.has(`${head}:${path}`)).slice(0, 12)) {
             const key = `${head}:${path}`;
             if (fetched.has(key))
                 continue;

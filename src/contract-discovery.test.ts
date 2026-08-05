@@ -73,7 +73,7 @@ describe("contract discovery", () => {
         : path === "f" ? "needle".repeat(10000) : "x".repeat(6000),
     }, "o", "r", "head", ["first", "second", "needle"]);
 
-    expect(evidence.length).toBeLessThan(31000);
+    expect(evidence.length).toBeLessThanOrEqual(30000);
   });
 
   it("prioritizes contract matches related to the changed path", async () => {

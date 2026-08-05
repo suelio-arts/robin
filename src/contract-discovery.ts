@@ -14,7 +14,11 @@ function excerptMatches(content: string, query: string, limit: number): string {
   const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
   const separator = "\n[... omitted ...]\n";
   const maxWindows = Math.max(1, Math.floor((limit + separator.length) / (separator.length + 1)));
-  const matches = [...content.matchAll(pattern)].slice(0, Math.min(4, maxWindows));
+  const matches: RegExpMatchArray[] = [];
+  for (const match of content.matchAll(pattern)) {
+    matches.push(match);
+    if (matches.length === Math.min(4, maxWindows)) break;
+  }
   if (matches.length === 0) return content.slice(0, limit);
   const windowSize = Math.floor((limit - separator.length * (matches.length - 1)) / matches.length);
   return matches.map(({index = 0}) => {
@@ -82,10 +86,13 @@ export async function buildContractSearchEvidence(
         continue;
       }
       if (!content) continue;
-      const limit = Math.min(FILE_LIMIT, remaining);
+      const header = `HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n`;
+      const framing = header.length + (sections.length ? 2 : 0);
+      const limit = Math.min(FILE_LIMIT, remaining - framing);
+      if (limit <= 0) continue;
       const excerpt = excerptMatches(content, query, limit);
-      sections.push(`HEAD CONTRACT SEARCH MATCH (${query}): ${path}\n${excerpt}`);
-      remaining -= excerpt.length;
+      sections.push(`${header}${excerpt}`);
+      remaining -= framing + excerpt.length;
     }
   }
   return sections.join("\n\n");

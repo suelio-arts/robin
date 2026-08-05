@@ -1899,6 +1899,7 @@ const TRACKING_TRANSFORM_DISCOVERY_PASS = "Audit only image-target and tracked-a
 const TRACKING_TRANSFORM_STATE_PASS = "Build a state table for every image-target event and the exact source/time of position, rotation, and scale after that event. Report a regression when UPDATED or reacquisition writes some transform components from the new anchor while another component remains cached from recognition. This mixed-time pose is internally inconsistent regardless of whether the desired policy is world-fixed or target-following.";
 const DOCUMENTATION_CONSISTENCY_DISCOVERY_PASS = "Audit only repository documentation consistency. Treat operational docs as executable contracts. For every changed enabled/disabled, automatic/manual, trigger, release, or deployment claim, search unchanged sibling runbooks, subsystem docs, and root or platform READMEs. Report contradictory guidance when following the stale document would skip a required action or expect automation that no longer runs.";
 const ROUND_TRIP_DISCOVERY_PASS = "Audit only read-project-edit-rebuild round trips. Trace every authored persisted field through the read projection, override/edit payload, server handler, and reconstructed write. Report a field that is displayed or accepted but omitted from the override map or serializer so saving an unrelated edit silently deletes or replaces it.";
+const ROUND_TRIP_FIELD_MATRIX_PASS = "Build a field matrix for each newly projected, editable, or claimed-preserved value: read projection, client payload, server input, persistence write, and readback verification. Report any field present before save that a full rebuild handler accepts but does not persist, even when the client payload includes it.";
 function isContractChunk(chunk) {
     const paths = [...chunk.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
     const contractPath = paths.some((path) => path.startsWith(".github/workflows/")
@@ -1916,7 +1917,7 @@ function getDiscoveryPasses(chunk) {
     }
     if (/\b(?:OverridesById|buildStoryWalk|round.?trip|reconstruct(?:ed|ion)?)\b/i.test(chunk)
         || (/^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk))) {
-        return [ROUND_TRIP_DISCOVERY_PASS, ...passes.slice(1)];
+        return [ROUND_TRIP_DISCOVERY_PASS, passes[1], ROUND_TRIP_FIELD_MATRIX_PASS, ...passes.slice(3)];
     }
     return /\b(?:ImageTargetEvent|anchor\.(?:position|rotation|scale)|didUpdate)\b/.test(chunk)
         ? [TRACKING_TRANSFORM_DISCOVERY_PASS, passes[1], TRACKING_TRANSFORM_STATE_PASS, ...passes.slice(3)]

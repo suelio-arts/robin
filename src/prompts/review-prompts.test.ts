@@ -68,6 +68,7 @@ describe("getReviewPrompt", () => {
     expect(documentationPasses[0]).toContain("repository documentation consistency");
     const roundTripPasses = getDiscoveryPasses("diff --git a/src/studio.ts b/src/studio.ts\n+navNodeOverridesById\n+buildStoryWalk");
     expect(roundTripPasses[0]).toContain("read-project-edit-rebuild round trips");
+    expect(roundTripPasses[2]).toContain("field matrix");
     const projectedTitlePasses = getInitialDiscoveryPasses("diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts\n+title: localizedTitle");
     expect(projectedTitlePasses[0]).toContain("read-project-edit-rebuild round trips");
     expect(projectedTitlePasses).toHaveLength(4);

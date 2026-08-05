@@ -140,7 +140,7 @@ jobs:
   review:
     uses: antongulin/robin/.github/workflows/review.yml@main
     with:
-      request-changes: "false" # string; omit this line to defer to .github/robin.yml
+      request-changes: ${{ 'false' }} # string; omit to defer to .github/robin.yml
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}

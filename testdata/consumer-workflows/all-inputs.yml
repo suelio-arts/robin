@@ -22,7 +22,7 @@ jobs:
       fail-on-high: false
       reasoning-effort: low
       # String input preserves omission as empty so repository config can win.
-      request-changes: "false"
+      request-changes: ${{ 'false' }}
       max-diff-size: "25000"
       max-comments: "10"
       max-output-tokens: ""

@@ -1901,6 +1901,7 @@ const ROUND_TRIP_DISCOVERY_PASS = "Audit only read-project-edit-rebuild round tr
 function isContractChunk(chunk) {
     const paths = [...chunk.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
     const contractPath = paths.some((path) => path.startsWith(".github/workflows/")
+        || path.includes("studio-simulator")
         || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|harness|validate|validator|validation|verify|check|checks|gate|gates|aggregate|preflight|e2e|ci)(?:[/_.-]|$)/i.test(path));
     const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk);
     return contractPath || contractContent;
@@ -1912,7 +1913,8 @@ function getDiscoveryPasses(chunk) {
     if (/^diff --git a\/(?:docs\/[^ ]+|(?:[^/]+\/)*README(?:\.[^/]+)?) /m.test(chunk)) {
         return [DOCUMENTATION_CONSISTENCY_DISCOVERY_PASS, ...passes.slice(1)];
     }
-    if (/\b(?:OverridesById|buildStoryWalk|round.?trip|reconstruct(?:ed|ion)?)\b/i.test(chunk)) {
+    if (/\b(?:OverridesById|buildStoryWalk|round.?trip|reconstruct(?:ed|ion)?)\b/i.test(chunk)
+        || (/^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk))) {
         return [ROUND_TRIP_DISCOVERY_PASS, ...passes.slice(1)];
     }
     return /\b(?:ImageTargetEvent|anchor\.(?:position|rotation|scale)|didUpdate)\b/.test(chunk)
@@ -2213,7 +2215,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
     if (remaining > 0) {
         const paths = [...new Set((await Promise.all(terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term)))).flat())]
             .filter((path) => !changedPaths.includes(path) && !isConfigurationPath(path) && !fetched.has(`${head}:${path}`))
-            .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+            .sort((left, right) => repositorySearchAffinity(right, changedPaths) - repositorySearchAffinity(left, changedPaths) || left.localeCompare(right));
         for (const path of paths.slice(0, 12)) {
             const key = `${head}:${path}`;
             fetched.add(key);
@@ -2283,6 +2285,10 @@ function pathAffinity(path, changedPaths) {
             shared += 1;
         return shared;
     }));
+}
+function repositorySearchAffinity(path, changedPaths) {
+    const documentationPriority = changedPaths.some((changed) => changed.startsWith("docs/")) && /(?:^|\/)README(?:\.|$)/i.test(path) ? 100 : 0;
+    return documentationPriority + pathAffinity(path, changedPaths);
 }
 function changedIdentifiers(diff) {
     const counts = new Map();

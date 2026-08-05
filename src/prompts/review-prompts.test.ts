@@ -67,6 +67,9 @@ describe("getReviewPrompt", () => {
     expect(documentationPasses[0]).toContain("repository documentation consistency");
     const roundTripPasses = getDiscoveryPasses("diff --git a/src/studio.ts b/src/studio.ts\n+navNodeOverridesById\n+buildStoryWalk");
     expect(roundTripPasses[0]).toContain("read-project-edit-rebuild round trips");
+    const projectedTitlePasses = getInitialDiscoveryPasses("diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts\n+title: localizedTitle");
+    expect(projectedTitlePasses[0]).toContain("read-project-edit-rebuild round trips");
+    expect(projectedTitlePasses).toHaveLength(4);
     expect(getInitialDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("canonical sibling preflight/contract entry points");
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("server handler and persistence serializer");

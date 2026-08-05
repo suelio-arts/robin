@@ -70,7 +70,7 @@ export async function buildFileContext(
       terms.slice(0, 6).map((term) => git.searchPaths(owner, repo, term))
     )).flat())]
       .filter((path) => !changedPaths.includes(path) && !isConfigurationPath(path) && !fetched.has(`${head}:${path}`))
-      .sort((left, right) => pathAffinity(right, changedPaths) - pathAffinity(left, changedPaths) || left.localeCompare(right));
+      .sort((left, right) => repositorySearchAffinity(right, changedPaths) - repositorySearchAffinity(left, changedPaths) || left.localeCompare(right));
     for (const path of paths.slice(0, 12)) {
       const key = `${head}:${path}`;
       fetched.add(key);
@@ -133,6 +133,11 @@ function pathAffinity(path: string, changedPaths: string[]): number {
     while (left[shared] && left[shared] === right[shared]) shared += 1;
     return shared;
   }));
+}
+
+function repositorySearchAffinity(path: string, changedPaths: string[]): number {
+  const documentationPriority = changedPaths.some((changed) => changed.startsWith("docs/")) && /(?:^|\/)README(?:\.|$)/i.test(path) ? 100 : 0;
+  return documentationPriority + pathAffinity(path, changedPaths);
 }
 
 function changedIdentifiers(diff: string): string[] {

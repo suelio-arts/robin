@@ -24,6 +24,7 @@ export function isContractChunk(chunk: string): boolean {
   const paths = [...chunk.matchAll(/^diff --git a\/(.+?) b\//gm)].map((match) => match[1]);
   const contractPath = paths.some((path) =>
     path.startsWith(".github/workflows/")
+    || path.includes("studio-simulator")
     || /(?:^|[/_.-])(?:test|tests|spec|specs|fixture|fixtures|harness|validate|validator|validation|verify|check|checks|gate|gates|aggregate|preflight|e2e|ci)(?:[/_.-]|$)/i.test(path)
   );
   const contractContent = /\b(?:validator|validation|fixture|harness|aggregate|preflight)\b/i.test(chunk);
@@ -37,7 +38,8 @@ export function getDiscoveryPasses(chunk: string): string[] {
   if (/^diff --git a\/(?:docs\/[^ ]+|(?:[^/]+\/)*README(?:\.[^/]+)?) /m.test(chunk)) {
     return [DOCUMENTATION_CONSISTENCY_DISCOVERY_PASS, ...passes.slice(1)];
   }
-  if (/\b(?:OverridesById|buildStoryWalk|round.?trip|reconstruct(?:ed|ion)?)\b/i.test(chunk)) {
+  if (/\b(?:OverridesById|buildStoryWalk|round.?trip|reconstruct(?:ed|ion)?)\b/i.test(chunk)
+      || (/^diff --git a\/[^ ]*(?:studio|editor|simulator)[^ ]* /mi.test(chunk) && /^\+\s*title\s*:/m.test(chunk))) {
     return [ROUND_TRIP_DISCOVERY_PASS, ...passes.slice(1)];
   }
   return /\b(?:ImageTargetEvent|anchor\.(?:position|rotation|scale)|didUpdate)\b/.test(chunk)

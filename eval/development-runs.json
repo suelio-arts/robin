@@ -140,6 +140,30 @@
       "negativeControlsRejected": 3,
       "negativeControlsTotal": 4,
       "notes": "Frozen before review. Caught the only CodeRabbit root and two independently verified additional defects. Focused subscription run is development-only and intentionally cannot satisfy the complete-corpus promotion scorer."
+    },
+    {
+      "artifactSha256": "2be290a99799fc7345d7b9c726cc9997bb578bad1664b58a07dd1eceb4f6a645",
+      "pipelineSha": "5f728569b900ef97e1f1b2ee408e10869aa91301",
+      "promptSha256": "ea99c44c14ae936b427492138a649a7c187f77457001d0c3f85bb3b44229d8c9",
+      "effort": "low",
+      "transport": "subscription",
+      "layout": "packed-adversarial",
+      "status": "complete-blind-development-miss",
+      "selection": [
+        "352:447f9088ce90a725f1ea7ff294e6fcc85f25169e",
+        "353:50b3c98ea6da711700f32775f1b658be7427748e"
+      ],
+      "durationMs": 129693,
+      "calls": 9,
+      "apiEquivalentUsd": 0.307087,
+      "coderabbitEquivalentUsd": 0.25,
+      "matchedReferenceRoots": 0,
+      "additionalRealFindings": 0,
+      "duplicateNoise": 0,
+      "falsePositives": 0,
+      "negativeControlsRejected": 3,
+      "negativeControlsTotal": 4,
+      "notes": "Same frozen blind selection as high. Missed the only CodeRabbit root and both additional defects, so low is not a promotion candidate."
     }
   ]
 }

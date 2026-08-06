@@ -29,6 +29,13 @@ describe("MIX review benchmark", () => {
       negativeControlsRejected: 3,
       negativeControlsTotal: 4,
     }));
+    expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
+      artifactSha256: "2be290a99799fc7345d7b9c726cc9997bb578bad1664b58a07dd1eceb4f6a645",
+      status: "complete-blind-development-miss",
+      effort: "low",
+      matchedReferenceRoots: 0,
+      falsePositives: 0,
+    }));
   });
 
   it("keeps a non-trivial, unique historical corpus", () => {

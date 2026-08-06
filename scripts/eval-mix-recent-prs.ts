@@ -46,6 +46,7 @@ const MIX_REVIEW_INSTRUCTIONS = [
 ].join("\n");
 const EVAL_CALL_TIMEOUT_MS = 75_000;
 const EVAL_LAST_CALL_START_MS = 220_000;
+const EVAL_CHUNK_CONCURRENCY = 3;
 const client = new LLMClient(
   "rolly-agent",
   "",
@@ -238,7 +239,9 @@ function writeProgress(results: unknown[]): void {
       reviewedFileIds: [...reviewedFiles].sort(),
       calls: productionCalls.length,
       benchmarkCalls: calls.length,
-      callRecords: calls,
+      callRecords: [...calls].sort((left, right) =>
+        left.snapshotId.localeCompare(right.snapshotId) || left.id.localeCompare(right.id)
+      ),
       usage: sumUsage(productionCalls),
       benchmarkUsage: sumUsage(calls),
       pricing: evalConfig.transport === "api" ? LUNA_API_PRICING : {source: "subscription-unpriced"},
@@ -286,10 +289,14 @@ async function main() {
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     reviewChunks.flatMap(changedHeadPaths).forEach((path) => reviewedFiles.add(`${testCase.pr}:${testCase.head}:${path}`));
     const reviewedPaths = changedHeadPaths(diff);
+    console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
     const responses: unknown[] = [];
     results.push({pr: testCase.pr, head: testCase.head, chunks: responses});
-    console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
-    for (const [index, chunk] of reviewChunks.entries()) {
+    for (let offset = 0; offset < reviewChunks.length; offset += EVAL_CHUNK_CONCURRENCY) {
+      responses.push(...await Promise.all(reviewChunks
+        .slice(offset, offset + EVAL_CHUNK_CONCURRENCY)
+        .map(async (chunk, batchIndex) => {
+      const index = offset + batchIndex;
       console.log(`PR ${testCase.pr}: reviewing chunk ${index + 1}/${reviewChunks.length}`);
       const localGit = {
         getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => {
@@ -420,17 +427,15 @@ async function main() {
         } catch (error) {
           const reason = `Precision gate failed twice for PR ${testCase.pr} chunk ${index + 1}: ${error}`;
           console.warn(reason);
-          responses.push({
+          return {
             kind: "review-error",
             error: reason,
             candidates,
             usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
-          });
-          writeProgress(results);
-          continue;
+          };
         }
       }
-      responses.push({
+      return {
         candidates,
         response: approved,
         contractQueries,
@@ -438,7 +443,8 @@ async function main() {
         precisionQueries,
         precisionEvidence,
         usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
-      });
+      };
+        })));
       writeProgress(results);
     }
     finishSnapshot(id);

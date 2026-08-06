@@ -47,6 +47,8 @@ describe("MIX review benchmark", () => {
     expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
     expect(source).toContain("{prioritizePlanned: true}");
     expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");
+    expect(source).toContain(".slice(offset, offset + EVAL_CHUNK_CONCURRENCY)");
+    expect(source).toContain("left.snapshotId.localeCompare(right.snapshotId) || left.id.localeCompare(right.id)");
     expect(source).toContain("DISCOVERY CONTRACT EVIDENCE");
     expect(source).toContain("JSON.stringify({file: candidate.file, rootCause: candidate.rootCause})");
     expect(source).not.toContain("CANDIDATE: ${JSON.stringify(candidate)}");

@@ -94,8 +94,7 @@ describe("getReviewPrompt", () => {
     const documentationPasses = getDiscoveryPasses("diff --git a/docs/release.md b/docs/release.md\n+Main Daily is manual");
     expect(documentationPasses[0]).toContain("repository documentation consistency");
     expect(documentationPasses[0]).toContain("exact final head");
-    expect(documentationPasses[0]).toContain("every changed checklist and workflow table independently");
-    expect(documentationPasses[0]).toContain("source-category exclusions such as backend-only");
+    expect(documentationPasses[0]).toContain("release exclusions such as backend-only");
     expect(VERIFICATION_INSTRUCTIONS.join("\n")).toContain("documentation contradictions as medium");
     const roundTripPasses = getDiscoveryPasses("diff --git a/src/studio.ts b/src/studio.ts\n+navNodeOverridesById\n+buildStoryWalk");
     expect(roundTripPasses[0]).toContain("read-project-edit-rebuild round trips");

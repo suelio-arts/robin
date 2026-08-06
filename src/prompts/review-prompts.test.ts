@@ -1,4 +1,4 @@
-import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, getContractSearchDiscoveryPass, getDiscoveryPasses, getInitialDiscoveryPasses, getReviewPrompt } from "./review-prompts";
+import { CONTRACT_SEARCH_DISCOVERY_PASS, CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, DISCOVERY_PASSES, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getDiscoveryPasses, getInitialDiscoveryPasses, getReviewPrompt } from "./review-prompts";
 
 describe("getReviewPrompt", () => {
   it("includes the focused review passes", () => {
@@ -93,6 +93,9 @@ describe("getReviewPrompt", () => {
     expect(overlappingPasses[5]).toContain("repository-contract gaps");
     const documentationPasses = getDiscoveryPasses("diff --git a/docs/release.md b/docs/release.md\n+Main Daily is manual");
     expect(documentationPasses[0]).toContain("repository documentation consistency");
+    expect(documentationPasses[0]).toContain("exact final head");
+    expect(documentationPasses[0]).toContain("release exclusions such as backend-only");
+    expect(VERIFICATION_INSTRUCTIONS.join("\n")).toContain("documentation contradictions as medium");
     const roundTripPasses = getDiscoveryPasses("diff --git a/src/studio.ts b/src/studio.ts\n+navNodeOverridesById\n+buildStoryWalk");
     expect(roundTripPasses[0]).toContain("read-project-edit-rebuild round trips");
     expect(roundTripPasses[2]).toContain("field matrix");

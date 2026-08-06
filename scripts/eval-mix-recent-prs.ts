@@ -44,8 +44,8 @@ const MIX_REVIEW_INSTRUCTIONS = [
   "Medium findings are concrete non-blocking bugs. Put optional simplification in suggestions; omit style nits and repeated advice.",
   "Prefer hard cuts and root-cause fixes. Keep changes DRY, functional, lean, type-safe, fail-fast, and free of speculative fallbacks or abstractions.",
 ].join("\n");
-const EVAL_CALL_TIMEOUT_MS = 75_000;
-const EVAL_LAST_CALL_START_MS = 220_000;
+const EVAL_CALL_TIMEOUT_MS = 100_000;
+const EVAL_LAST_CALL_START_MS = 190_000;
 const EVAL_CHUNK_CONCURRENCY = 8;
 const client = new LLMClient(
   "rolly-agent",

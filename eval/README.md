@@ -75,6 +75,16 @@ For a focused rerun, select exact snapshots/files with `EVAL_HEADS` and
 `EVAL_FILES`; `EVAL_CHUNKS=2,3` selects one-based chunks after file filtering.
 File filters also constrain negative controls. Chunk filters skip negative controls because those cases are file-level, not chunked.
 
+Isolated repositories use the same evaluator with explicit inputs:
+
+```bash
+MIX_REPO=/path/to/repository EVAL_MANIFEST=eval/sandbox-prs.json npm run eval:mix -- /tmp/run.json
+```
+
+`sandbox-prs.json` is populated only from exact draft PR heads in the private
+`suelio-arts/robin-benchmark` repository. It never runs Robin on GitHub or merges
+fixture branches. Provider misses remain seeded labels instead of being erased.
+
 Score a finding only when it matches the PR, file, and root cause. Generic advice
 does not count. Bot agreement is not validation: incorrect bot findings belong in
 the negative controls. Run each candidate prompt at least three times before

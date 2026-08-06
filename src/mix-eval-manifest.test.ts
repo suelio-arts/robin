@@ -1,9 +1,21 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import manifest from "../eval/mix-recent-prs.json";
+import sandboxManifest from "../eval/sandbox-prs.json";
 import developmentRuns from "../eval/development-runs.json";
 
 describe("MIX review benchmark", () => {
+  it("keeps isolated sandbox heads frozen", () => {
+    const cases = sandboxManifest.holdoutCases;
+    expect(cases).toHaveLength(5);
+    expect(new Set(cases.map(({pr, head}) => `${pr}:${head}`))).toEqual(
+      new Set(sandboxManifest.blindHoldoutSnapshots)
+    );
+    expect(cases.flatMap(({labels}) => labels)).toHaveLength(5);
+    expect(cases.flatMap(({labels}) => labels).filter(({source}) => source === "CodeRabbit")).toHaveLength(4);
+    expect(cases.flatMap(({labels}) => labels).filter(({source}) => source === "Seeded")).toHaveLength(1);
+  });
+
   it("keeps a measured development-run ledger", () => {
     expect(developmentRuns.schemaVersion).toBe(1);
     expect(developmentRuns.runs.some(({status}) => status === "timeout")).toBe(true);
@@ -84,6 +96,7 @@ describe("MIX review benchmark", () => {
   it("keeps evaluation contract and precision discovery aligned with production", () => {
     const source = readFileSync(resolve("scripts/eval-mix-recent-prs.ts"), "utf8");
     expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
+    expect(source).toContain('process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"');
     expect(source).toContain("{prioritizePlanned: true}");
     expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");
     expect(source).toContain("const reviewChunks = chunkDiffByFile(selectedDiff, 50000)");

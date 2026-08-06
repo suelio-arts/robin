@@ -18,7 +18,7 @@ type NegativeControl = EvalCase & { rejectedCandidates: RejectedCandidate[] };
 
 const mixRepo = process.env.MIX_REPO || "/Users/rolly/Build/mix/mix-mono";
 const output = resolve(process.argv[2] || "eval/mix-recent-prs-results.json");
-const manifestSource = readFileSync(resolve("eval/mix-recent-prs.json"), "utf8");
+const manifestSource = readFileSync(resolve(process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"), "utf8");
 const manifestSha256 = createHash("sha256").update(manifestSource).digest("hex");
 const manifest = JSON.parse(manifestSource) as {
   developmentCases: EvalCase[];

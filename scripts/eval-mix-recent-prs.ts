@@ -46,7 +46,7 @@ const MIX_REVIEW_INSTRUCTIONS = [
 ].join("\n");
 const EVAL_CALL_TIMEOUT_MS = 75_000;
 const EVAL_LAST_CALL_START_MS = 220_000;
-const EVAL_CHUNK_CONCURRENCY = 3;
+const EVAL_CHUNK_CONCURRENCY = 8;
 const client = new LLMClient(
   "rolly-agent",
   "",

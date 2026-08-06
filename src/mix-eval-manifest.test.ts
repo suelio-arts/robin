@@ -7,13 +7,18 @@ import developmentRuns from "../eval/development-runs.json";
 describe("MIX review benchmark", () => {
   it("keeps isolated sandbox heads frozen", () => {
     const cases = sandboxManifest.holdoutCases;
-    expect(cases).toHaveLength(5);
+    expect(cases).toHaveLength(10);
     expect(new Set(cases.map(({pr, head}) => `${pr}:${head}`))).toEqual(
       new Set(sandboxManifest.blindHoldoutSnapshots)
     );
     expect(cases.flatMap(({labels}) => labels)).toHaveLength(5);
     expect(cases.flatMap(({labels}) => labels).filter(({source}) => source === "CodeRabbit")).toHaveLength(4);
     expect(cases.flatMap(({labels}) => labels).filter(({source}) => source === "Seeded")).toHaveLength(1);
+    expect(sandboxManifest.blindUpdatePairs).toHaveLength(5);
+    expect(sandboxManifest.holdoutNegativeControls).toHaveLength(5);
+    expect(new Set(sandboxManifest.blindNegativeSnapshots)).toEqual(
+      new Set(sandboxManifest.holdoutNegativeControls.map(({pr, head}) => `${pr}:${head}`))
+    );
   });
 
   it("keeps a measured development-run ledger", () => {

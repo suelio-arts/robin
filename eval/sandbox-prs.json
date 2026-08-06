@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "repository": "suelio-arts/robin-benchmark",
+  "blindHoldoutSnapshots": [
+    "2:0a85c6cbf0bcc2ce544a59bfb33259f199a71a77",
+    "3:9fac4da53ba1a3b5f24a687fb9484da5e4274ad1",
+    "4:78391fd272f8a19186f17ac0e32f92c2f9c04f97",
+    "5:01ddd427b038942361078f3e9a851e7a05f6b271",
+    "6:5193ef5b07527e9d54b7c74530c6e771e3c1f0cb",
+    "2:911d11498035c0b464d0598800781e076d985e21",
+    "3:09c85bbaebaf527e04bcf687bb61dbda2e0118d6",
+    "4:28cddbae0408172466bbd90bd502852996664e71",
+    "5:78b7954b405cacc262bebdc3aacc35bad14da7ad",
+    "6:0148f258bb0d00de7b03ae9fdc851b9eafcbac31"
+  ],
+  "blindNegativeSnapshots": [
+    "2:911d11498035c0b464d0598800781e076d985e21",
+    "3:09c85bbaebaf527e04bcf687bb61dbda2e0118d6",
+    "4:28cddbae0408172466bbd90bd502852996664e71",
+    "5:78b7954b405cacc262bebdc3aacc35bad14da7ad",
+    "6:0148f258bb0d00de7b03ae9fdc851b9eafcbac31"
+  ],
+  "blindUpdatePairs": [
+    {"before": "2:0a85c6cbf0bcc2ce544a59bfb33259f199a71a77", "after": "2:911d11498035c0b464d0598800781e076d985e21"},
+    {"before": "3:9fac4da53ba1a3b5f24a687fb9484da5e4274ad1", "after": "3:09c85bbaebaf527e04bcf687bb61dbda2e0118d6"},
+    {"before": "4:78391fd272f8a19186f17ac0e32f92c2f9c04f97", "after": "4:28cddbae0408172466bbd90bd502852996664e71"},
+    {"before": "5:01ddd427b038942361078f3e9a851e7a05f6b271", "after": "5:78b7954b405cacc262bebdc3aacc35bad14da7ad"},
+    {"before": "6:5193ef5b07527e9d54b7c74530c6e771e3c1f0cb", "after": "6:0148f258bb0d00de7b03ae9fdc851b9eafcbac31"}
+  ],
+  "developmentCases": [],
+  "unscoredHistoricalNotes": [],
+  "holdoutCases": [
+    {
+      "pr": 2,
+      "base": "09cf642aff2913a1753fd6e88d43a09e2a4f4b6c",
+      "head": "0a85c6cbf0bcc2ce544a59bfb33259f199a71a77",
+      "generation": 1,
+      "changedFiles": ["ios/AR/Shared/WalkDraftStore.swift"],
+      "labels": [
+        {
+          "file": "ios/AR/Shared/WalkDraftStore.swift",
+          "rootCause": "removing atomic replacement lets interruption during background draft persistence destroy the previous recoverable draft",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 3,
+      "base": "a2bfbc27ed28782c1b948e018d29316e296f2f01",
+      "head": "9fac4da53ba1a3b5f24a687fb9484da5e4274ad1",
+      "generation": 1,
+      "changedFiles": ["studio/web/js/preview-controller.mjs"],
+      "labels": [
+        {
+          "file": "studio/web/js/preview-controller.mjs",
+          "rootCause": "unmount removes a newly created callback instead of the registered resize handler, leaking listeners across mount cycles",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 4,
+      "base": "fde12d4c407787582cd14ae02f7383c9872f2174",
+      "head": "78391fd272f8a19186f17ac0e32f92c2f9c04f97",
+      "generation": 1,
+      "changedFiles": ["backend/functions/src/storage/artifact-path.ts"],
+      "labels": [
+        {
+          "file": "backend/functions/src/storage/artifact-path.ts",
+          "rootCause": "resolving an untrusted artifact name without containment validation permits absolute-path and parent-directory escape from the private root",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 5,
+      "base": "6e40b7894c570ae9ecf7170c59f14331086bb387",
+      "head": "01ddd427b038942361078f3e9a851e7a05f6b271",
+      "generation": 1,
+      "changedFiles": ["studio/web/js/search-controller.mjs"],
+      "labels": [
+        {
+          "file": "studio/web/js/search-controller.mjs",
+          "rootCause": "an older search response can render after a newer request and overwrite the latest results because the generation guard was removed",
+          "source": "Seeded"
+        }
+      ]
+    },
+    {
+      "pr": 6,
+      "base": "6f1407e80c901279b881d09a06e34badd4586d87",
+      "head": "5193ef5b07527e9d54b7c74530c6e771e3c1f0cb",
+      "generation": 1,
+      "changedFiles": ["backend/functions/src/services/private-walk-cache.ts"],
+      "labels": [
+        {
+          "file": "backend/functions/src/services/private-walk-cache.ts",
+          "rootCause": "keying a private-walk cache only by walk id returns one owner's cached walk to another user before ownership validation",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 2,
+      "base": "09cf642aff2913a1753fd6e88d43a09e2a4f4b6c",
+      "head": "911d11498035c0b464d0598800781e076d985e21",
+      "generation": 2,
+      "changedFiles": ["ios/AR/Shared/WalkDraftStore.swift"],
+      "labels": []
+    },
+    {
+      "pr": 3,
+      "base": "a2bfbc27ed28782c1b948e018d29316e296f2f01",
+      "head": "09c85bbaebaf527e04bcf687bb61dbda2e0118d6",
+      "generation": 2,
+      "changedFiles": ["studio/web/js/preview-controller.mjs"],
+      "labels": []
+    },
+    {
+      "pr": 4,
+      "base": "fde12d4c407787582cd14ae02f7383c9872f2174",
+      "head": "28cddbae0408172466bbd90bd502852996664e71",
+      "generation": 2,
+      "changedFiles": ["backend/functions/src/storage/artifact-path.ts"],
+      "labels": []
+    },
+    {
+      "pr": 5,
+      "base": "6e40b7894c570ae9ecf7170c59f14331086bb387",
+      "head": "78b7954b405cacc262bebdc3aacc35bad14da7ad",
+      "generation": 2,
+      "changedFiles": ["studio/web/js/search-controller.mjs"],
+      "labels": []
+    },
+    {
+      "pr": 6,
+      "base": "6f1407e80c901279b881d09a06e34badd4586d87",
+      "head": "0148f258bb0d00de7b03ae9fdc851b9eafcbac31",
+      "generation": 2,
+      "changedFiles": ["backend/functions/src/services/private-walk-cache.ts"],
+      "labels": []
+    }
+  ],
+  "holdoutNegativeControls": [
+    {
+      "pr": 2,
+      "base": "09cf642aff2913a1753fd6e88d43a09e2a4f4b6c",
+      "head": "911d11498035c0b464d0598800781e076d985e21",
+      "rejectedCandidates": [
+        {"file": "ios/AR/Shared/WalkDraftStore.swift", "rootCause": "background draft persistence no longer uses atomic replacement", "source": "CodeRabbit", "reason": "fixed at this exact head: data.write uses the atomic option"}
+      ]
+    },
+    {
+      "pr": 3,
+      "base": "a2bfbc27ed28782c1b948e018d29316e296f2f01",
+      "head": "09c85bbaebaf527e04bcf687bb61dbda2e0118d6",
+      "rejectedCandidates": [
+        {"file": "studio/web/js/preview-controller.mjs", "rootCause": "unmount removes a different resize callback and leaks the registered listener", "source": "CodeRabbit", "reason": "fixed at this exact head: removal reuses this.#onResize"}
+      ]
+    },
+    {
+      "pr": 4,
+      "base": "fde12d4c407787582cd14ae02f7383c9872f2174",
+      "head": "28cddbae0408172466bbd90bd502852996664e71",
+      "rejectedCandidates": [
+        {"file": "backend/functions/src/storage/artifact-path.ts", "rootCause": "untrusted artifact names can escape the private root", "source": "CodeRabbit", "reason": "fixed at this exact head: relative-path containment rejects parent and absolute escapes"}
+      ]
+    },
+    {
+      "pr": 5,
+      "base": "6e40b7894c570ae9ecf7170c59f14331086bb387",
+      "head": "78b7954b405cacc262bebdc3aacc35bad14da7ad",
+      "rejectedCandidates": [
+        {"file": "studio/web/js/search-controller.mjs", "rootCause": "an older search response can overwrite newer results", "source": "Seeded", "reason": "fixed at this exact head: the generation guard rejects stale responses before rendering"}
+      ]
+    },
+    {
+      "pr": 6,
+      "base": "6f1407e80c901279b881d09a06e34badd4586d87",
+      "head": "0148f258bb0d00de7b03ae9fdc851b9eafcbac31",
+      "rejectedCandidates": [
+        {"file": "backend/functions/src/services/private-walk-cache.ts", "rootCause": "private-walk cache hits can cross tenant boundaries", "source": "CodeRabbit", "reason": "fixed at this exact head: the cache key includes both user and walk ids"}
+      ]
+    }
+  ]
+}

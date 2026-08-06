@@ -1,4 +1,4 @@
-import { chunkDiffByFile, DEFAULT_SKIP_PATH_PATTERNS, filterDiff, matchPathPattern, shouldSkipPath } from "./diff-filter";
+import { chunkDiffByFile, DEFAULT_SKIP_PATH_PATTERNS, filterDiff, matchPathPattern, selectDiffFiles, shouldSkipPath } from "./diff-filter";
 
 describe("matchPathPattern", () => {
   it("matches lockfiles and dist paths", () => {
@@ -10,6 +10,12 @@ describe("matchPathPattern", () => {
 });
 
 describe("filterDiff", () => {
+  it("selects quoted Git paths by their decoded destination name", () => {
+    const quoted = 'diff --git "a/old/caf\\303\\251 name.ts" "b/studio/new/caf\\303\\251 name.ts"\n--- "a/old/caf\\303\\251 name.ts"\n+++ "b/studio/new/caf\\303\\251 name.ts"\n@@ -1 +1 @@\n-old\n+new\n';
+    expect(selectDiffFiles(quoted, new Set(["studio/new/café name.ts"]))).toBe(quoted);
+    expect(selectDiffFiles(quoted, new Set(["studio/other.ts"]))).toBe("");
+  });
+
   it("removes skipped file hunks from a unified diff", () => {
     const diff = [
       "diff --git a/package-lock.json b/package-lock.json",

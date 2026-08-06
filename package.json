@@ -29,7 +29,8 @@
     "lint": "eslint src/**/*.ts",
     "test": "jest && npm run typecheck:eval",
     "typecheck:eval": "tsc -p tsconfig.eval.json",
-    "eval:mix": "ts-node scripts/eval-mix-recent-prs.ts",
+    "eval:mix": "ts-node --project tsconfig.eval.json scripts/eval-mix-recent-prs.ts",
+    "eval:score": "ts-node --project tsconfig.eval.json scripts/score-mix-eval.ts",
     "package": "ncc build dist/index.js -o dist --license licenses.txt && npm run clean"
   },
   "keywords": [

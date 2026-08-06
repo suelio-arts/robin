@@ -1,3 +1,5 @@
+import { changedHeadPaths } from "./contract-discovery";
+
 export const DEFAULT_SKIP_PATH_PATTERNS = [
   "**/package-lock.json",
   "**/yarn.lock",
@@ -62,6 +64,14 @@ export function splitDiffIntoFiles(diff: string): Array<{ path: string; content:
   }
 
   return files;
+}
+
+export function selectDiffFiles(diff: string, selectedPaths: Set<string>): string {
+  if (selectedPaths.size === 0) return diff;
+  return splitDiffIntoFiles(diff)
+    .filter(({content}) => changedHeadPaths(content).some((path) => selectedPaths.has(path)))
+    .map(({content}) => content)
+    .join("");
 }
 
 export function filterDiff(

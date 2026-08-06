@@ -1,40 +1,89 @@
 import { execFileSync } from "child_process";
+import { createHash } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
-import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
+import { chunkDiffByFile, selectDiffFiles } from "../src/diff-filter";
 import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
 import { LLMClient } from "../src/llm-client";
+import { LUNA_API_PRICING, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
 
-type EvalCase = { pr: number; base: string; head: string; generation?: number; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
+type EvalCase = { pr: number; base: string; head: string; generation?: number; changedFiles?: string[]; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
 type NegativeControl = EvalCase & { rejectedCandidates: RejectedCandidate[] };
 
 const mixRepo = process.env.MIX_REPO || "/Users/rolly/Build/mix/mix-mono";
 const output = resolve(process.argv[2] || "eval/mix-recent-prs-results.json");
-const manifest = JSON.parse(
-  readFileSync(resolve("eval/mix-recent-prs.json"), "utf8")
-) as {
+const manifestSource = readFileSync(resolve(process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"), "utf8");
+const manifestSha256 = createHash("sha256").update(manifestSource).digest("hex");
+const manifest = JSON.parse(manifestSource) as {
   developmentCases: EvalCase[];
   unscoredHistoricalNotes: EvalCase[];
+  blindHoldoutSnapshots: string[];
+  blindNegativeSnapshots: string[];
+  blindUpdatePairs: Array<{before: string; after: string}>;
   holdoutCases: EvalCase[];
   holdoutNegativeControls: NegativeControl[];
 };
+const EVAL_AGENTS = {
+  "luna-5-6-high-subscription": {effort: "high", transport: "subscription"},
+  "luna-5-6-low-subscription": {effort: "low", transport: "subscription"},
+  "luna-5-6-high-api": {effort: "high", transport: "api"},
+  "luna-5-6-low-api": {effort: "low", transport: "api"},
+} as const;
+const evalAgent = process.env.EVAL_AGENT || "luna-5-6-high-subscription";
+if (!(evalAgent in EVAL_AGENTS)) throw new Error(`Unsupported EVAL_AGENT: ${evalAgent}`);
+const evalConfig = EVAL_AGENTS[evalAgent as keyof typeof EVAL_AGENTS];
+const MIX_REVIEW_INSTRUCTIONS = [
+  "Minimize false negatives on the initial review, but never invent a failure path.",
+  "High findings block only for a proven production, security, data-loss, build, migration, or contract failure.",
+  "Medium findings are concrete non-blocking bugs. Put optional simplification in suggestions; omit style nits and repeated advice.",
+  "Prefer hard cuts and root-cause fixes. Keep changes DRY, functional, lean, type-safe, fail-fast, and free of speculative fallbacks or abstractions.",
+].join("\n");
+const EVAL_CALL_TIMEOUT_MS = 100_000;
+const EVAL_LAST_CALL_START_MS = 190_000;
+const EVAL_CHUNK_CONCURRENCY = 8;
 const client = new LLMClient(
   "rolly-agent",
   "",
-  "luna-5-6-high-subscription",
+  evalAgent,
   undefined,
-  600_000,
+  EVAL_CALL_TIMEOUT_MS,
   1,
   undefined,
-  "high",
+  evalConfig.effort,
   "codex"
 );
+const runStartedMs = Date.now();
+let activeSnapshotStartedMs: number | undefined;
+let activeSnapshotKind: "review" | "negative" | undefined;
+let activeSnapshotId: string | undefined;
+const snapshotDurationsMs: Record<string, number> = {};
+const pipelineSha = execFileSync("git", ["rev-parse", "HEAD"], {encoding: "utf8"}).trim();
+if (execFileSync("git", ["status", "--porcelain"], {encoding: "utf8"}).trim()) {
+  throw new Error("Commit the candidate pipeline before evaluation so pipelineSha is reproducible");
+}
+const promptSha256 = createHash("sha256")
+  .update(readFileSync(resolve("src/prompts/review-prompts.ts"), "utf8"))
+  .update(MIX_REVIEW_INSTRUCTIONS)
+  .digest("hex");
+type CallRecord = {
+  id: string;
+  snapshotId: string;
+  durationMs: number;
+  production: boolean;
+  provider: string;
+  auth: string;
+  model: string;
+  effort: string;
+  usage: TokenUsage;
+};
+const calls: CallRecord[] = [];
+const reviewedFiles = new Set<string>();
 const selectedPrs = new Set(
   (process.env.EVAL_PRS || "").split(",").filter(Boolean).map(Number)
 );
@@ -47,7 +96,8 @@ const selectedFiles = new Set(
 const selectedChunks = new Set(
   (process.env.EVAL_CHUNKS || "").split(",").filter(Boolean).map(Number)
 );
-const exposedGenerations = new Set([3, 4]);
+const blindHoldoutSnapshots = new Set(manifest.blindHoldoutSnapshots);
+const blindNegativeSnapshots = new Set(manifest.blindNegativeSnapshots);
 
 function asReview(value: unknown): Partial<StructuredReview> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Partial<StructuredReview> : {};
@@ -68,19 +118,142 @@ function validateSnapshot(testCase: EvalCase): void {
   if (mergeBase !== testCase.base) {
     throw new Error(`PR ${testCase.pr}: base ${testCase.base} is not the merge base of ${testCase.head}`);
   }
+  if (testCase.changedFiles) {
+    const actual = execFileSync("git", ["diff", "--name-only", testCase.base, testCase.head], {
+      cwd: mixRepo,
+      encoding: "utf8",
+    }).trim().split("\n").filter(Boolean).sort();
+    const expected = [...testCase.changedFiles].sort();
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`PR ${testCase.pr}: changedFiles does not match the frozen diff inventory`);
+    }
+  }
   for (const {file} of [...(testCase.labels || []), ...(testCase.rejectedCandidates || [])]) {
     if (!file) throw new Error(`PR ${testCase.pr}: benchmark candidate is missing its file path`);
     execFileSync("git", ["cat-file", "-e", `${testCase.head}:${file}`], {cwd: mixRepo});
   }
 }
 
+function validateBlindUpdatePairs(): void {
+  const cases = new Map(manifest.holdoutCases.map((testCase) => [snapshotId(testCase.pr, testCase.head), testCase]));
+  for (const {before, after} of manifest.blindUpdatePairs) {
+    const predecessor = cases.get(before);
+    const update = cases.get(after);
+    if (!predecessor || !update || predecessor.pr !== update.pr || before === after) {
+      throw new Error(`Invalid blind update pair: ${before} -> ${after}`);
+    }
+    if (!blindHoldoutSnapshots.has(before) || !blindHoldoutSnapshots.has(after)) {
+      throw new Error(`Blind update pair must use blind holdout snapshots: ${before} -> ${after}`);
+    }
+    const mergeBase = execFileSync("git", ["merge-base", predecessor.head, update.head], {
+      cwd: mixRepo,
+      encoding: "utf8",
+    }).trim();
+    if (mergeBase !== predecessor.head) {
+      throw new Error(`Blind update predecessor is not an ancestor: ${before} -> ${after}`);
+    }
+  }
+}
+
 async function review(systemPrompt: string, userContent: string) {
+  if (activeSnapshotStartedMs === undefined) throw new Error("Model call started outside a benchmark snapshot");
+  if (Date.now() - activeSnapshotStartedMs >= EVAL_LAST_CALL_START_MS) {
+    throw new Error("PR snapshot exceeded its five-minute wall-clock budget before the next model call");
+  }
+  const started = Date.now();
   const response = await client.chatCompletion(systemPrompt, userContent, true);
+  if (!response.usage) throw new Error("Evaluation requires provider token usage for every model call");
+  if (!response.callId) throw new Error("Evaluation requires a native provider session id for every model call");
+  if (!response.provenance) throw new Error("Evaluation requires native provider provenance for every model call");
+  const expectedProvenance = {provider: "codex", auth: evalConfig.transport, model: "gpt-5.6-luna", effort: evalConfig.effort};
+  if (JSON.stringify(response.provenance) !== JSON.stringify(expectedProvenance)) {
+    throw new Error(`Wrong evaluation provider provenance: ${JSON.stringify(response.provenance)}`);
+  }
+  if (!activeSnapshotId) throw new Error("Evaluation call is missing its snapshot id");
+  const {inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens} = response.usage;
+  calls.push({
+    id: response.callId,
+    snapshotId: activeSnapshotId,
+    durationMs: Date.now() - started,
+    production: activeSnapshotKind === "review",
+    ...response.provenance,
+    usage: {inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens},
+  });
   return {
     choices: [{message: {content: response.content}}],
     model: response.model,
-    usage: {transport: "subscription"},
+    usage: response.usage || {transport: evalConfig.transport},
   };
+}
+
+function startSnapshot(id: string, kind: "review" | "negative"): void {
+  if (activeSnapshotStartedMs !== undefined) throw new Error("Benchmark snapshots cannot overlap");
+  if (id in snapshotDurationsMs) throw new Error(`Duplicate benchmark snapshot: ${id}`);
+  activeSnapshotStartedMs = Date.now();
+  activeSnapshotKind = kind;
+  activeSnapshotId = id;
+}
+
+function finishSnapshot(id: string): void {
+  if (activeSnapshotStartedMs === undefined) throw new Error("No active benchmark snapshot");
+  const durationMs = Date.now() - activeSnapshotStartedMs;
+  activeSnapshotStartedMs = undefined;
+  activeSnapshotKind = undefined;
+  activeSnapshotId = undefined;
+  snapshotDurationsMs[id] = durationMs;
+  if (durationMs >= 300_000) throw new Error(`Benchmark snapshot ${id} took ${durationMs} ms`);
+}
+
+function runCostUsd(selectedCalls: typeof calls): number {
+  if (evalConfig.transport === "subscription") return 0;
+  return selectedCalls.reduce((total, {usage}) => total + lunaApiCost(usage), 0);
+}
+
+function sumUsage(selectedCalls: typeof calls): TokenUsage {
+  return selectedCalls.reduce((total, {usage}) => ({
+    inputTokens: total.inputTokens + usage.inputTokens,
+    cachedInputTokens: total.cachedInputTokens + usage.cachedInputTokens,
+    outputTokens: total.outputTokens + usage.outputTokens,
+    reasoningOutputTokens: total.reasoningOutputTokens + usage.reasoningOutputTokens,
+  }), {inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0});
+}
+
+function writeProgress(results: unknown[]): void {
+  const productionCalls = calls.filter(({production}) => production);
+  writeFileSync(output, `${JSON.stringify({
+    schemaVersion: 2,
+    run: {
+      id: process.env.EVAL_RUN_ID || `${evalAgent}-${new Date(runStartedMs).toISOString()}`,
+      model: "gpt-5.6-luna",
+      effort: evalConfig.effort,
+      transport: evalConfig.transport,
+      promptSha256,
+      pipelineSha,
+      manifestSha256,
+      durationMs: Date.now() - runStartedMs,
+      snapshotDurationsMs,
+      costUsd: runCostUsd(productionCalls),
+      benchmarkCostUsd: runCostUsd(calls),
+      coderabbitEquivalentUsd: reviewedFiles.size * 0.25,
+      reviewedFiles: reviewedFiles.size,
+      reviewedFileIds: [...reviewedFiles].sort(),
+      calls: productionCalls.length,
+      benchmarkCalls: calls.length,
+      callRecords: [...calls].sort((left, right) =>
+        left.snapshotId.localeCompare(right.snapshotId) || left.id.localeCompare(right.id)
+      ),
+      usage: sumUsage(productionCalls),
+      benchmarkUsage: sumUsage(calls),
+      pricing: evalConfig.transport === "api" ? LUNA_API_PRICING : {source: "subscription-unpriced"},
+      selection: {
+        prs: [...selectedPrs].sort((a, b) => a - b),
+        heads: [...selectedHeads].sort(),
+        files: [...selectedFiles].sort(),
+        chunks: [...selectedChunks].sort((a, b) => a - b),
+      },
+    },
+    results,
+  }, null, 2)}\n`);
 }
 
 async function main() {
@@ -89,33 +262,40 @@ async function main() {
   if (!['development', 'holdout'].includes(evalSet)) {
     throw new Error("EVAL_SET must be development or holdout");
   }
+  if (evalSet === "holdout") validateBlindUpdatePairs();
   const cases = evalSet === "holdout"
-    ? manifest.holdoutCases.filter(({generation}) => !generation || !exposedGenerations.has(generation))
+    ? manifest.holdoutCases.filter(({pr, head}) => blindHoldoutSnapshots.has(snapshotId(pr, head)))
     : [
         ...manifest.developmentCases,
         ...manifest.unscoredHistoricalNotes.filter(({generation}) => generation === 2),
-        ...manifest.holdoutCases.filter(({generation}) => generation && exposedGenerations.has(generation)),
+        ...manifest.holdoutCases.filter(({pr, head}) => !blindHoldoutSnapshots.has(snapshotId(pr, head))),
       ];
   for (const testCase of cases.filter(
     (candidate) =>
       (selectedPrs.size === 0 || selectedPrs.has(candidate.pr))
       && (selectedHeads.size === 0 || selectedHeads.has(candidate.head))
   )) {
+    const id = snapshotId(testCase.pr, testCase.head);
+    startSnapshot(id, "review");
     validateSnapshot(testCase);
     const diff = execFileSync(
       "git",
       ["diff", "--no-ext-diff", "--unified=3", testCase.base, testCase.head],
       { cwd: mixRepo, encoding: "utf8", maxBuffer: 20 * 1024 * 1024 }
     );
-    const reviewChunks = splitDiffIntoFiles(diff)
-      .filter(({ path }) => selectedFiles.size === 0 || selectedFiles.has(path))
-      .flatMap(({ content }) => chunkDiffByFile(content, 50000))
+    const selectedDiff = selectDiffFiles(diff, selectedFiles);
+    const reviewChunks = chunkDiffByFile(selectedDiff, 50000)
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
+    reviewChunks.flatMap(changedHeadPaths).forEach((path) => reviewedFiles.add(`${testCase.pr}:${testCase.head}:${path}`));
     const reviewedPaths = changedHeadPaths(diff);
+    console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
     const responses: unknown[] = [];
     results.push({pr: testCase.pr, head: testCase.head, chunks: responses});
-    console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
-    for (const [index, chunk] of reviewChunks.entries()) {
+    for (let offset = 0; offset < reviewChunks.length; offset += EVAL_CHUNK_CONCURRENCY) {
+      responses.push(...await Promise.all(reviewChunks
+        .slice(offset, offset + EVAL_CHUNK_CONCURRENCY)
+        .map(async (chunk, batchIndex) => {
+      const index = offset + batchIndex;
       console.log(`PR ${testCase.pr}: reviewing chunk ${index + 1}/${reviewChunks.length}`);
       const localGit = {
         getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => {
@@ -160,7 +340,7 @@ async function main() {
         context,
         "```",
       ].join("\n");
-      const reviewPrompt = getReviewPrompt();
+      const reviewPrompt = getReviewPrompt(MIX_REVIEW_INSTRUCTIONS);
       const discover = (instructions: string) => review(
         reviewPrompt,
         `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
@@ -246,17 +426,15 @@ async function main() {
         } catch (error) {
           const reason = `Precision gate failed twice for PR ${testCase.pr} chunk ${index + 1}: ${error}`;
           console.warn(reason);
-          responses.push({
+          return {
             kind: "review-error",
             error: reason,
             candidates,
             usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
-          });
-          writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
-          continue;
+          };
         }
       }
-      responses.push({
+      return {
         candidates,
         response: approved,
         contractQueries,
@@ -264,16 +442,26 @@ async function main() {
         precisionQueries,
         precisionEvidence,
         usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
-      });
-      writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
+      };
+        })));
+      writeProgress(results);
     }
+    finishSnapshot(id);
+    writeProgress(results);
   }
-  if (evalSet === "holdout" && selectedChunks.size === 0) {
-    for (const testCase of manifest.holdoutNegativeControls.filter(
+  if (selectedChunks.size === 0) {
+    const negativeCases = manifest.holdoutNegativeControls.filter(({pr, head}) =>
+      evalSet === "holdout"
+        ? blindNegativeSnapshots.has(snapshotId(pr, head))
+        : !blindNegativeSnapshots.has(snapshotId(pr, head))
+    );
+    for (const testCase of negativeCases.filter(
       (candidate) =>
         (selectedPrs.size === 0 || selectedPrs.has(candidate.pr))
         && (selectedHeads.size === 0 || selectedHeads.has(candidate.head))
     )) {
+      const id = negativeSnapshotDurationId(testCase.pr, testCase.head);
+      startSnapshot(id, "negative");
       validateSnapshot(testCase);
       for (const candidate of testCase.rejectedCandidates) {
         if (selectedFiles.size > 0 && !selectedFiles.has(candidate.file)) continue;
@@ -293,7 +481,7 @@ async function main() {
           const reason = `Missing candidate file at ${testCase.head}:${candidate.file}`;
           console.warn(reason);
           results.push({pr: testCase.pr, head: testCase.head, kind: "candidate-error", candidate, error: reason});
-          writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
+          writeProgress(results);
           continue;
         }
         const decision = await review([
@@ -304,7 +492,7 @@ async function main() {
           "Return strict JSON only: {\"approved\":true|false,\"reason\":\"short evidence\"}",
         ].join("\n"), [
           "<EVIDENCE_DATA>",
-          `CANDIDATE: ${JSON.stringify(candidate)}`,
+          `CANDIDATE: ${JSON.stringify({file: candidate.file, rootCause: candidate.rootCause})}`,
           "EXACT FILE DIFF:",
           annotateDiffWithLineNumbers(diff),
           "EXACT HEAD FILE:",
@@ -330,7 +518,7 @@ async function main() {
             error: reason,
             usage: decision.usage,
           });
-          writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
+          writeProgress(results);
           continue;
         }
         results.push({
@@ -341,12 +529,14 @@ async function main() {
           decision: parsedDecision,
           usage: decision.usage,
         });
-        writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
+        writeProgress(results);
       }
+      finishSnapshot(id);
+      writeProgress(results);
     }
   }
-  writeFileSync(output, `${JSON.stringify(results, null, 2)}\n`);
-  console.log(`Wrote ${results.length} Luna-high reviews to ${output}`);
+  writeProgress(results);
+  console.log(`Wrote ${results.length} ${evalAgent} reviews to ${output}`);
 }
 
 main();

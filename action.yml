@@ -26,7 +26,7 @@ inputs:
     description: "OpenAI-compatible base URL, or rolly-agent on a trusted self-hosted Rolly runner."
     required: true
   model:
-    description: "Provider model name, or a subscription profile such as opus-5-high-subscription with rolly-agent."
+    description: "Provider model name, or a Luna profile such as luna-5-6-high-subscription with rolly-agent."
     required: true
   reasoning-effort:
     description: "Optional reasoning effort for compatible models: low, medium, or high."

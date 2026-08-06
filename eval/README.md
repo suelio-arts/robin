@@ -1,5 +1,7 @@
 # MIX Recent-PR Evaluation
 
+<!-- Disposable pull-request change used to verify the required Self-Test check. -->
+
 `mix-recent-prs.json` freezes validated CodeRabbit, Greptile, and Luna root causes
 from recent MIX pull requests plus rejected, stale, and withdrawn candidate comments.
 Luna-sourced labels are scored only after independent exact-SHA adjudication;

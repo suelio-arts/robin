@@ -6,9 +6,13 @@
   },
   "blindHoldoutSnapshots": [
     "318:41e4d06be8eab388e93f41e5a88825407da77b09",
-    "320:1ad70bd0636d26c8810d93c1f730aa36e6f6e314"
+    "320:1ad70bd0636d26c8810d93c1f730aa36e6f6e314",
+    "353:50b3c98ea6da711700f32775f1b658be7427748e"
   ],
-  "blindNegativeSnapshots": [],
+  "blindNegativeSnapshots": [
+    "352:447f9088ce90a725f1ea7ff294e6fcc85f25169e",
+    "353:50b3c98ea6da711700f32775f1b658be7427748e"
+  ],
   "blindUpdatePairs": [],
   "developmentCases": [
     {
@@ -1050,6 +1054,20 @@
       "labels": [{"file": "studio/ci_scripts/verify_studio_cli_contracts.sh", "rootCause": "RejectedItemClient.paged_request ignores params, so the contract test still passes if the production request drops fields[reviewSubmissionItems] or changes its page limit", "source": "CodeRabbit"}]
     },
     {
+      "pr": 353,
+      "base": "1cd5e108b178103918b083b3d8c8a5c82e404848",
+      "head": "50b3c98ea6da711700f32775f1b658be7427748e",
+      "generation": 6,
+      "changedFiles": ["backend/functions/scripts/migrate-great-walk-sources.ts"],
+      "labels": [
+        {
+          "file": "backend/functions/scripts/migrate-great-walk-sources.ts",
+          "rootCause": "BulkWriter updates are enqueued while later walks and beats are still being validated, so a later validation failure can leave a partially applied migration",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
       "pr": 102,
       "base": "3da0be66d010b954d2b51acb5f68b2e77b9f5255",
       "head": "2824887dd459efda77a0208a7adbfe35c97573d6",
@@ -1254,6 +1272,44 @@
       "head": "5517c28ad940808ff8038d57fc91a468e82e5f5e",
       "rejectedCandidates": [
         {"file": "studio/ingestion_backend/tests/test_cli.py", "rootCause": "parseCommand has no empty-argument test", "source": "CodeRabbit", "reason": "stale at exact head: parseCommand([]) is asserted verbatim in the final test file"}
+      ]
+    },
+    {
+      "pr": 352,
+      "base": "d33944b7f950f199054932a8c935eaa8bcf1d4dd",
+      "head": "447f9088ce90a725f1ea7ff294e6fcc85f25169e",
+      "rejectedCandidates": [
+        {
+          "file": "studio/web/walk-manager-guide.html",
+          "rootCause": "the human-facing Walk Manager guide must repeat the autopilot role:ops identity contract for unattended automation",
+          "source": "CodeRabbit",
+          "reason": "unproven: the guide does not instruct unattended automation, while AGENTS.md and the linked CLI contracts already define the agent-only identity requirement"
+        }
+      ]
+    },
+    {
+      "pr": 353,
+      "base": "1cd5e108b178103918b083b3d8c8a5c82e404848",
+      "head": "50b3c98ea6da711700f32775f1b658be7427748e",
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/scripts/migrate-great-walk-sources.ts",
+          "rootCause": "the migration duplicates raw strings such as --apply, data_layer_record, and source instead of deriving them from one shared constant source",
+          "source": "CodeRabbit",
+          "reason": "style-only: the exact literals match their schemas and no changed behavior or divergent value is proven"
+        },
+        {
+          "file": "backend/functions/scripts/migrate-great-walk-sources.ts",
+          "rootCause": "a missing layer record is parsed without checking recordDoc.exists and therefore lacks a custom walk, element, and record identifier error",
+          "source": "CodeRabbit",
+          "reason": "not a separate functional bug: schema parsing already fails fast on the missing record; the requested change only improves diagnostics"
+        },
+        {
+          "file": "backend/functions/scripts/migrate-great-walk-sources.ts",
+          "rootCause": "enumerating users and querying each WALK_BEATS subcollection must be replaced with a collection-group query filtered by walkId",
+          "source": "CodeRabbit",
+          "reason": "unproven optimization: the existing queries cover the canonical users and no omitted record or material scale failure is established"
+        }
       ]
     }
   ]

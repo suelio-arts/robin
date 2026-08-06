@@ -16,8 +16,9 @@ then adjudicate and score unseen PRs as a separate holdout before promotion.
 `blindHoldoutSnapshots` and `blindNegativeSnapshots` are the authoritative frozen
 unseen allowlists. Other records in `holdoutCases` and `holdoutNegativeControls`
 are exposed development corpus, regardless of their historical name or generation.
-The current portable blind set has only the two independently run PR 318/320 labels
-and no blind negative controls, so it is intentionally insufficient for promotion.
+The current portable blind set has three independently frozen CodeRabbit labels
+and four CodeRabbit negative controls. It has no fresh Greptile cases, so it is
+intentionally insufficient for promotion.
 Freeze a candidate pipeline before adding fresh snapshots; promotion requires at
 least ten blind roots, ten blind negative candidates, and three blind update heads.
 Update heads must be frozen as explicit `blindUpdatePairs`; the evaluator proves each

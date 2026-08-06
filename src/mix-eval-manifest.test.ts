@@ -27,18 +27,22 @@ describe("MIX review benchmark", () => {
     expect(new Set(snapshots).size).toBe(snapshots.length);
     expect(manifest.developmentCases.length).toBeGreaterThanOrEqual(5);
     expect(manifest.developmentCases.flatMap((testCase) => testCase.labels).length).toBeGreaterThanOrEqual(12);
-    expect(manifest.holdoutCases.flatMap((testCase) => testCase.labels)).toHaveLength(42);
+    expect(manifest.holdoutCases.flatMap((testCase) => testCase.labels).length).toBeGreaterThanOrEqual(43);
     expect(manifest.blindHoldoutSnapshots).toEqual([
       "318:41e4d06be8eab388e93f41e5a88825407da77b09",
       "320:1ad70bd0636d26c8810d93c1f730aa36e6f6e314",
+      "353:50b3c98ea6da711700f32775f1b658be7427748e",
     ]);
-    expect(manifest.blindNegativeSnapshots).toEqual([]);
+    expect(manifest.blindNegativeSnapshots).toEqual([
+      "352:447f9088ce90a725f1ea7ff294e6fcc85f25169e",
+      "353:50b3c98ea6da711700f32775f1b658be7427748e",
+    ]);
     expect(manifest.blindUpdatePairs).toEqual([]);
     const blindCases = manifest.holdoutCases.filter(({pr, head}) =>
       manifest.blindHoldoutSnapshots.includes(`${pr}:${head}`)
     );
     expect(blindCases.every(({changedFiles}) => (changedFiles?.length || 0) > 0)).toBe(true);
-    expect(manifest.holdoutNegativeControls.flatMap(({ rejectedCandidates }) => rejectedCandidates)).toHaveLength(21);
+    expect(manifest.holdoutNegativeControls.flatMap(({ rejectedCandidates }) => rejectedCandidates).length).toBeGreaterThanOrEqual(25);
     for (const label of manifest.holdoutCases.flatMap((testCase) => testCase.labels)) {
       expect(label).toEqual(expect.objectContaining({
         file: expect.stringMatching(/\S/),

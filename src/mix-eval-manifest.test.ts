@@ -53,6 +53,22 @@ describe("MIX review benchmark", () => {
       matchedReferenceRoots: 0,
       falsePositives: 0,
     }));
+    expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
+      artifactSha256: "ef1e86c5e388b9ffab1ca51f9b5e9b45709116171ee662f99bd56a18a314f79b",
+      status: "complete-isolated-blind",
+      matchedReferenceRoots: 5,
+      coderabbitMatchedRoots: 4,
+      coderabbitMissedSeededRoots: 1,
+      falsePositives: 0,
+    }));
+    expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
+      artifactSha256: "52fa90df279e0eea93b7091bfa7e7e56e7e52ab8b55b41c08516f781e45bd31a",
+      status: "complete-isolated-updates",
+      negativeControlsRejected: 5,
+      negativeControlsTotal: 5,
+      updateNoisePerUpdate: 0,
+      falsePositives: 0,
+    }));
   });
 
   it("keeps a non-trivial, unique historical corpus", () => {

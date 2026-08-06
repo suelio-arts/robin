@@ -1,8 +1,27 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import manifest from "../eval/mix-recent-prs.json";
+import developmentRuns from "../eval/development-runs.json";
 
 describe("MIX review benchmark", () => {
+  it("keeps a measured development-run ledger", () => {
+    expect(developmentRuns.schemaVersion).toBe(1);
+    expect(developmentRuns.runs.some(({status}) => status === "timeout")).toBe(true);
+    const selected = developmentRuns.runs.find(({pipelineSha}) =>
+      pipelineSha === developmentRuns.selected.equivalentMeasuredTree
+    );
+    expect(selected).toEqual(expect.objectContaining({
+      status: "complete",
+      effort: developmentRuns.selected.effort,
+      promptSha256: developmentRuns.selected.promptSha256,
+      matchedReferenceRoots: 2,
+      duplicateNoise: 0,
+      falsePositives: 0,
+    }));
+    expect((selected?.durationMs || Infinity)).toBeLessThan(300_000);
+    expect((selected?.apiEquivalentUsd || Infinity) / (selected?.coderabbitEquivalentUsd || 0)).toBeLessThan(0.5);
+  });
+
   it("keeps a non-trivial, unique historical corpus", () => {
     const snapshots = manifest.developmentCases.map(({pr, head}) => `${pr}:${head}`);
     expect(new Set(snapshots).size).toBe(snapshots.length);

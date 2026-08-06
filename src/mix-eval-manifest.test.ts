@@ -14,7 +14,15 @@ describe("MIX review benchmark", () => {
     expect(cases.flatMap(({labels}) => labels)).toHaveLength(5);
     expect(cases.flatMap(({labels}) => labels).filter(({source}) => source === "CodeRabbit")).toHaveLength(4);
     expect(cases.flatMap(({labels}) => labels).filter(({source}) => source === "Seeded")).toHaveLength(1);
-    expect(sandboxManifest.blindUpdatePairs).toHaveLength(5);
+    expect(sandboxManifest.blindUpdatePairs).toEqual([
+      {before: "2:0a85c6cbf0bcc2ce544a59bfb33259f199a71a77", after: "2:911d11498035c0b464d0598800781e076d985e21"},
+      {before: "3:9fac4da53ba1a3b5f24a687fb9484da5e4274ad1", after: "3:09c85bbaebaf527e04bcf687bb61dbda2e0118d6"},
+      {before: "4:78391fd272f8a19186f17ac0e32f92c2f9c04f97", after: "4:28cddbae0408172466bbd90bd502852996664e71"},
+      {before: "5:01ddd427b038942361078f3e9a851e7a05f6b271", after: "5:78b7954b405cacc262bebdc3aacc35bad14da7ad"},
+      {before: "6:5193ef5b07527e9d54b7c74530c6e771e3c1f0cb", after: "6:0148f258bb0d00de7b03ae9fdc851b9eafcbac31"},
+    ]);
+    const updateHeads = sandboxManifest.blindUpdatePairs.flatMap(({before, after}) => [before, after]);
+    expect(new Set(updateHeads).size).toBe(updateHeads.length);
     expect(sandboxManifest.holdoutNegativeControls).toHaveLength(5);
     expect(new Set(sandboxManifest.blindNegativeSnapshots)).toEqual(
       new Set(sandboxManifest.holdoutNegativeControls.map(({pr, head}) => `${pr}:${head}`))
@@ -36,8 +44,17 @@ describe("MIX review benchmark", () => {
       duplicateNoise: 0,
       falsePositives: 0,
     }));
-    expect((selected?.durationMs || Infinity)).toBeLessThan(300_000);
-    expect((selected?.apiEquivalentUsd || Infinity) / (selected?.coderabbitEquivalentUsd || 0)).toBeLessThan(0.5);
+    const {durationMs, apiEquivalentUsd, coderabbitEquivalentUsd} = selected || {};
+    if (durationMs === undefined || apiEquivalentUsd === undefined || coderabbitEquivalentUsd === undefined) {
+      throw new Error("Selected measured run is missing timing or cost metadata");
+    }
+    for (const value of [durationMs, apiEquivalentUsd, coderabbitEquivalentUsd]) {
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(value)).toBe(true);
+    }
+    expect(coderabbitEquivalentUsd).toBeGreaterThan(0);
+    expect(durationMs).toBeLessThan(300_000);
+    expect(apiEquivalentUsd / coderabbitEquivalentUsd).toBeLessThan(0.5);
     expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
       artifactSha256: "f1e2bed22473280cadcdd91566ee830f2ef3dafb03cc6036fa346b37d3195ea2",
       status: "complete-blind-development",
@@ -88,9 +105,17 @@ describe("MIX review benchmark", () => {
       "353:50b3c98ea6da711700f32775f1b658be7427748e",
     ]);
     expect(manifest.blindUpdatePairs).toEqual([]);
-    const blindCases = manifest.holdoutCases.filter(({pr, head}) =>
-      manifest.blindHoldoutSnapshots.includes(`${pr}:${head}`)
-    );
+    const blindCaseIds = new Set(manifest.holdoutCases
+      .map(({pr, head}) => `${pr}:${head}`)
+      .filter((id) => manifest.blindHoldoutSnapshots.includes(id)));
+    const blindNegativeIds = new Set(manifest.holdoutNegativeControls
+      .map(({pr, head}) => `${pr}:${head}`)
+      .filter((id) => manifest.blindNegativeSnapshots.includes(id)));
+    expect(blindCaseIds).toEqual(new Set(manifest.blindHoldoutSnapshots));
+    expect(blindCaseIds.size).toBe(manifest.blindHoldoutSnapshots.length);
+    expect(blindNegativeIds).toEqual(new Set(manifest.blindNegativeSnapshots));
+    expect(blindNegativeIds.size).toBe(manifest.blindNegativeSnapshots.length);
+    const blindCases = manifest.holdoutCases.filter(({pr, head}) => blindCaseIds.has(`${pr}:${head}`));
     expect(blindCases.every(({changedFiles}) => (changedFiles?.length || 0) > 0)).toBe(true);
     expect(manifest.holdoutNegativeControls.flatMap(({ rejectedCandidates }) => rejectedCandidates).length).toBeGreaterThanOrEqual(25);
     for (const label of manifest.holdoutCases.flatMap((testCase) => testCase.labels)) {

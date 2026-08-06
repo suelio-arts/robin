@@ -27,7 +27,23 @@ describe("LLMClient", () => {
   it("runs subscription agents through Rolly without an API key", async () => {
     const root = await mkdtemp(join(tmpdir(), "robin-result-"));
     const result = join(root, "result.md");
+    const events = join(root, "events.jsonl");
     await writeFile(result, '{"summary":"clean"}');
+    await writeFile(events, `${JSON.stringify({type: "turn.completed", usage: {
+      input_tokens: 100,
+      cached_input_tokens: 40,
+      output_tokens: 20,
+      reasoning_output_tokens: 5,
+    }})}\n`);
+    await writeFile(`${result}.meta.json`, JSON.stringify({
+      duration_seconds: 1.5,
+      events,
+      session: "test-session",
+      provider: "codex",
+      auth: "subscription",
+      model: "gpt-5.6-luna",
+      effort: "high",
+    }));
     (execFile as unknown as jest.Mock).mockImplementation((_file, _args, _options, callback) => {
       callback(null, JSON.stringify({ result }), "");
     });
@@ -45,6 +61,20 @@ describe("LLMClient", () => {
         "codex"
       ).chatCompletion("system", "user", true);
       expect(response.content).toBe('{"summary":"clean"}');
+      expect(response.callId).toBe("test-session");
+      expect(response.provenance).toEqual({
+        provider: "codex",
+        auth: "subscription",
+        model: "gpt-5.6-luna",
+        effort: "high",
+      });
+      expect(response.usage).toEqual({
+        inputTokens: 100,
+        cachedInputTokens: 40,
+        outputTokens: 20,
+        reasoningOutputTokens: 5,
+        durationMs: 1500,
+      });
       expect(execFile).toHaveBeenCalledWith(
         "/Users/rolly/.local/bin/rolly",
         expect.arrayContaining(["--caller", "codex", "--agent", "luna-5-6-high-subscription"]),
@@ -54,6 +84,11 @@ describe("LLMClient", () => {
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  it("keeps non-Luna agents out of Robin's local transport", () => {
+    expect(() => new LLMClient("rolly-agent", "", "opus-5-high-subscription"))
+      .toThrow("Unsupported Robin local agent");
   });
 
 });

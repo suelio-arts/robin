@@ -1169,6 +1169,12 @@ const os_1 = __nccwpck_require__(857);
 const path_1 = __nccwpck_require__(6928);
 const ROLLY_AGENT_URL = "rolly-agent";
 const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
+const ROBIN_LOCAL_AGENTS = new Set([
+    "luna-5-6-high-api",
+    "luna-5-6-high-subscription",
+    "luna-5-6-low-api",
+    "luna-5-6-low-subscription",
+]);
 function runFile(file, args, options) {
     return new Promise((resolve, reject) => {
         (0, child_process_1.execFile)(file, args, options, (error, stdout) => error ? reject(error) : resolve(String(stdout)));
@@ -1188,6 +1194,9 @@ class LLMClient {
     constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort, localAgentCaller = "github") {
         this.model = model;
         this.localAgent = baseUrl === ROLLY_AGENT_URL;
+        if (this.localAgent && !ROBIN_LOCAL_AGENTS.has(model)) {
+            throw new Error(`Unsupported Robin local agent: ${model}`);
+        }
         this.routerModel = (0, llm_retry_1.isOpenRouterRouterModel)(model);
         this.onProgress = onProgress;
         this.reasoningEffort = reasoningEffort;
@@ -1235,14 +1244,15 @@ class LLMClient {
                 core.info(`LLM attempt ${attempt}/${this.maxAttempts}: waiting for provider...`);
                 await this.progress(`Waiting for provider (attempt ${attempt}/${this.maxAttempts})…`);
                 const request = this.buildRequest(systemPrompt, userContent, useJson);
-                const { content, model: resolvedModel } = this.routerModel
+                const result = this.routerModel
                     ? await this.streamChatCompletion(request)
                     : await this.blockingChatCompletion(request);
+                const { content, model: resolvedModel } = result;
                 if (content) {
                     if (!this.routerModel) {
                         this.logResolvedModel(resolvedModel || this.model);
                     }
-                    return { content, model: resolvedModel };
+                    return result;
                 }
                 lastFinishReason = "empty";
                 core.warning(`LLM attempt ${attempt}/${this.maxAttempts}: empty content${useJson ? " (json mode)" : ""}`);
@@ -1294,11 +1304,54 @@ class LLMClient {
             const content = await (0, promises_1.readFile)(resultPath, "utf8");
             if (!content.trim())
                 throw new Error("Rolly agent returned an empty result");
-            return { content, model: this.model };
+            return { content, model: this.model, ...await this.readLocalAgentMetadata(resultPath) };
         }
         finally {
             if (root)
                 await (0, promises_1.rm)(root, { recursive: true, force: true });
+        }
+    }
+    async readLocalAgentMetadata(resultPath) {
+        try {
+            const meta = JSON.parse(await (0, promises_1.readFile)(`${resultPath}.meta.json`, "utf8"));
+            if (!meta.events)
+                return {};
+            const usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 };
+            let usageEvents = 0;
+            for (const line of (await (0, promises_1.readFile)(meta.events, "utf8")).split("\n")) {
+                if (!line.trim())
+                    continue;
+                const event = JSON.parse(line);
+                if (event.type !== "turn.completed" || !event.usage)
+                    continue;
+                const counters = [
+                    event.usage.input_tokens,
+                    event.usage.cached_input_tokens,
+                    event.usage.output_tokens,
+                    event.usage.reasoning_output_tokens,
+                ].map((value) => value ?? 0);
+                if (!counters.every((value) => Number.isInteger(value) && value >= 0)) {
+                    throw new Error("Invalid local agent token usage");
+                }
+                usageEvents += 1;
+                usage.inputTokens += counters[0];
+                usage.cachedInputTokens += counters[1];
+                usage.outputTokens += counters[2];
+                usage.reasoningOutputTokens += counters[3];
+            }
+            if (usageEvents === 0)
+                throw new Error("Local agent emitted no token usage");
+            return {
+                callId: meta.session,
+                provenance: [meta.provider, meta.auth, meta.model, meta.effort].every((value) => typeof value === "string" && value)
+                    ? { provider: meta.provider, auth: meta.auth, model: meta.model, effort: meta.effort }
+                    : undefined,
+                usage: { ...usage, durationMs: typeof meta.duration_seconds === "number" ? meta.duration_seconds * 1000 : undefined },
+            };
+        }
+        catch (error) {
+            core.warning(`Could not read local agent usage metadata: ${error}`);
+            return {};
         }
     }
     async blockingChatCompletion(request) {
@@ -1306,9 +1359,17 @@ class LLMClient {
             ...request,
             stream: false,
         });
+        const usage = response.usage;
         return {
             content: this.extractMessageContent(response),
             model: response.model || this.model,
+            callId: response.id,
+            usage: usage ? {
+                inputTokens: usage.prompt_tokens || 0,
+                cachedInputTokens: usage.prompt_tokens_details?.cached_tokens || 0,
+                outputTokens: usage.completion_tokens || 0,
+                reasoningOutputTokens: usage.completion_tokens_details?.reasoning_tokens || 0,
+            } : undefined,
         };
     }
     /** Stream so the first SSE chunk (model id) proves OpenRouter routed; abort if none arrives. */
@@ -1330,6 +1391,7 @@ class LLMClient {
             const stream = await this.client.chat.completions.create({ ...request, stream: true }, { signal: controller.signal });
             const parts = [];
             let resolvedModel = this.model;
+            let callId;
             for await (const chunk of stream) {
                 if (!gotFirstChunk) {
                     gotFirstChunk = true;
@@ -1351,8 +1413,10 @@ class LLMClient {
                 if (chunk.model) {
                     resolvedModel = chunk.model;
                 }
+                if (chunk.id)
+                    callId = chunk.id;
             }
-            return { content: parts.join(""), model: resolvedModel };
+            return { content: parts.join(""), model: resolvedModel, callId };
         }
         catch (error) {
             clearStallTimer();

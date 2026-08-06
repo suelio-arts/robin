@@ -449,7 +449,7 @@ function pad(n) {
 /***/ }),
 
 /***/ 7561:
-/***/ ((__unused_webpack_module, exports) => {
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 "use strict";
 
@@ -458,8 +458,10 @@ exports.DEFAULT_SKIP_PATH_PATTERNS = void 0;
 exports.matchPathPattern = matchPathPattern;
 exports.shouldSkipPath = shouldSkipPath;
 exports.splitDiffIntoFiles = splitDiffIntoFiles;
+exports.selectDiffFiles = selectDiffFiles;
 exports.filterDiff = filterDiff;
 exports.chunkDiffByFile = chunkDiffByFile;
+const contract_discovery_1 = __nccwpck_require__(9972);
 exports.DEFAULT_SKIP_PATH_PATTERNS = [
     "**/package-lock.json",
     "**/yarn.lock",
@@ -512,6 +514,14 @@ function splitDiffIntoFiles(diff) {
         files.push({ path, content: `diff --git ${part}` });
     }
     return files;
+}
+function selectDiffFiles(diff, selectedPaths) {
+    if (selectedPaths.size === 0)
+        return diff;
+    return splitDiffIntoFiles(diff)
+        .filter(({ content }) => (0, contract_discovery_1.changedHeadPaths)(content).some((path) => selectedPaths.has(path)))
+        .map(({ content }) => content)
+        .join("");
 }
 function filterDiff(diff, extraSkipPatterns = []) {
     const patterns = [...exports.DEFAULT_SKIP_PATH_PATTERNS, ...extraSkipPatterns];

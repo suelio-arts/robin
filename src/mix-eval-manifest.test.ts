@@ -120,9 +120,11 @@ describe("MIX review benchmark", () => {
     expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
     expect(source).toContain('process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"');
     expect(source).toContain("{prioritizePlanned: true}");
-    expect(source).toContain("const selectedDiff = selectDiffFiles(diff, selectedFiles)");
+    const selectedDiffIndex = source.indexOf("const selectedDiff = selectDiffFiles(diff, selectedFiles)");
+    const reviewChunksIndex = source.indexOf("const reviewChunks = chunkDiffByFile(selectedDiff, 50000)");
+    expect(selectedDiffIndex).toBeGreaterThanOrEqual(0);
+    expect(reviewChunksIndex).toBeGreaterThan(selectedDiffIndex);
     expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");
-    expect(source).toContain("const reviewChunks = chunkDiffByFile(selectedDiff, 50000)");
     expect(source).toContain(".slice(offset, offset + EVAL_CHUNK_CONCURRENCY)");
     expect(source).toContain("left.snapshotId.localeCompare(right.snapshotId) || left.id.localeCompare(right.id)");
     expect(source).toContain("DISCOVERY CONTRACT EVIDENCE");

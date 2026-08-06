@@ -283,9 +283,11 @@ async function main() {
       ["diff", "--no-ext-diff", "--unified=3", testCase.base, testCase.head],
       { cwd: mixRepo, encoding: "utf8", maxBuffer: 20 * 1024 * 1024 }
     );
-    const reviewChunks = splitDiffIntoFiles(diff)
+    const selectedDiff = splitDiffIntoFiles(diff)
       .filter(({ path }) => selectedFiles.size === 0 || selectedFiles.has(path))
-      .flatMap(({ content }) => chunkDiffByFile(content, 50000))
+      .map(({ content }) => content)
+      .join("");
+    const reviewChunks = chunkDiffByFile(selectedDiff, 50000)
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     reviewChunks.flatMap(changedHeadPaths).forEach((path) => reviewedFiles.add(`${testCase.pr}:${testCase.head}:${path}`));
     const reviewedPaths = changedHeadPaths(diff);

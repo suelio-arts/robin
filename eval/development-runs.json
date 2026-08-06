@@ -8,7 +8,7 @@
     "status": "exposed-development-only"
   },
   "selected": {
-    "candidateHead": "3220595",
+    "candidateHead": "3220595bb0891c5fa769fa08a388d45fbc9f2ec9",
     "equivalentMeasuredTree": "44e8367a60c4c667f7c2e92689a46d10ef249af5",
     "promptSha256": "ea99c44c14ae936b427492138a649a7c187f77457001d0c3f85bb3b44229d8c9",
     "effort": "high",

@@ -3,7 +3,7 @@ import { createHash } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
-import { chunkDiffByFile, splitDiffIntoFiles } from "../src/diff-filter";
+import { chunkDiffByFile, selectDiffFiles } from "../src/diff-filter";
 import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { ReviewParser, StructuredReview } from "../src/review-parser";
@@ -283,10 +283,7 @@ async function main() {
       ["diff", "--no-ext-diff", "--unified=3", testCase.base, testCase.head],
       { cwd: mixRepo, encoding: "utf8", maxBuffer: 20 * 1024 * 1024 }
     );
-    const selectedDiff = splitDiffIntoFiles(diff)
-      .filter(({ path }) => selectedFiles.size === 0 || selectedFiles.has(path))
-      .map(({ content }) => content)
-      .join("");
+    const selectedDiff = selectDiffFiles(diff, selectedFiles);
     const reviewChunks = chunkDiffByFile(selectedDiff, 50000)
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     reviewChunks.flatMap(changedHeadPaths).forEach((path) => reviewedFiles.add(`${testCase.pr}:${testCase.head}:${path}`));

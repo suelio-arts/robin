@@ -23,6 +23,7 @@ describe("MIX review benchmark", () => {
 
   it("keeps a measured development-run ledger", () => {
     expect(developmentRuns.schemaVersion).toBe(1);
+    expect(developmentRuns.selected.candidateHead).toMatch(/^[a-f0-9]{40}$/);
     expect(developmentRuns.runs.some(({status}) => status === "timeout")).toBe(true);
     const selected = developmentRuns.runs.find(({pipelineSha}) =>
       pipelineSha === developmentRuns.selected.equivalentMeasuredTree
@@ -119,6 +120,7 @@ describe("MIX review benchmark", () => {
     expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
     expect(source).toContain('process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"');
     expect(source).toContain("{prioritizePlanned: true}");
+    expect(source).toContain("const selectedDiff = selectDiffFiles(diff, selectedFiles)");
     expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");
     expect(source).toContain("const reviewChunks = chunkDiffByFile(selectedDiff, 50000)");
     expect(source).toContain(".slice(offset, offset + EVAL_CHUNK_CONCURRENCY)");

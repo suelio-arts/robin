@@ -151,6 +151,11 @@ describe("MIX evaluation scorer", () => {
     expect(promotionReady(scores.slice(0, 2))).toBe(false);
     expect(promotionReady(scores)).toBe(true);
     expect(promotionReady([scores[0], {...scores[1], callIds: scores[0].callIds}, scores[2]])).toBe(false);
+    expect(promotionReady([
+      scores[0],
+      {...scores[1], configurationId: `${scores[1].configurationId}:low`},
+      scores[2],
+    ])).toBe(false);
   });
 
   it("keeps an emitted high false positive from passing precision", () => {
@@ -211,5 +216,8 @@ describe("MIX evaluation scorer", () => {
     raw.run.coderabbitEquivalentUsd -= 0.25;
     raw.run.callRecords[0].auth = "subscription";
     expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("Call provenance");
+    raw.run.callRecords[0].auth = "api";
+    (raw.run as {model: string}).model = "gpt-4o";
+    expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("frozen Luna model");
   });
 });

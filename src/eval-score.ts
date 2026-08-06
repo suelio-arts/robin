@@ -206,6 +206,11 @@ export function artifactFindings(artifact: EvaluationArtifact): ArtifactFinding[
 
 function validateArtifact(artifact: EvaluationArtifact, artifactSha256: string): void {
   if (artifact.schemaVersion !== 2) throw new Error("Unsupported evaluation artifact schema");
+  if (artifact.run.model !== "gpt-5.6-luna") throw new Error("Artifact model is not the frozen Luna model");
+  if (artifact.run.effort !== "high" && artifact.run.effort !== "low") throw new Error("Artifact effort must be high or low");
+  if (artifact.run.transport !== "api" && artifact.run.transport !== "subscription") {
+    throw new Error("Artifact transport must be api or subscription");
+  }
   if (!/^[a-f0-9]{64}$/.test(artifactSha256)) throw new Error("artifactSha256 must be a full SHA-256");
   if (!/^[a-f0-9]{64}$/.test(artifact.run.promptSha256)) throw new Error("promptSha256 must be a full SHA-256");
   if (!/^[a-f0-9]{40}$/.test(artifact.run.pipelineSha)) throw new Error("pipelineSha must be a full Git commit SHA");

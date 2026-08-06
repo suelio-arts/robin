@@ -141,6 +141,9 @@ function validateBlindUpdatePairs(): void {
     if (!predecessor || !update || predecessor.pr !== update.pr || before === after) {
       throw new Error(`Invalid blind update pair: ${before} -> ${after}`);
     }
+    if (!blindHoldoutSnapshots.has(before) || !blindHoldoutSnapshots.has(after)) {
+      throw new Error(`Blind update pair must use blind holdout snapshots: ${before} -> ${after}`);
+    }
     const mergeBase = execFileSync("git", ["merge-base", predecessor.head, update.head], {
       cwd: mixRepo,
       encoding: "utf8",

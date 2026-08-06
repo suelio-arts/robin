@@ -20,6 +20,15 @@ describe("MIX review benchmark", () => {
     }));
     expect((selected?.durationMs || Infinity)).toBeLessThan(300_000);
     expect((selected?.apiEquivalentUsd || Infinity) / (selected?.coderabbitEquivalentUsd || 0)).toBeLessThan(0.5);
+    expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
+      artifactSha256: "f1e2bed22473280cadcdd91566ee830f2ef3dafb03cc6036fa346b37d3195ea2",
+      status: "complete-blind-development",
+      matchedReferenceRoots: 1,
+      additionalRealFindings: 2,
+      falsePositives: 0,
+      negativeControlsRejected: 3,
+      negativeControlsTotal: 4,
+    }));
   });
 
   it("keeps a non-trivial, unique historical corpus", () => {

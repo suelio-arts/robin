@@ -116,6 +116,30 @@
       "duplicateNoise": 0,
       "falsePositives": 0,
       "notes": "Candidate generation improved, but the precision gate collapsed distinct checklist roots; change reverted."
+    },
+    {
+      "artifactSha256": "f1e2bed22473280cadcdd91566ee830f2ef3dafb03cc6036fa346b37d3195ea2",
+      "pipelineSha": "0a5caeb03180eb43243e2bb0f1677bac5a493643",
+      "promptSha256": "ea99c44c14ae936b427492138a649a7c187f77457001d0c3f85bb3b44229d8c9",
+      "effort": "high",
+      "transport": "subscription",
+      "layout": "packed-adversarial",
+      "status": "complete-blind-development",
+      "selection": [
+        "352:447f9088ce90a725f1ea7ff294e6fcc85f25169e",
+        "353:50b3c98ea6da711700f32775f1b658be7427748e"
+      ],
+      "durationMs": 182852,
+      "calls": 9,
+      "apiEquivalentUsd": 0.380527,
+      "coderabbitEquivalentUsd": 0.25,
+      "matchedReferenceRoots": 1,
+      "additionalRealFindings": 2,
+      "duplicateNoise": 0,
+      "falsePositives": 0,
+      "negativeControlsRejected": 3,
+      "negativeControlsTotal": 4,
+      "notes": "Frozen before review. Caught the only CodeRabbit root and two independently verified additional defects. Focused subscription run is development-only and intentionally cannot satisfy the complete-corpus promotion scorer."
     }
   ]
 }

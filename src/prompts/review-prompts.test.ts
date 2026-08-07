@@ -42,6 +42,16 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("same-diff comment or test");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("A helper parameter is not a trust boundary");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("export keyword does not make");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("accepts both tenant identity and resource identity");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("cached value is tenant-scoped");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("keyed only by resource before ownership validation");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("can return another tenant's cached value");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("needs no external caller");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Globally shared values or an effective ownership check after lookup defeat the claim");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("key aliasing or two tenant calls alone do not prove a leak");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("changed confinement helper is also its own boundary");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("accepts an untrusted value and promises to keep the returned path or capability within a supplied root");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("removed the enforcing containment check");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("not seeing an entry is not evidence");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("same entry, not a duplicate");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("arbitrarily huge caller-controlled");

@@ -33,28 +33,62 @@ describe("MIX review benchmark", () => {
     expect(developmentRuns.schemaVersion).toBe(1);
     expect(developmentRuns.selected.candidateHead).toMatch(/^[a-f0-9]{40}$/);
     expect(developmentRuns.runs.some(({status}) => status === "timeout")).toBe(true);
-    const selected = developmentRuns.runs.find(({pipelineSha}) =>
+    const selectedRuns = developmentRuns.runs.filter(({pipelineSha, promptSha256, effort}) =>
       pipelineSha === developmentRuns.selected.equivalentMeasuredTree
+      && promptSha256 === developmentRuns.selected.promptSha256
+      && effort === developmentRuns.selected.effort
     );
-    expect(selected).toEqual(expect.objectContaining({
-      status: "complete",
-      effort: developmentRuns.selected.effort,
-      promptSha256: developmentRuns.selected.promptSha256,
-      matchedReferenceRoots: 2,
+    const expectMeasuredEconomics = ({durationMs, apiEquivalentUsd, coderabbitEquivalentUsd}: {
+      durationMs?: number;
+      apiEquivalentUsd?: number;
+      coderabbitEquivalentUsd?: number;
+    }) => {
+      if (durationMs === undefined || apiEquivalentUsd === undefined || coderabbitEquivalentUsd === undefined) {
+        throw new Error("Measured run is missing timing or cost metadata");
+      }
+      for (const value of [durationMs, apiEquivalentUsd, coderabbitEquivalentUsd]) {
+        expect(value).toBeGreaterThanOrEqual(0);
+        expect(Number.isFinite(value)).toBe(true);
+      }
+      expect(coderabbitEquivalentUsd).toBeGreaterThan(0);
+      expect(durationMs).toBeLessThan(300_000);
+      expect(apiEquivalentUsd / coderabbitEquivalentUsd).toBeLessThan(0.5);
+    };
+    expect(selectedRuns).toHaveLength(3);
+    expect(new Set(selectedRuns.map(({artifactSha256}) => artifactSha256)).size).toBe(3);
+    for (const selected of selectedRuns) {
+      expect(selected).toEqual(expect.objectContaining({
+        status: "complete-isolated-repeatability",
+        effort: developmentRuns.selected.effort,
+        matchedReferenceRoots: 5,
+        duplicateNoise: 0,
+        falsePositives: 0,
+        negativeControlsRejected: 5,
+        negativeControlsTotal: 5,
+        updateNoisePerUpdate: 0,
+        suggestionsPerSnapshot: 0,
+      }));
+      expectMeasuredEconomics(selected);
+    }
+    const lowControls = developmentRuns.runs.filter(({status, effort, pipelineSha, promptSha256}) =>
+      status === "complete-isolated-control"
+      && effort === "low"
+      && pipelineSha === developmentRuns.selected.equivalentMeasuredTree
+      && promptSha256 === developmentRuns.selected.promptSha256
+    );
+    expect(lowControls).toHaveLength(1);
+    expect(lowControls[0]).toEqual(expect.objectContaining({
+      status: "complete-isolated-control",
+      effort: "low",
+      matchedReferenceRoots: 5,
       duplicateNoise: 0,
       falsePositives: 0,
+      negativeControlsRejected: 5,
+      negativeControlsTotal: 5,
+      updateNoisePerUpdate: 0,
+      suggestionsPerSnapshot: 0,
     }));
-    const {durationMs, apiEquivalentUsd, coderabbitEquivalentUsd} = selected || {};
-    if (durationMs === undefined || apiEquivalentUsd === undefined || coderabbitEquivalentUsd === undefined) {
-      throw new Error("Selected measured run is missing timing or cost metadata");
-    }
-    for (const value of [durationMs, apiEquivalentUsd, coderabbitEquivalentUsd]) {
-      expect(value).toBeGreaterThanOrEqual(0);
-      expect(Number.isFinite(value)).toBe(true);
-    }
-    expect(coderabbitEquivalentUsd).toBeGreaterThan(0);
-    expect(durationMs).toBeLessThan(300_000);
-    expect(apiEquivalentUsd / coderabbitEquivalentUsd).toBeLessThan(0.5);
+    expectMeasuredEconomics(lowControls[0]);
     expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
       artifactSha256: "f1e2bed22473280cadcdd91566ee830f2ef3dafb03cc6036fa346b37d3195ea2",
       status: "complete-blind-development",

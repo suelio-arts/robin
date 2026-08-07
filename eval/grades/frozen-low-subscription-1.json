@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "artifactSha256": "c87812259340497f42d79e463c031880d6587d767925fd60d74287c6d1c1358a",
+  "findings": [
+    {"id":"9b504807a35c2708176269771ce54c6c12db9962744ff5f64fd789a0dc37e852","disposition":"matched","matchedLabelIds":["2:0a85c6cbf0bcc2ce544a59bfb33259f199a71a77:label:1"]},
+    {"id":"2371eefeaeefa795fdde7b9a0dc0c48f875e938edeea683382211774c16b9b44","disposition":"matched","matchedLabelIds":["3:9fac4da53ba1a3b5f24a687fb9484da5e4274ad1:label:1"]},
+    {"id":"453c976676288156ad43b9dfdcd61f139ec792a4f09970975bfc10ecd8850e60","disposition":"matched","matchedLabelIds":["4:78391fd272f8a19186f17ac0e32f92c2f9c04f97:label:1"]},
+    {"id":"4972247a637a2ff194c8c22d243293c2d822851106f8d52b7d466f7c9492fe9a","disposition":"matched","matchedLabelIds":["5:01ddd427b038942361078f3e9a851e7a05f6b271:label:1"]},
+    {"id":"88f7234de54922852dedc05ec6f46b9fa6dc273fad4a2842786ad9e34a9e5a1e","disposition":"matched","matchedLabelIds":["6:5193ef5b07527e9d54b7c74530c6e771e3c1f0cb:label:1"]}
+  ]
+}

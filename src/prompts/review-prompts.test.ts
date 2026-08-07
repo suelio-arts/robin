@@ -211,6 +211,8 @@ describe("getReviewPrompt", () => {
       'await unzip(payload);',
       'await Promise.all(items.map(load));',
       'await Promise.all(groups.flatMap(load));',
+      'await Promise.allSettled(items.map(load));',
+      'await Promise.any(groups.flatMap(load));',
     ]) {
       const passes = getInitialDiscoveryPasses(`diff --git a/backend/worker.ts b/backend/worker.ts\n+${line}`);
       expect(passes).toHaveLength(5);
@@ -230,6 +232,12 @@ describe("getReviewPrompt", () => {
       'scrollTo(0, 0);',
       'camera.quaternion.copy(next);',
       'const mesh = new Mesh(geometry);',
+      'root.appendChild(child);',
+      'root.removeChild(child);',
+      'root.replaceChildren(child);',
+      'root.insertBefore(child, marker);',
+      'root.querySelector(".item");',
+      'root.querySelectorAll(".item");',
     ]) {
       expect(getInitialDiscoveryPasses(`diff --git a/src/player.ts b/src/player.ts\n+${line}`)[4])
         .toContain("UI and rendering semantics");
@@ -251,6 +259,8 @@ describe("getReviewPrompt", () => {
     expect(getInitialDiscoveryPasses("diff --git a/docs/release.md b/docs/release.md\n+Release notes updated."))
       .toHaveLength(4);
     expect(getInitialDiscoveryPasses("diff --git a/web/api/server.ts b/web/api/server.ts\n+return response;"))
+      .toHaveLength(4);
+    expect(getInitialDiscoveryPasses("diff --git a/backend/query.ts b/backend/query.ts\n+return selectRows(table);"))
       .toHaveLength(4);
   });
 });

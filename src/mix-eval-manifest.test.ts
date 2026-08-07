@@ -33,9 +33,10 @@ describe("MIX review benchmark", () => {
     expect(developmentRuns.schemaVersion).toBe(1);
     expect(developmentRuns.selected.candidateHead).toMatch(/^[a-f0-9]{40}$/);
     expect(developmentRuns.runs.some(({status}) => status === "timeout")).toBe(true);
-    const selectedRuns = developmentRuns.runs.filter(({pipelineSha, promptSha256}) =>
+    const selectedRuns = developmentRuns.runs.filter(({pipelineSha, promptSha256, effort}) =>
       pipelineSha === developmentRuns.selected.equivalentMeasuredTree
       && promptSha256 === developmentRuns.selected.promptSha256
+      && effort === developmentRuns.selected.effort
     );
     expect(selectedRuns).toHaveLength(3);
     expect(new Set(selectedRuns.map(({artifactSha256}) => artifactSha256)).size).toBe(3);

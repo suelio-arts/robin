@@ -136,13 +136,13 @@ function hasChangedPythonPath(chunk: string): boolean {
 
 function hasAvailabilityConcern(chunk: string): boolean {
   return hasVendorModelChange(chunk)
-    || changedHeadPaths(chunk).some((path) => /(?:^|[/_.-])(?:abort|availability|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fanout|lease|memory|pool|resource|socket|stream|timeout|timer)(?:[/_.-]|$)/i.test(path))
-    || /^[+-](?![+-]).*(?:\b(?:abort|availability|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fan.?out|lease|memory|pool|release|resource|socket|stream|timeout|timer)\w*\b|\bPromise\.race\b)/mi.test(chunk);
+    || changedHeadPaths(chunk).some((path) => /(?:^|[/_.-])(?:abort|availability|buffer|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fanout|gunzip|inflate|lease|memory|pool|resource|socket|stream|timeout|timer|unzip)(?:[/_.-]|$)/i.test(path))
+    || /^[+-](?![+-]).*(?:\b(?:abort|arrayBuffer|availability|body.?buffer|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fan.?out|gunzip|inflate|lease|memory|pool|resource|socket|stream|timeout|timer|unzip)\w*\b|\brelease\s*\(|\bPromise\.race\b|\bPromise\.all\s*\([^\n]*(?:map|flatMap)\s*\()/mi.test(chunk);
 }
 
 function hasUiConcern(chunk: string): boolean {
-  return changedHeadPaths(chunk).some((path) => /(?:^|[/_.-])(?:ui|view|views|render|renderer|frontend|web)(?:[/_.-]|$)/i.test(path) || /(?:View\.swift|\.(?:html|css|jsx|tsx))$/i.test(path))
-    || /^[+-](?![+-]).*\b(?:UI|DOM|viewport|render(?:er|ing)?|SwiftUI|UIView)\b/mi.test(chunk);
+  return changedHeadPaths(chunk).some((path) => /(?:^|[/_.-])(?:ui|view|views|render|renderer|frontend)(?:[/_.-]|$)/i.test(path) || /(?:(?:View|ViewController)\.swift|\.(?:html|css|scss|sass|less|jsx|tsx|vue|svelte))$/i.test(path))
+    || /^[+-](?![+-]).*(?:\b(?:UI|DOM|viewport|render(?:er|ing)?|SwiftUI|UIView|overflow|scroll\w*|camera|quaternion|Object3D|Mesh)\b|\bmin-height\b|\b100d?vh\b)/mi.test(chunk);
 }
 
 function hasVendorModelChange(chunk: string): boolean {

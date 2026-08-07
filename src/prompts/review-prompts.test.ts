@@ -197,8 +197,22 @@ describe("getReviewPrompt", () => {
   it("routes expensive initial passes only to matching diffs", () => {
     expect(getInitialDiscoveryPasses("diff --git a/backend/orders.ts b/backend/orders.ts\n+return order;")).toHaveLength(4);
 
-    for (const signal of ["lease", "pool", "release", "timeout", "resource"]) {
-      const passes = getInitialDiscoveryPasses(`diff --git a/backend/worker.ts b/backend/worker.ts\n+handle("${signal}");`);
+    for (const line of [
+      'handle("lease");',
+      'handle("pool");',
+      'lease.release();',
+      'handle("timeout");',
+      'handle("resource");',
+      'await response.arrayBuffer();',
+      'const buffered = bodyBuffer(body);',
+      'await decompress(payload);',
+      'await inflate(payload);',
+      'await gunzip(payload);',
+      'await unzip(payload);',
+      'await Promise.all(items.map(load));',
+      'await Promise.all(groups.flatMap(load));',
+    ]) {
+      const passes = getInitialDiscoveryPasses(`diff --git a/backend/worker.ts b/backend/worker.ts\n+${line}`);
       expect(passes).toHaveLength(5);
       expect(passes[4]).toContain("availability and resource safety");
     }
@@ -210,10 +224,21 @@ describe("getReviewPrompt", () => {
       expect(passes).toHaveLength(5);
       expect(passes[4]).toContain("UI and rendering semantics");
     }
-    const swiftViewPasses = getInitialDiscoveryPasses("diff --git a/ios/PlayerView.swift b/ios/PlayerView.swift");
-    expect(swiftViewPasses).toHaveLength(5);
-    expect(swiftViewPasses[4]).toContain("UI and rendering semantics");
-    for (const extension of ["html", "css", "jsx", "tsx"]) {
+    for (const line of [
+      'panel.style.overflow = "auto";',
+      'min-height: 100dvh;',
+      'scrollTo(0, 0);',
+      'camera.quaternion.copy(next);',
+      'const mesh = new Mesh(geometry);',
+    ]) {
+      expect(getInitialDiscoveryPasses(`diff --git a/src/player.ts b/src/player.ts\n+${line}`)[4])
+        .toContain("UI and rendering semantics");
+    }
+    for (const swiftPath of ["PlayerView.swift", "PlayerViewController.swift"]) {
+      expect(getInitialDiscoveryPasses(`diff --git a/ios/${swiftPath} b/ios/${swiftPath}`)[4])
+        .toContain("UI and rendering semantics");
+    }
+    for (const extension of ["html", "css", "scss", "sass", "less", "jsx", "tsx", "vue", "svelte"]) {
       expect(getInitialDiscoveryPasses(`diff --git a/app/shell.${extension} b/app/shell.${extension}`)[4])
         .toContain("UI and rendering semantics");
     }
@@ -222,5 +247,10 @@ describe("getReviewPrompt", () => {
     expect(overlappingPasses).toHaveLength(6);
     expect(overlappingPasses[4]).toContain("availability and resource safety");
     expect(overlappingPasses[5]).toContain("UI and rendering semantics");
+
+    expect(getInitialDiscoveryPasses("diff --git a/docs/release.md b/docs/release.md\n+Release notes updated."))
+      .toHaveLength(4);
+    expect(getInitialDiscoveryPasses("diff --git a/web/api/server.ts b/web/api/server.ts\n+return response;"))
+      .toHaveLength(4);
   });
 });

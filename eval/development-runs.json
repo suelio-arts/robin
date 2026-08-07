@@ -8,11 +8,11 @@
     "status": "exposed-development-only"
   },
   "selected": {
-    "candidateHead": "3220595bb0891c5fa769fa08a388d45fbc9f2ec9",
-    "equivalentMeasuredTree": "44e8367a60c4c667f7c2e92689a46d10ef249af5",
-    "promptSha256": "ea99c44c14ae936b427492138a649a7c187f77457001d0c3f85bb3b44229d8c9",
+    "candidateHead": "9f6b3afcb5ed0c6122e0db7eb305b16c827505d2",
+    "equivalentMeasuredTree": "9f6b3afcb5ed0c6122e0db7eb305b16c827505d2",
+    "promptSha256": "5d80311e53c5f9787bc809f60c41746f03eec8947cba3fd3fbe67228b19e95aa",
     "effort": "high",
-    "reason": "Best measured recall with zero duplicate or false-positive findings; blind promotion remains required."
+    "reason": "Three identical isolated runs reached 5/5 roots with zero false positives, suggestions, or update noise; fresh Greptile evidence remains required for promotion."
   },
   "runs": [
     {
@@ -207,6 +207,72 @@
       "negativeControlsTotal": 5,
       "updateNoisePerUpdate": 0,
       "notes": "All five exact fix heads emitted zero findings and zero suggestions; every stale initial candidate was rejected."
+    },
+    {
+      "artifactSha256": "748bed10ab88332e8ba682c710affb74b27e038a88f92b4dc9ecdd7b1cfda35a",
+      "pipelineSha": "9f6b3afcb5ed0c6122e0db7eb305b16c827505d2",
+      "promptSha256": "5d80311e53c5f9787bc809f60c41746f03eec8947cba3fd3fbe67228b19e95aa",
+      "effort": "high",
+      "transport": "subscription",
+      "layout": "packed-adversarial",
+      "status": "complete-isolated-repeatability",
+      "repository": "suelio-arts/robin-benchmark",
+      "durationMs": 87347,
+      "calls": 85,
+      "apiEquivalentUsd": 1.0829994,
+      "coderabbitEquivalentUsd": 2.5,
+      "matchedReferenceRoots": 5,
+      "additionalRealFindings": 0,
+      "falsePositives": 0,
+      "negativeControlsRejected": 5,
+      "negativeControlsTotal": 5,
+      "updateNoisePerUpdate": 0,
+      "suggestionsPerSnapshot": 0,
+      "notes": "Run 1/3. Current corpus has no fresh Greptile labels and cannot promote."
+    },
+    {
+      "artifactSha256": "4f003b22455c43a741f848e810dcc6622593b0778371e4d5226e2ffff327193b",
+      "pipelineSha": "9f6b3afcb5ed0c6122e0db7eb305b16c827505d2",
+      "promptSha256": "5d80311e53c5f9787bc809f60c41746f03eec8947cba3fd3fbe67228b19e95aa",
+      "effort": "high",
+      "transport": "subscription",
+      "layout": "packed-adversarial",
+      "status": "complete-isolated-repeatability",
+      "repository": "suelio-arts/robin-benchmark",
+      "durationMs": 81739,
+      "calls": 85,
+      "apiEquivalentUsd": 1.0800874,
+      "coderabbitEquivalentUsd": 2.5,
+      "matchedReferenceRoots": 5,
+      "additionalRealFindings": 0,
+      "falsePositives": 0,
+      "negativeControlsRejected": 5,
+      "negativeControlsTotal": 5,
+      "updateNoisePerUpdate": 0,
+      "suggestionsPerSnapshot": 0,
+      "notes": "Run 2/3. Current corpus has no fresh Greptile labels and cannot promote."
+    },
+    {
+      "artifactSha256": "2b5d3c8fd70f522197f7fde2149b4b6f83b370718472bddb8d8f39bdf3795690",
+      "pipelineSha": "9f6b3afcb5ed0c6122e0db7eb305b16c827505d2",
+      "promptSha256": "5d80311e53c5f9787bc809f60c41746f03eec8947cba3fd3fbe67228b19e95aa",
+      "effort": "high",
+      "transport": "subscription",
+      "layout": "packed-adversarial",
+      "status": "complete-isolated-repeatability",
+      "repository": "suelio-arts/robin-benchmark",
+      "durationMs": 87288,
+      "calls": 85,
+      "apiEquivalentUsd": 1.0759986,
+      "coderabbitEquivalentUsd": 2.5,
+      "matchedReferenceRoots": 5,
+      "additionalRealFindings": 0,
+      "falsePositives": 0,
+      "negativeControlsRejected": 5,
+      "negativeControlsTotal": 5,
+      "updateNoisePerUpdate": 0,
+      "suggestionsPerSnapshot": 0,
+      "notes": "Run 3/3. Current corpus has no fresh Greptile labels and cannot promote."
     }
   ]
 }

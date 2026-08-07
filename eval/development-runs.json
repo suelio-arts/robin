@@ -273,6 +273,28 @@
       "updateNoisePerUpdate": 0,
       "suggestionsPerSnapshot": 0,
       "notes": "Run 3/3. Current corpus has no fresh Greptile labels and cannot promote."
+    },
+    {
+      "artifactSha256": "c87812259340497f42d79e463c031880d6587d767925fd60d74287c6d1c1358a",
+      "pipelineSha": "3f03c4f89da66c82f48bb4c2156d606a2a227a34",
+      "promptSha256": "5d80311e53c5f9787bc809f60c41746f03eec8947cba3fd3fbe67228b19e95aa",
+      "effort": "low",
+      "transport": "subscription",
+      "layout": "packed-adversarial",
+      "status": "complete-isolated-control",
+      "repository": "suelio-arts/robin-benchmark",
+      "durationMs": 69304,
+      "calls": 85,
+      "apiEquivalentUsd": 1.1460214,
+      "coderabbitEquivalentUsd": 2.5,
+      "matchedReferenceRoots": 5,
+      "additionalRealFindings": 0,
+      "falsePositives": 0,
+      "negativeControlsRejected": 5,
+      "negativeControlsTotal": 5,
+      "updateNoisePerUpdate": 0,
+      "suggestionsPerSnapshot": 0,
+      "notes": "Single low-effort control matched the available corpus and was faster, but cost slightly more under API-equivalent cache usage; high remains the frozen candidate until low repeats and fresh Greptile evidence exist."
     }
   ]
 }

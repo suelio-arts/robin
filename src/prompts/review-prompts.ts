@@ -96,7 +96,7 @@ export function getDiscoveryPasses(chunk: string): string[] {
   if (changedHeadPaths(chunk).some((path) => path.startsWith(".github/workflows/"))) {
     passes.splice(0, 1, WORKFLOW_TRUST_DISCOVERY_PASS);
   }
-  if (/^\+(?!\+\+).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk)) {
+  if (hasVendorModelChange(chunk)) {
     passes.splice(4, 1, VENDOR_MODEL_COMPATIBILITY_PASS);
   }
   if (/^diff --git a\/(?:docs\/[^ ]+|(?:[^/]+\/)*README(?:\.[^/]+)?) /m.test(chunk)) {
@@ -116,7 +116,12 @@ export function getDiscoveryPasses(chunk: string): string[] {
 
 export function getInitialDiscoveryPasses(chunk: string): string[] {
   const passes = getDiscoveryPasses(chunk);
-  return isContractChunk(chunk) ? passes.slice(0, 4) : passes;
+  if (isContractChunk(chunk)) return passes.slice(0, 4);
+  return [
+    ...passes.slice(0, 4),
+    ...(hasAvailabilityConcern(chunk) ? [passes[4]] : []),
+    ...(hasUiConcern(chunk) ? [passes[5]] : []),
+  ];
 }
 
 export function getContractSearchDiscoveryPass(chunk: string): string {
@@ -127,6 +132,21 @@ export function getContractSearchDiscoveryPass(chunk: string): string {
 
 function hasChangedPythonPath(chunk: string): boolean {
   return changedHeadPaths(chunk).some((path) => path.endsWith(".py"));
+}
+
+function hasAvailabilityConcern(chunk: string): boolean {
+  return hasVendorModelChange(chunk)
+    || changedHeadPaths(chunk).some((path) => /(?:^|[/_.-])(?:abort|availability|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fanout|lease|memory|pool|resource|socket|stream|timeout|timer)(?:[/_.-]|$)/i.test(path))
+    || /^[+-](?![+-]).*(?:\b(?:abort|availability|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fan.?out|lease|memory|pool|release|resource|socket|stream|timeout|timer)\w*\b|\bPromise\.race\b)/mi.test(chunk);
+}
+
+function hasUiConcern(chunk: string): boolean {
+  return changedHeadPaths(chunk).some((path) => /(?:^|[/_.-])(?:ui|view|views|render|renderer|frontend|web)(?:[/_.-]|$)/i.test(path) || /(?:View\.swift|\.(?:html|css|jsx|tsx))$/i.test(path))
+    || /^[+-](?![+-]).*\b(?:UI|DOM|viewport|render(?:er|ing)?|SwiftUI|UIView)\b/mi.test(chunk);
+}
+
+function hasVendorModelChange(chunk: string): boolean {
+  return /^\+(?!\+\+).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk);
 }
 
 function hasParserLikeChange(chunk: string): boolean {

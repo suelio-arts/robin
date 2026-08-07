@@ -112,7 +112,8 @@ describe("getReviewPrompt", () => {
     const projectedTitlePasses = getInitialDiscoveryPasses("diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts\n+title: localizedTitle");
     expect(projectedTitlePasses[0]).toContain("read-project-edit-rebuild round trips");
     expect(projectedTitlePasses).toHaveLength(4);
-    expect(getInitialDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
+    expect(getInitialDiscoveryPasses("diff --git a/backend/player.ts b/backend/player.ts"))
+      .toEqual(DISCOVERY_PASSES.slice(0, 4));
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("canonical sibling preflight/contract entry points");
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("server handler and persistence serializer");
     expect(PRECISION_SEARCH_PLANNER_INSTRUCTIONS).toContain("could disprove each candidate");
@@ -141,7 +142,7 @@ describe("getReviewPrompt", () => {
     expect(parserPasses[0]).toContain("comments, quoted strings, duplicate fields");
     expect(parserPasses[0]).toContain("active properties from commented or quoted lookalikes");
     expect(getInitialDiscoveryPasses("diff --git a/src/value.ts b/src/value.ts\n+const value = input.trim()"))
-      .toEqual(DISCOVERY_PASSES);
+      .toEqual(DISCOVERY_PASSES.slice(0, 4));
     expect(getInitialDiscoveryPasses([
       "diff --git a/backend/types.ts b/backend/types.ts",
       "+const reconciled = {...existing, ...record}; // reconciliation upgrade",
@@ -184,12 +185,42 @@ describe("getReviewPrompt", () => {
     expect(getInitialDiscoveryPasses("diff --git a/verify.mjs b/verify.mjs\n+assert.doesNotMatch(source, /visible = false/)")[0])
       .toContain("source-code verification gates");
     expect(getInitialDiscoveryPasses("diff --git a/src/domain.ts b/src/domain.ts\n+const version = 2\n+const model = record"))
-      .toEqual(DISCOVERY_PASSES);
+      .toEqual(DISCOVERY_PASSES.slice(0, 4));
     const requiredChildren = [
       "diff --git a/studio/editor.mjs b/studio/editor.mjs",
       "+if (thesis && beats.length === 0) throw new Error('Add a beat');",
     ].join("\n");
     expect(getInitialDiscoveryPasses(requiredChildren)).toHaveLength(4);
     expect(getContractSearchDiscoveryPass(requiredChildren)).toContain("required first child");
+  });
+
+  it("routes expensive initial passes only to matching diffs", () => {
+    expect(getInitialDiscoveryPasses("diff --git a/backend/orders.ts b/backend/orders.ts\n+return order;")).toHaveLength(4);
+
+    for (const signal of ["lease", "pool", "release", "timeout", "resource"]) {
+      const passes = getInitialDiscoveryPasses(`diff --git a/backend/worker.ts b/backend/worker.ts\n+handle("${signal}");`);
+      expect(passes).toHaveLength(5);
+      expect(passes[4]).toContain("availability and resource safety");
+    }
+    expect(getInitialDiscoveryPasses("diff --git a/backend/worker.ts b/backend/worker.ts\n+await Promise.race(tasks);"))
+      .toHaveLength(5);
+
+    for (const signal of ["UI", "DOM", "viewport", "render"]) {
+      const passes = getInitialDiscoveryPasses(`diff --git a/src/player.ts b/src/player.ts\n+handle("${signal}");`);
+      expect(passes).toHaveLength(5);
+      expect(passes[4]).toContain("UI and rendering semantics");
+    }
+    const swiftViewPasses = getInitialDiscoveryPasses("diff --git a/ios/PlayerView.swift b/ios/PlayerView.swift");
+    expect(swiftViewPasses).toHaveLength(5);
+    expect(swiftViewPasses[4]).toContain("UI and rendering semantics");
+    for (const extension of ["html", "css", "jsx", "tsx"]) {
+      expect(getInitialDiscoveryPasses(`diff --git a/app/shell.${extension} b/app/shell.${extension}`)[4])
+        .toContain("UI and rendering semantics");
+    }
+
+    const overlappingPasses = getInitialDiscoveryPasses("diff --git a/web/player.ts b/web/player.ts\n+const timeout = viewport.height;");
+    expect(overlappingPasses).toHaveLength(6);
+    expect(overlappingPasses[4]).toContain("availability and resource safety");
+    expect(overlappingPasses[5]).toContain("UI and rendering semantics");
   });
 });

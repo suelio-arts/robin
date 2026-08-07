@@ -38,6 +38,7 @@ describe("MIX review benchmark", () => {
       && promptSha256 === developmentRuns.selected.promptSha256
     );
     expect(selectedRuns).toHaveLength(3);
+    expect(new Set(selectedRuns.map(({artifactSha256}) => artifactSha256)).size).toBe(3);
     for (const selected of selectedRuns) {
       expect(selected).toEqual(expect.objectContaining({
         status: "complete-isolated-repeatability",
@@ -62,6 +63,17 @@ describe("MIX review benchmark", () => {
       expect(durationMs).toBeLessThan(300_000);
       expect(apiEquivalentUsd / coderabbitEquivalentUsd).toBeLessThan(0.5);
     }
+    expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
+      status: "complete-isolated-control",
+      effort: "low",
+      matchedReferenceRoots: 5,
+      duplicateNoise: 0,
+      falsePositives: 0,
+      negativeControlsRejected: 5,
+      negativeControlsTotal: 5,
+      updateNoisePerUpdate: 0,
+      suggestionsPerSnapshot: 0,
+    }));
     expect(developmentRuns.runs).toContainEqual(expect.objectContaining({
       artifactSha256: "f1e2bed22473280cadcdd91566ee830f2ef3dafb03cc6036fa346b37d3195ea2",
       status: "complete-blind-development",

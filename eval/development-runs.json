@@ -292,6 +292,7 @@
       "coderabbitEquivalentUsd": 2.5,
       "matchedReferenceRoots": 5,
       "additionalRealFindings": 0,
+      "duplicateNoise": 0,
       "falsePositives": 0,
       "negativeControlsRejected": 5,
       "negativeControlsTotal": 5,

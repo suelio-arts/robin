@@ -2438,7 +2438,7 @@ function getDiscoveryPasses(chunk) {
     if ((0, contract_discovery_1.changedHeadPaths)(chunk).some((path) => path.startsWith(".github/workflows/"))) {
         passes.splice(0, 1, WORKFLOW_TRUST_DISCOVERY_PASS);
     }
-    if (/^\+(?!\+\+).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk)) {
+    if (hasVendorModelChange(chunk)) {
         passes.splice(4, 1, VENDOR_MODEL_COMPATIBILITY_PASS);
     }
     if (/^diff --git a\/(?:docs\/[^ ]+|(?:[^/]+\/)*README(?:\.[^/]+)?) /m.test(chunk)) {
@@ -2457,7 +2457,13 @@ function getDiscoveryPasses(chunk) {
 }
 function getInitialDiscoveryPasses(chunk) {
     const passes = getDiscoveryPasses(chunk);
-    return isContractChunk(chunk) ? passes.slice(0, 4) : passes;
+    if (isContractChunk(chunk))
+        return passes.slice(0, 4);
+    return [
+        ...passes.slice(0, 4),
+        ...(hasAvailabilityConcern(chunk) ? [passes[4]] : []),
+        ...(hasUiConcern(chunk) ? [passes[5]] : []),
+    ];
 }
 function getContractSearchDiscoveryPass(chunk) {
     return hasChangedPythonPath(chunk)
@@ -2466,6 +2472,18 @@ function getContractSearchDiscoveryPass(chunk) {
 }
 function hasChangedPythonPath(chunk) {
     return (0, contract_discovery_1.changedHeadPaths)(chunk).some((path) => path.endsWith(".py"));
+}
+function hasAvailabilityConcern(chunk) {
+    return hasVendorModelChange(chunk)
+        || (0, contract_discovery_1.changedHeadPaths)(chunk).some((path) => /(?:^|[/_.-])(?:abort|availability|buffer|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fanout|gunzip|inflate|lease|memory|pool|resource|socket|stream|timeout|timer|unzip)(?:[/_.-]|$)/i.test(path))
+        || /^[+-](?![+-]).*(?:\b(?:abort|arrayBuffer|availability|body.?buffer|cache|cancel|cleanup|concurrency|deadline|decompress|disk|dispose|fan.?out|gunzip|inflate|lease|memory|pool|resource|socket|stream|timeout|timer|unzip)\w*\b|\brelease\s*\(|\bPromise\.race\b|\bPromise\.(?:all|allSettled|any)\s*\([^\n]*(?:map|flatMap)\s*\()/mi.test(chunk);
+}
+function hasUiConcern(chunk) {
+    return (0, contract_discovery_1.changedHeadPaths)(chunk).some((path) => /(?:^|[/_.-])(?:ui|view|views|render|renderer|frontend)(?:[/_.-]|$)/i.test(path) || /(?:(?:View|ViewController)\.swift|\.(?:html|css|scss|sass|less|jsx|tsx|vue|svelte))$/i.test(path))
+        || /^[+-](?![+-]).*(?:\b(?:UI|DOM|viewport|render(?:er|ing)?|SwiftUI|UIView|overflow|scroll\w*|camera|quaternion|Object3D|Mesh)\b|\b(?:appendChild|removeChild|replaceChildren|insertBefore|querySelector|querySelectorAll)\s*\(|\bmin-height\b|\b100d?vh\b)/mi.test(chunk);
+}
+function hasVendorModelChange(chunk) {
+    return /^\+(?!\+\+).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk);
 }
 function hasParserLikeChange(chunk) {
     return /^\+(?!\+\+).*(?:\bre\.(?:search|match|fullmatch|findall|finditer)\s*\(|\bnew RegExp\s*\(|\.match\s*\(|\bgrep\s+-[^\n]*[EF]|\b(?:parse|parser|scanner|validator)\w*\s*\()/mi.test(chunk);

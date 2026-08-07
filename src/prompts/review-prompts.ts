@@ -146,7 +146,7 @@ function hasUiConcern(chunk: string): boolean {
 }
 
 function hasVendorModelChange(chunk: string): boolean {
-  return /^\+(?!\+\+).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk);
+  return /^[+-](?![+-]).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk);
 }
 
 function hasParserLikeChange(chunk: string): boolean {

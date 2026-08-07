@@ -2483,7 +2483,7 @@ function hasUiConcern(chunk) {
         || /^[+-](?![+-]).*(?:\b(?:UI|DOM|viewport|render(?:er|ing)?|SwiftUI|UIView|overflow|scroll\w*|camera|quaternion|Object3D|Mesh)\b|\b(?:appendChild|removeChild|replaceChildren|insertBefore|querySelector|querySelectorAll)\s*\(|\bmin-height\b|\b100d?vh\b)/mi.test(chunk);
 }
 function hasVendorModelChange(chunk) {
-    return /^\+(?!\+\+).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk);
+    return /^[+-](?![+-]).*(?:\bspeech[_-]?models?\b|\bapi[_-]?version\b|\bmodel\s*:\s*["'][a-z0-9._-]+["'])/mi.test(chunk);
 }
 function hasParserLikeChange(chunk) {
     return /^\+(?!\+\+).*(?:\bre\.(?:search|match|fullmatch|findall|finditer)\s*\(|\bnew RegExp\s*\(|\.match\s*\(|\bgrep\s+-[^\n]*[EF]|\b(?:parse|parser|scanner|validator)\w*\s*\()/mi.test(chunk);

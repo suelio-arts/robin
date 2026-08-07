@@ -171,6 +171,12 @@ describe("getReviewPrompt", () => {
       "diff --git a/vendor/client.py b/vendor/client.py",
       "+config[\"speech_models\"] = [\"universal-3-pro\"]",
     ].join("\n"))[4]).toContain("every option the changed request still forwards");
+    const removedVendorModelPasses = getInitialDiscoveryPasses([
+      "diff --git a/vendor/client.py b/vendor/client.py",
+      "-config[\"speech_models\"] = [\"universal-3-pro\"]",
+    ].join("\n"));
+    expect(removedVendorModelPasses).toHaveLength(5);
+    expect(removedVendorModelPasses[4]).toContain("every option the changed request still forwards");
     expect(getInitialDiscoveryPasses([
       "diff --git a/.github/workflows/eval.yml b/.github/workflows/eval.yml",
       "+      uses: vendor/action@main",

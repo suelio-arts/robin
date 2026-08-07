@@ -48,6 +48,7 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("can return another tenant's cached value");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("needs no external caller");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Globally shared values or an effective ownership check after lookup defeat the claim");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("key aliasing or two tenant calls alone do not prove a leak");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("changed confinement helper is also its own boundary");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("accepts an untrusted value and promises to keep the returned path or capability within a supplied root");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("removed the enforcing containment check");

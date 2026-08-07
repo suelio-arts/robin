@@ -112,7 +112,8 @@ describe("getReviewPrompt", () => {
     const projectedTitlePasses = getInitialDiscoveryPasses("diff --git a/src/studio-simulator.ts b/src/studio-simulator.ts\n+title: localizedTitle");
     expect(projectedTitlePasses[0]).toContain("read-project-edit-rebuild round trips");
     expect(projectedTitlePasses).toHaveLength(4);
-    expect(getInitialDiscoveryPasses("diff --git a/src/player.ts b/src/player.ts")).toEqual(DISCOVERY_PASSES);
+    expect(getInitialDiscoveryPasses("diff --git a/backend/player.ts b/backend/player.ts"))
+      .toEqual(DISCOVERY_PASSES.slice(0, 4));
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("canonical sibling preflight/contract entry points");
     expect(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS).toContain("server handler and persistence serializer");
     expect(PRECISION_SEARCH_PLANNER_INSTRUCTIONS).toContain("could disprove each candidate");
@@ -141,7 +142,7 @@ describe("getReviewPrompt", () => {
     expect(parserPasses[0]).toContain("comments, quoted strings, duplicate fields");
     expect(parserPasses[0]).toContain("active properties from commented or quoted lookalikes");
     expect(getInitialDiscoveryPasses("diff --git a/src/value.ts b/src/value.ts\n+const value = input.trim()"))
-      .toEqual(DISCOVERY_PASSES);
+      .toEqual(DISCOVERY_PASSES.slice(0, 4));
     expect(getInitialDiscoveryPasses([
       "diff --git a/backend/types.ts b/backend/types.ts",
       "+const reconciled = {...existing, ...record}; // reconciliation upgrade",
@@ -170,6 +171,12 @@ describe("getReviewPrompt", () => {
       "diff --git a/vendor/client.py b/vendor/client.py",
       "+config[\"speech_models\"] = [\"universal-3-pro\"]",
     ].join("\n"))[4]).toContain("every option the changed request still forwards");
+    const removedVendorModelPasses = getInitialDiscoveryPasses([
+      "diff --git a/vendor/client.py b/vendor/client.py",
+      "-config[\"speech_models\"] = [\"universal-3-pro\"]",
+    ].join("\n"));
+    expect(removedVendorModelPasses).toHaveLength(5);
+    expect(removedVendorModelPasses[4]).toContain("every option the changed request still forwards");
     expect(getInitialDiscoveryPasses([
       "diff --git a/.github/workflows/eval.yml b/.github/workflows/eval.yml",
       "+      uses: vendor/action@main",
@@ -184,12 +191,82 @@ describe("getReviewPrompt", () => {
     expect(getInitialDiscoveryPasses("diff --git a/verify.mjs b/verify.mjs\n+assert.doesNotMatch(source, /visible = false/)")[0])
       .toContain("source-code verification gates");
     expect(getInitialDiscoveryPasses("diff --git a/src/domain.ts b/src/domain.ts\n+const version = 2\n+const model = record"))
-      .toEqual(DISCOVERY_PASSES);
+      .toEqual(DISCOVERY_PASSES.slice(0, 4));
     const requiredChildren = [
       "diff --git a/studio/editor.mjs b/studio/editor.mjs",
       "+if (thesis && beats.length === 0) throw new Error('Add a beat');",
     ].join("\n");
     expect(getInitialDiscoveryPasses(requiredChildren)).toHaveLength(4);
     expect(getContractSearchDiscoveryPass(requiredChildren)).toContain("required first child");
+  });
+
+  it("routes expensive initial passes only to matching diffs", () => {
+    expect(getInitialDiscoveryPasses("diff --git a/backend/orders.ts b/backend/orders.ts\n+return order;")).toHaveLength(4);
+
+    for (const line of [
+      'handle("lease");',
+      'handle("pool");',
+      'lease.release();',
+      'handle("timeout");',
+      'handle("resource");',
+      'await response.arrayBuffer();',
+      'const buffered = bodyBuffer(body);',
+      'await decompress(payload);',
+      'await inflate(payload);',
+      'await gunzip(payload);',
+      'await unzip(payload);',
+      'await Promise.all(items.map(load));',
+      'await Promise.all(groups.flatMap(load));',
+      'await Promise.allSettled(items.map(load));',
+      'await Promise.any(groups.flatMap(load));',
+    ]) {
+      const passes = getInitialDiscoveryPasses(`diff --git a/backend/worker.ts b/backend/worker.ts\n+${line}`);
+      expect(passes).toHaveLength(5);
+      expect(passes[4]).toContain("availability and resource safety");
+    }
+    expect(getInitialDiscoveryPasses("diff --git a/backend/worker.ts b/backend/worker.ts\n+await Promise.race(tasks);"))
+      .toHaveLength(5);
+
+    for (const signal of ["UI", "DOM", "viewport", "render"]) {
+      const passes = getInitialDiscoveryPasses(`diff --git a/src/player.ts b/src/player.ts\n+handle("${signal}");`);
+      expect(passes).toHaveLength(5);
+      expect(passes[4]).toContain("UI and rendering semantics");
+    }
+    for (const line of [
+      'panel.style.overflow = "auto";',
+      'min-height: 100dvh;',
+      'scrollTo(0, 0);',
+      'camera.quaternion.copy(next);',
+      'const mesh = new Mesh(geometry);',
+      'root.appendChild(child);',
+      'root.removeChild(child);',
+      'root.replaceChildren(child);',
+      'root.insertBefore(child, marker);',
+      'root.querySelector(".item");',
+      'root.querySelectorAll(".item");',
+    ]) {
+      expect(getInitialDiscoveryPasses(`diff --git a/src/player.ts b/src/player.ts\n+${line}`)[4])
+        .toContain("UI and rendering semantics");
+    }
+    for (const swiftPath of ["PlayerView.swift", "PlayerViewController.swift"]) {
+      expect(getInitialDiscoveryPasses(`diff --git a/ios/${swiftPath} b/ios/${swiftPath}`)[4])
+        .toContain("UI and rendering semantics");
+    }
+    for (const extension of ["html", "css", "scss", "sass", "less", "jsx", "tsx", "vue", "svelte"]) {
+      expect(getInitialDiscoveryPasses(`diff --git a/app/shell.${extension} b/app/shell.${extension}`)[4])
+        .toContain("UI and rendering semantics");
+    }
+
+    const overlappingPasses = getInitialDiscoveryPasses("diff --git a/web/player.ts b/web/player.ts\n+const timeout = viewport.height;");
+    expect(overlappingPasses).toHaveLength(6);
+    expect(overlappingPasses[4]).toContain("availability and resource safety");
+    expect(overlappingPasses[5]).toContain("UI and rendering semantics");
+
+    expect(getInitialDiscoveryPasses("diff --git a/docs/release.md b/docs/release.md\n+Release notes updated."))
+      .toHaveLength(4);
+    expect(getInitialDiscoveryPasses("diff --git a/web/api/server.ts b/web/api/server.ts\n+return response;"))
+      .toHaveLength(4);
+    expect(getInitialDiscoveryPasses("diff --git a/backend/query.ts b/backend/query.ts\n+return selectRows(table);"))
+      .toHaveLength(4);
   });
 });

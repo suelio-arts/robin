@@ -32,6 +32,22 @@ describe("MIX review benchmark", () => {
   it("keeps a measured development-run ledger", () => {
     expect(developmentRuns.schemaVersion).toBe(1);
     expect(developmentRuns.selected.candidateHead).toMatch(/^[a-f0-9]{40}$/);
+    const measuredPromptHashes = new Set(developmentRuns.runs.flatMap(({promptSha256}) =>
+      promptSha256 ? [promptSha256] : []
+    ));
+    expect(new Set(developmentRuns.promptGrades.map(({promptSha256}) => promptSha256))).toEqual(measuredPromptHashes);
+    expect(developmentRuns.promptGrades.filter(({verdict}) => verdict === "selected")).toEqual([
+      expect.objectContaining({promptSha256: developmentRuns.selected.promptSha256}),
+    ]);
+    for (const grade of developmentRuns.promptGrades) {
+      expect(grade.reason.trim()).not.toBe("");
+      expect(grade.artifactSha256s.length).toBeGreaterThan(0);
+      expect(new Set(grade.artifactSha256s).size).toBe(grade.artifactSha256s.length);
+      const measuredArtifacts = new Set(developmentRuns.runs.flatMap(({promptSha256, artifactSha256}) =>
+        promptSha256 === grade.promptSha256 && artifactSha256 ? [artifactSha256] : []
+      ));
+      expect(new Set(grade.artifactSha256s)).toEqual(measuredArtifacts);
+    }
     expect(developmentRuns.runs.some(({status}) => status === "timeout")).toBe(true);
     const selectedRuns = developmentRuns.runs.filter(({pipelineSha, promptSha256, effort}) =>
       pipelineSha === developmentRuns.selected.equivalentMeasuredTree

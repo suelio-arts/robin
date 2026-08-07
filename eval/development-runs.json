@@ -14,6 +14,60 @@
     "effort": "high",
     "reason": "Three isolated high-effort runs reached 5/5 roots with zero false positives, suggestions, or update noise after requiring tenant-scoped data-flow proof; fresh Greptile evidence remains required for promotion."
   },
+  "promptGrades": [
+    {
+      "promptSha256": "bd56ea25ffaf1060243bb2cca86e70e5b53b82bb5b75ffd19ca57a7d6a59a19f",
+      "verdict": "retired",
+      "artifactSha256s": [
+        "131a18a8d486c02e216c24189d995b6d461dd60ddfa9aabed2aaee601983bbfe",
+        "f5f67ba79508ed3921c6bd3d1b4443cc44ac58c66140db92049b8027f85f6288",
+        "72bb2f6b95e307a35a1d3f8a62f2c9753460ab8563e3779a44dcda9cfdcabfdb"
+      ],
+      "reason": "Retired: high exceeded the CodeRabbit cost baseline and duplicated roots; low missed the reference root."
+    },
+    {
+      "promptSha256": "bf4b6ff16b6ab5c5cdea3715ebbfed91e08cc28e37c6a717874e81e1615c750d",
+      "verdict": "retired",
+      "artifactSha256s": [
+        "cb7d983677bc9db3f0209dac295f5c702d19cf314a3ff413fdf35407d2356914"
+      ],
+      "reason": "Retired: the precision gate collapsed distinct checklist roots and missed the reference root."
+    },
+    {
+      "promptSha256": "ea99c44c14ae936b427492138a649a7c187f77457001d0c3f85bb3b44229d8c9",
+      "verdict": "retired",
+      "artifactSha256s": [
+        "c890cc990ea684616542e5e8ccfddf6469e91d626bf088d774d121d4f8d4d5fb",
+        "f1e2bed22473280cadcdd91566ee830f2ef3dafb03cc6036fa346b37d3195ea2",
+        "2be290a99799fc7345d7b9c726cc9997bb578bad1664b58a07dd1eceb4f6a645",
+        "ef1e86c5e388b9ffab1ca51f9b5e9b45709116171ee662f99bd56a18a314f79b",
+        "52fa90df279e0eea93b7091bfa7e7e56e7e52ab8b55b41c08516f781e45bd31a"
+      ],
+      "reason": "Retired after development exposed non-repeatable tenant-cache and confinement misses; its fixed-head update run remained clean."
+    },
+    {
+      "promptSha256": "5d80311e53c5f9787bc809f60c41746f03eec8947cba3fd3fbe67228b19e95aa",
+      "verdict": "retired",
+      "artifactSha256s": [
+        "748bed10ab88332e8ba682c710affb74b27e038a88f92b4dc9ecdd7b1cfda35a",
+        "4f003b22455c43a741f848e810dcc6622593b0778371e4d5226e2ffff327193b",
+        "2b5d3c8fd70f522197f7fde2149b4b6f83b370718472bddb8d8f39bdf3795690",
+        "c87812259340497f42d79e463c031880d6587d767925fd60d74287c6d1c1358a"
+      ],
+      "reason": "Retired despite 5/5 repeatability because its cache rule treated key aliasing as sufficient proof and could create false positives."
+    },
+    {
+      "promptSha256": "09d8a6acc6b0717a03f43567714dd4d758c05dfac7950e2485d53d9cd1df9976",
+      "verdict": "selected",
+      "artifactSha256s": [
+        "36d00ed435e33d461e5daa876f7274fa3b251a4988c91ba6af9f851fbf934546",
+        "9a702035af4b3a58d9ebd686108c96d86b2c306f4ccd262d4b1a2901bf7c67c2",
+        "2517de9c05860955fe0726a2aea5790f5965dd6082c4d335e9bcd91f3c1279c0",
+        "fcd1f3365197e5ea85415c36daf2a7994d71edfe65356157cf0a9379b95b94a4"
+      ],
+      "reason": "Selected: three high repeats and one low control reached 5/5 roots with zero false positives, suggestions, or update noise while remaining under the latency and API-equivalent cost targets."
+    }
+  ],
   "runs": [
     {
       "pipelineSha": "c3e285d0ef917e450dced46c61fbc8c0569eca6f",

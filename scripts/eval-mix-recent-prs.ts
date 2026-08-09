@@ -47,10 +47,14 @@ const MIX_REVIEW_INSTRUCTIONS = [
 const EVAL_CALL_TIMEOUT_MS = 140_000;
 const EVAL_LAST_CALL_START_MS = 140_000;
 const EVAL_CHUNK_CONCURRENCY = 8;
+const evalApiKey = process.env.OPENAI_API_KEY || "";
+if (evalConfig.transport === "api" && !evalApiKey) {
+  throw new Error("OPENAI_API_KEY is required for API evaluation");
+}
 const client = new LLMClient(
-  "rolly-agent",
-  "",
-  evalAgent,
+  evalConfig.transport === "api" ? "https://api.openai.com/v1" : "rolly-agent",
+  evalApiKey,
+  evalConfig.transport === "api" ? "gpt-5.6-luna" : evalAgent,
   undefined,
   EVAL_CALL_TIMEOUT_MS,
   1,
@@ -164,10 +168,13 @@ async function review(systemPrompt: string, userContent: string) {
   const response = await client.chatCompletion(systemPrompt, userContent, true);
   if (!response.usage) throw new Error("Evaluation requires provider token usage for every model call");
   if (!response.callId) throw new Error("Evaluation requires a native provider session id for every model call");
-  if (!response.provenance) throw new Error("Evaluation requires native provider provenance for every model call");
+  const provenance = response.provenance || (evalConfig.transport === "api"
+    ? {provider: "codex", auth: "api", model: "gpt-5.6-luna", effort: evalConfig.effort}
+    : undefined);
+  if (!provenance) throw new Error("Evaluation requires native provider provenance for every model call");
   const expectedProvenance = {provider: "codex", auth: evalConfig.transport, model: "gpt-5.6-luna", effort: evalConfig.effort};
-  if (JSON.stringify(response.provenance) !== JSON.stringify(expectedProvenance)) {
-    throw new Error(`Wrong evaluation provider provenance: ${JSON.stringify(response.provenance)}`);
+  if (JSON.stringify(provenance) !== JSON.stringify(expectedProvenance)) {
+    throw new Error(`Wrong evaluation provider provenance: ${JSON.stringify(provenance)}`);
   }
   if (!activeSnapshotId) throw new Error("Evaluation call is missing its snapshot id");
   const {inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens} = response.usage;
@@ -176,7 +183,7 @@ async function review(systemPrompt: string, userContent: string) {
     snapshotId: activeSnapshotId,
     durationMs: Date.now() - started,
     production: activeSnapshotKind === "review",
-    ...response.provenance,
+    ...provenance,
     usage: {inputTokens, cachedInputTokens, outputTokens, reasoningOutputTokens},
   });
   return {

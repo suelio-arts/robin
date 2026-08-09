@@ -214,6 +214,8 @@ describe("MIX review benchmark", () => {
     const source = readFileSync(resolve("scripts/eval-mix-recent-prs.ts"), "utf8");
     expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
     expect(source).toContain('process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"');
+    expect(source).toContain('evalConfig.transport === "api" ? "https://api.openai.com/v1" : "rolly-agent"');
+    expect(source).toContain('throw new Error("OPENAI_API_KEY is required for API evaluation")');
     expect(source).toContain("{prioritizePlanned: true}");
     const selectedDiffIndex = source.indexOf("const selectedDiff = selectDiffFiles(diff, selectedFiles)");
     const reviewChunksIndex = source.indexOf("const reviewChunks = chunkDiffByFile(selectedDiff, 50000)");

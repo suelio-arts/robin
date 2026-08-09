@@ -1670,7 +1670,7 @@ async function run() {
     let statusModel = "not configured";
     let pullNumber;
     let onJobCancelled;
-    let gatekeeper = true;
+    let gatekeeper = core.getInput("request-changes") !== "false";
     try {
         const eventName = github.context.eventName;
         const payload = github.context.payload;
@@ -1893,7 +1893,12 @@ async function run() {
     catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         if (octokit && statusOwner && statusRepo && statusCommentId) {
-            await updateStatusComment(octokit, statusOwner, statusRepo, statusCommentId, buildFailedStatusBody(message, statusCommand));
+            try {
+                await updateStatusComment(octokit, statusOwner, statusRepo, statusCommentId, buildFailedStatusBody(message, statusCommand));
+            }
+            catch (statusError) {
+                core.warning(`Could not update Robin status comment: ${statusError}`);
+            }
         }
         if (gatekeeper && octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
             try {

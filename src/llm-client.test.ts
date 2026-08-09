@@ -5,9 +5,14 @@ import { join } from "path";
 
 jest.mock("child_process", () => ({ execFile: jest.fn() }));
 
-import { LLMClient } from "./llm-client";
+import { LLMClient, LOCAL_AGENT_COMPLETION_CONTRACT } from "./llm-client";
 
 describe("LLMClient", () => {
+  it("confines local agents to the supplied completion evidence", () => {
+    expect(LOCAL_AGENT_COMPLETION_CONTRACT).toContain("Do not call tools");
+    expect(LOCAL_AGENT_COMPLETION_CONTRACT).toContain("only the evidence supplied");
+  });
+
   it("passes explicit reasoning effort to compatible providers", () => {
     const client = new LLMClient(
       "https://api.openai.com/v1",

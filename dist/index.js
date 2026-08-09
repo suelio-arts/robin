@@ -1206,6 +1206,8 @@ class LLMClient {
     localAgent;
     timeoutMs;
     localAgentCaller;
+    startedAt = Date.now();
+    metrics = { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 };
     constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort, localAgentCaller = "github") {
         this.model = model;
         this.localAgent = baseUrl === ROLLY_AGENT_URL;
@@ -1249,8 +1251,11 @@ class LLMClient {
         }
     }
     async chatCompletion(systemPrompt, userContent, jsonResponseMode = false) {
-        if (this.localAgent)
-            return this.localAgentCompletion(systemPrompt, userContent);
+        if (this.localAgent) {
+            const result = await this.localAgentCompletion(systemPrompt, userContent);
+            this.recordMetrics(result);
+            return result;
+        }
         let lastFinishReason = "unknown";
         let lastError;
         for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
@@ -1267,6 +1272,7 @@ class LLMClient {
                     if (!this.routerModel) {
                         this.logResolvedModel(resolvedModel || this.model);
                     }
+                    this.recordMetrics(result);
                     return result;
                 }
                 lastFinishReason = "empty";
@@ -1293,6 +1299,18 @@ class LLMClient {
             throw new Error(`Failed to get response from LLM after ${this.maxAttempts} attempts: ${lastError}`);
         }
         throw new Error(`Empty response from LLM after ${this.maxAttempts} attempts (finish_reason=${lastFinishReason})`);
+    }
+    getMetrics() {
+        return { ...this.metrics, durationMs: Date.now() - this.startedAt };
+    }
+    recordMetrics(result) {
+        if (!result.usage)
+            return;
+        this.metrics.calls += 1;
+        this.metrics.inputTokens += result.usage.inputTokens;
+        this.metrics.cachedInputTokens += result.usage.cachedInputTokens;
+        this.metrics.outputTokens += result.usage.outputTokens;
+        this.metrics.reasoningOutputTokens += result.usage.reasoningOutputTokens;
     }
     async localAgentCompletion(systemPrompt, userContent) {
         let root;
@@ -1652,6 +1670,7 @@ async function run() {
     let statusModel = "not configured";
     let pullNumber;
     let onJobCancelled;
+    let gatekeeper = true;
     try {
         const eventName = github.context.eventName;
         const payload = github.context.payload;
@@ -1782,6 +1801,7 @@ async function run() {
         const maxComments = (0, repo_config_1.resolveMaxComments)(maxCommentsInput, repoConfig);
         const jsonResponseMode = (0, repo_config_1.resolveJsonResponseMode)(jsonResponseModeInput, repoConfig);
         const requestChanges = (0, repo_config_1.resolveRequestChanges)(requestChangesInput, repoConfig);
+        gatekeeper = requestChanges;
         const diff = await gitUtils.getPullRequestDiff(owner, repo, prNumber);
         if (!diff || diff.trim().length === 0) {
             core.warning("No diff found for this PR.");
@@ -1854,6 +1874,11 @@ async function run() {
                 }
             }
             deduplicateFindings(findings);
+            const metrics = llm.getMetrics();
+            findings.summary += [
+                "",
+                `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning)`,
+            ].join("\n");
             core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
             const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
             await reviewer.postReview(owner, repo, prNumber, findings, requestChanges);
@@ -1870,7 +1895,7 @@ async function run() {
         if (octokit && statusOwner && statusRepo && statusCommentId) {
             await updateStatusComment(octokit, statusOwner, statusRepo, statusCommentId, buildFailedStatusBody(message, statusCommand));
         }
-        if (octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
+        if (gatekeeper && octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
             try {
                 await new github_reviewer_1.GitHubReviewer(octokit).postFailureReview(statusOwner, statusRepo, pullNumber, message);
                 core.warning(`Review blocked after execution failure: ${message}`);
@@ -1880,7 +1905,10 @@ async function run() {
                 core.error(`Could not post fail-closed review: ${reviewError}`);
             }
         }
-        core.setFailed(message);
+        if (gatekeeper)
+            core.setFailed(message);
+        else
+            core.warning(`Informational Robin review did not complete: ${message}`);
     }
     finally {
         onJobCancelled = undefined;
@@ -2169,20 +2197,24 @@ async function runReviewPipeline(llm, searchContracts, diff, context, reviewInst
             return parsed.findings;
         return review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
     };
-    const discovery = await Promise.all((0, review_prompts_1.getInitialDiscoveryPasses)(diff).map(discover));
+    const contractChunk = (0, review_prompts_1.isContractChunk)(diff);
+    const [discovery, contractPlan] = await Promise.all([
+        Promise.all((0, review_prompts_1.getInitialDiscoveryPasses)(diff).map(discover)),
+        contractChunk
+            ? llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true)
+            : Promise.resolve(undefined),
+    ]);
     let contractEvidence = "";
-    if ((0, review_prompts_1.isContractChunk)(diff)) {
-        const plan = await llm.chatCompletion(review_prompts_1.CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true);
+    if (contractPlan) {
         const changedPaths = (0, contract_discovery_1.changedHeadPaths)(diff);
-        contractEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(plan.content, diff, context), changedPaths);
-        discovery.push(await discover([
-            (0, review_prompts_1.getContractSearchDiscoveryPass)(diff),
-            "CONTRACT SEARCH EVIDENCE:",
-            (0, contract_discovery_1.wrapContractSearchEvidence)(contractEvidence),
-        ].join("\n\n")));
+        contractEvidence = await searchContracts((0, contract_discovery_1.completeContractSearchPlan)(contractPlan.content, diff, context), changedPaths);
     }
     const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
-    const verified = review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, [`CANDIDATE FINDINGS:\n${candidates}`, ...review_prompts_1.VERIFICATION_INSTRUCTIONS].join("\n\n"))).content);
+    const verified = review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, [
+        `CANDIDATE FINDINGS:\n${candidates}`,
+        contractEvidence && `CONTRACT SEARCH EVIDENCE:\n${(0, contract_discovery_1.wrapContractSearchEvidence)(contractEvidence)}`,
+        ...review_prompts_1.VERIFICATION_INSTRUCTIONS,
+    ].filter(Boolean).join("\n\n"))).content);
     const precisionCandidates = (0, precision_gate_1.buildPrecisionCandidates)([...discovery, verified]);
     let precisionEvidence = "";
     if (precisionCandidates.length > 0) {

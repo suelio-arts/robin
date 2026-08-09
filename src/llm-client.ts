@@ -61,6 +61,14 @@ export interface ChatCompletionResult {
 export type LlmProgressHandler = (detail: string) => void | Promise<void>;
 export type ReasoningEffort = "low" | "medium" | "high";
 export type LocalAgentCaller = "github" | "codex";
+export interface LlmMetrics {
+  calls: number;
+  durationMs: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+}
 
 export class LLMClient {
   private client: OpenAI;
@@ -73,6 +81,8 @@ export class LLMClient {
   private localAgent: boolean;
   private timeoutMs: number;
   private localAgentCaller: LocalAgentCaller;
+  private startedAt = Date.now();
+  private metrics = {calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0};
 
   constructor(
     baseUrl: string,
@@ -139,7 +149,11 @@ export class LLMClient {
     userContent: string,
     jsonResponseMode = false
   ): Promise<ChatCompletionResult> {
-    if (this.localAgent) return this.localAgentCompletion(systemPrompt, userContent);
+    if (this.localAgent) {
+      const result = await this.localAgentCompletion(systemPrompt, userContent);
+      this.recordMetrics(result);
+      return result;
+    }
     let lastFinishReason = "unknown";
     let lastError: unknown;
 
@@ -161,6 +175,7 @@ export class LLMClient {
           if (!this.routerModel) {
             this.logResolvedModel(resolvedModel || this.model);
           }
+          this.recordMetrics(result);
           return result;
         }
 
@@ -199,6 +214,19 @@ export class LLMClient {
     throw new Error(
       `Empty response from LLM after ${this.maxAttempts} attempts (finish_reason=${lastFinishReason})`
     );
+  }
+
+  getMetrics(): LlmMetrics {
+    return {...this.metrics, durationMs: Date.now() - this.startedAt};
+  }
+
+  private recordMetrics(result: ChatCompletionResult): void {
+    if (!result.usage) return;
+    this.metrics.calls += 1;
+    this.metrics.inputTokens += result.usage.inputTokens;
+    this.metrics.cachedInputTokens += result.usage.cachedInputTokens;
+    this.metrics.outputTokens += result.usage.outputTokens;
+    this.metrics.reasoningOutputTokens += result.usage.reasoningOutputTokens;
   }
 
   private async localAgentCompletion(

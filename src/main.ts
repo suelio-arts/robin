@@ -17,7 +17,7 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
+import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent, validateExpectedHeadSha, workflowDispatchPrNumber } from "./events";
 import { buildFileContext } from "./review-context";
@@ -33,6 +33,7 @@ async function run(): Promise<void> {
   let statusModel = "not configured";
   let pullNumber: number | undefined;
   let onJobCancelled: (() => Promise<void>) | undefined;
+  let gatekeeper = true;
 
   try {
     const eventName = github.context.eventName;
@@ -206,6 +207,7 @@ async function run(): Promise<void> {
     const maxComments = resolveMaxComments(maxCommentsInput, repoConfig);
     const jsonResponseMode = resolveJsonResponseMode(jsonResponseModeInput, repoConfig);
     const requestChanges = resolveRequestChanges(requestChangesInput, repoConfig);
+    gatekeeper = requestChanges;
 
     const diff = await gitUtils.getPullRequestDiff(owner, repo, prNumber);
     
@@ -348,6 +350,11 @@ async function run(): Promise<void> {
       }
 
       deduplicateFindings(findings);
+      const metrics = llm.getMetrics();
+      findings.summary += [
+        "",
+        `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning)`,
+      ].join("\n");
 
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
 
@@ -368,7 +375,7 @@ async function run(): Promise<void> {
     if (octokit && statusOwner && statusRepo && statusCommentId) {
       await updateStatusComment(octokit, statusOwner, statusRepo, statusCommentId, buildFailedStatusBody(message, statusCommand));
     }
-    if (octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
+    if (gatekeeper && octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
       try {
         await new GitHubReviewer(octokit as any).postFailureReview(
           statusOwner,
@@ -382,7 +389,8 @@ async function run(): Promise<void> {
         core.error(`Could not post fail-closed review: ${reviewError}`);
       }
     }
-    core.setFailed(message);
+    if (gatekeeper) core.setFailed(message);
+    else core.warning(`Informational Robin review did not complete: ${message}`);
   } finally {
     onJobCancelled = undefined;
   }
@@ -768,21 +776,20 @@ async function runReviewPipeline(
       `${instructions}\n\nReturn ONLY a single valid JSON object.`
     )).content);
   };
-  const discovery = await Promise.all(getInitialDiscoveryPasses(diff).map(discover));
+  const contractChunk = isContractChunk(diff);
+  const [discovery, contractPlan] = await Promise.all([
+    Promise.all(getInitialDiscoveryPasses(diff).map(discover)),
+    contractChunk
+      ? llm.chatCompletion(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true)
+      : Promise.resolve(undefined),
+  ]);
   let contractEvidence = "";
-  if (isContractChunk(diff)) {
-    const plan = await llm.chatCompletion(
-      CONTRACT_SEARCH_PLANNER_INSTRUCTIONS,
-      buildReviewInput(diff, context),
-      true
-    );
+  if (contractPlan) {
     const changedPaths = changedHeadPaths(diff);
-    contractEvidence = await searchContracts(completeContractSearchPlan(plan.content, diff, context), changedPaths);
-    discovery.push(await discover([
-      getContractSearchDiscoveryPass(diff),
-      "CONTRACT SEARCH EVIDENCE:",
-      wrapContractSearchEvidence(contractEvidence),
-    ].join("\n\n")));
+    contractEvidence = await searchContracts(
+      completeContractSearchPlan(contractPlan.content, diff, context),
+      changedPaths
+    );
   }
   const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
   const verified = ReviewParser.parse((await runReview(
@@ -791,7 +798,11 @@ async function runReviewPipeline(
     reviewInstructions,
     true,
     context,
-    [`CANDIDATE FINDINGS:\n${candidates}`, ...VERIFICATION_INSTRUCTIONS].join("\n\n")
+    [
+      `CANDIDATE FINDINGS:\n${candidates}`,
+      contractEvidence && `CONTRACT SEARCH EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
+      ...VERIFICATION_INSTRUCTIONS,
+    ].filter(Boolean).join("\n\n")
   )).content);
   const precisionCandidates = buildPrecisionCandidates([...discovery, verified]);
   let precisionEvidence = "";

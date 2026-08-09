@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, selectDiffFiles } from "../src/diff-filter";
-import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getContractSearchDiscoveryPass, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
+import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
@@ -44,8 +44,8 @@ const MIX_REVIEW_INSTRUCTIONS = [
   "Medium findings are concrete non-blocking bugs. Put optional simplification in suggestions; omit style nits and repeated advice.",
   "Prefer hard cuts and root-cause fixes. Keep changes DRY, functional, lean, type-safe, fail-fast, and free of speculative fallbacks or abstractions.",
 ].join("\n");
-const EVAL_CALL_TIMEOUT_MS = 140_000;
-const EVAL_LAST_CALL_START_MS = 140_000;
+const EVAL_CALL_TIMEOUT_MS = 90_000;
+const EVAL_LAST_CALL_START_MS = 205_000;
 const EVAL_CHUNK_CONCURRENCY = 8;
 const evalApiKey = process.env.OPENAI_API_KEY || "";
 if (evalConfig.transport === "api" && !evalApiKey) {
@@ -352,14 +352,17 @@ async function main() {
         reviewPrompt,
         `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
       );
-      const discovery = await Promise.all(getInitialDiscoveryPasses(chunk).map(discover));
+      const contractChunk = isContractChunk(chunk);
+      const [discovery, contractPlan] = await Promise.all([
+        Promise.all(getInitialDiscoveryPasses(chunk).map(discover)),
+        contractChunk ? review(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, reviewInput) : Promise.resolve(undefined),
+      ]);
       const toolUsage: unknown[] = [];
       let contractQueries: string[] = [];
       let contractEvidence = "";
-      if (isContractChunk(chunk)) {
-        const plan = await review(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, reviewInput);
-        toolUsage.push(plan.usage);
-        contractQueries = completeContractSearchPlan(plan.choices[0]?.message.content || "", chunk, context);
+      if (contractPlan) {
+        toolUsage.push(contractPlan.usage);
+        contractQueries = completeContractSearchPlan(contractPlan.choices[0]?.message.content || "", chunk, context);
         contractEvidence = await buildContractSearchEvidence(
           localGit,
           "",
@@ -369,11 +372,6 @@ async function main() {
           changedHeadPaths(chunk),
           {reviewedPaths}
         );
-        discovery.push(await discover([
-          getContractSearchDiscoveryPass(chunk),
-          "CONTRACT SEARCH EVIDENCE:",
-          wrapContractSearchEvidence(contractEvidence),
-        ].join("\n\n")));
       }
       const candidates = discovery.map((candidate) =>
         asReview(ReviewParser.parse(candidate.choices[0]?.message.content || ""))
@@ -382,9 +380,10 @@ async function main() {
         reviewInput,
         "CANDIDATE FINDINGS:",
         JSON.stringify(candidates),
+        contractEvidence && `CONTRACT SEARCH EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
         "REVIEW FOCUS:",
         VERIFICATION_INSTRUCTIONS.join("\n"),
-      ].join("\n\n"));
+      ].filter(Boolean).join("\n\n"));
       const verified = asReview(ReviewParser.parse(verification.choices[0]?.message.content || ""));
       const precisionCandidates = buildPrecisionCandidates([...candidates, verified]);
       let precisionQueries: string[] = [];

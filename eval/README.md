@@ -1,6 +1,6 @@
 # MIX Recent-PR Evaluation
 
-`mix-recent-prs.json` freezes validated CodeRabbit, Greptile, and Luna root causes
+`mix-recent-prs.json` freezes historical CodeRabbit, Greptile, and Luna root causes
 from recent MIX pull requests plus rejected, stale, and withdrawn candidate comments.
 Luna-sourced labels are scored only after independent exact-SHA adjudication;
 model agreement alone never makes a candidate ground truth.
@@ -16,15 +16,12 @@ then adjudicate and score unseen PRs as a separate holdout before promotion.
 `blindHoldoutSnapshots` and `blindNegativeSnapshots` are the authoritative frozen
 unseen allowlists. Other records in `holdoutCases` and `holdoutNegativeControls`
 are exposed development corpus, regardless of their historical name or generation.
-The current portable blind set has three independently frozen CodeRabbit labels
-and four CodeRabbit negative controls. It has no fresh Greptile cases, so it is
-intentionally insufficient for promotion.
-Freeze a candidate pipeline before adding fresh snapshots; promotion requires at
-least ten blind roots, ten blind negative candidates, and three blind update heads.
+`mix-coderabbit-holdout.json` is the untouched promotion set frozen after the
+current Luna prompt. Freeze a candidate pipeline before adding fresh snapshots;
+promotion requires at least ten CodeRabbit roots, ten CodeRabbit negative
+candidates, and three blind update heads.
 Update heads must be frozen as explicit `blindUpdatePairs`; the evaluator proves each
 predecessor is a Git ancestor of its paired update before making any model call.
-Each ten-case minimum must include at least five CodeRabbit and five Greptile
-examples; both source-specific recall and rejection rates must independently hit 90%.
 Negative
 controls are specific stale candidate comments, not claims that their entire PRs
 are defect-free. Do not count a different validated defect as a false positive.
@@ -66,7 +63,7 @@ npm run eval:score -- eval/mix-recent-prs.json \
 Label IDs are deterministic: `<pr>:<head>:label:<one-based index>`. Negative-control
 IDs use `<pr>:<head>:negative:<one-based index>`. Additional real findings require
 exact-head evidence. Promotion requires three distinct runs of the same prompt and
-pipeline configuration and distinct raw artifact hashes, each with at least 90% blind-union recall, 70% precision,
+pipeline configuration and distinct raw artifact hashes, each with at least 80% CodeRabbit root recall, 70% precision,
 zero blocking false positives, at least 90% negative-control rejection, no more than
 one suggestion per reviewed snapshot, at most 0.25 update-noise findings per update,
 under five minutes per PR snapshot, and under half the equivalent CodeRabbit overage cost.

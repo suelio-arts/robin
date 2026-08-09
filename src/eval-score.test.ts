@@ -21,13 +21,13 @@ const manifest: EvalManifest = {
   holdoutCases: ["a", "e", "f", "g"].map((head) => ({pr: 1, head: head.repeat(40), changedFiles: head === "a"
     ? Array.from({length: 10}, (_unused, index) => `${index}.ts`)
     : [`empty-${head}.ts`], labels: head === "a"
-    ? Array.from({length: 10}, (_unused, index) => ({file: `${index}.ts`, rootCause: `root ${index}`, source: index % 2 ? "Greptile" : "CodeRabbit"}))
+    ? Array.from({length: 10}, (_unused, index) => ({file: `${index}.ts`, rootCause: `root ${index}`, source: "CodeRabbit"}))
     : []})),
   holdoutNegativeControls: [{pr: 2, head: "b".repeat(40), rejectedCandidates:
     Array.from({length: 10}, (_unused, index) => ({
       file: `negative-${index}.ts`,
       rootCause: `not a bug ${index}`,
-      source: index % 2 ? "Greptile" : "CodeRabbit",
+      source: "CodeRabbit",
     }))}],
 };
 const manifestSha256 = "e".repeat(64);

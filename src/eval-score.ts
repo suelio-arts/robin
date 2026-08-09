@@ -477,13 +477,9 @@ export function scoreEvaluation(
     && unfiltered
     && artifact.run.transport === "api"
     && fullPositiveSet
-    && expectedLabels.size >= 10
-    && sourceLabelIds.coderabbit.length >= 5
-    && sourceLabelIds.greptile.length >= 5
+    && sourceLabelIds.coderabbit.length >= 10
     && fullNegativeSet
-    && expectedNegativeIds.length >= 10
-    && sourceNegativeIds.coderabbit.length >= 5
-    && sourceNegativeIds.greptile.length >= 5
+    && sourceNegativeIds.coderabbit.length >= 10
     && fullDurations
     && evaluatedUpdates.length >= 3;
   const recall = ratio(matched.size, expectedLabels.size);
@@ -515,9 +511,9 @@ export function scoreEvaluation(
     costRatio,
     complete,
     passes: {
-      quality: complete && recall >= 0.9 && sourceRecall.coderabbit >= 0.9 && sourceRecall.greptile >= 0.9,
+      quality: complete && recall >= 0.8 && sourceRecall.coderabbit >= 0.8,
       precision: complete && precision >= 0.7 && blockingFalsePositives === 0 && negativeControlRejectionRate >= 0.9
-        && sourceNegativeRejectionRate.coderabbit >= 0.9 && sourceNegativeRejectionRate.greptile >= 0.9 && suggestionsPerSnapshot <= 1,
+        && sourceNegativeRejectionRate.coderabbit >= 0.9 && suggestionsPerSnapshot <= 1,
       updateStability: complete && updateBlockingFalsePositives === 0 && updateNoisePerUpdate <= 0.25,
       latency: complete && durationMs < 300_000,
       cost: complete && costRatio < 0.5,

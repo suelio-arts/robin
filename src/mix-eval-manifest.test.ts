@@ -1,10 +1,25 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 import manifest from "../eval/mix-recent-prs.json";
+import coderabbitManifest from "../eval/mix-coderabbit-holdout.json";
 import sandboxManifest from "../eval/sandbox-prs.json";
 import developmentRuns from "../eval/development-runs.json";
 
 describe("MIX review benchmark", () => {
+  it("freezes a promotion-sized untouched CodeRabbit holdout", () => {
+    expect(coderabbitManifest.holdoutCases.flatMap(({labels}) => labels)).toHaveLength(17);
+    expect(coderabbitManifest.holdoutNegativeControls.flatMap(({rejectedCandidates}) => rejectedCandidates)).toHaveLength(16);
+    expect(coderabbitManifest.blindUpdatePairs).toHaveLength(5);
+    expect(new Set(coderabbitManifest.blindHoldoutSnapshots)).toEqual(new Set(
+      coderabbitManifest.holdoutCases.map(({pr, head}) => `${pr}:${head}`)
+    ));
+    expect(new Set(coderabbitManifest.blindNegativeSnapshots)).toEqual(new Set(
+      coderabbitManifest.holdoutNegativeControls.map(({pr, head}) => `${pr}:${head}`)
+    ));
+    expect(coderabbitManifest.holdoutCases.flatMap(({labels}) => labels)
+      .every(({source}) => source === "CodeRabbit")).toBe(true);
+  });
+
   it("keeps isolated sandbox heads frozen", () => {
     const cases = sandboxManifest.holdoutCases;
     expect(cases).toHaveLength(10);

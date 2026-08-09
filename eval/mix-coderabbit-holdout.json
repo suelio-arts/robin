@@ -1,0 +1,459 @@
+{
+  "repository": "suelio-arts/mix-mono",
+  "scoring": {
+    "match": "Same PR, file, and root cause; generic advice does not count.",
+    "acceptance": "CodeRabbit-comparable means at least 80% root recall, 70% precision, zero blocking false positives, 90% stale-candidate rejection, stable updates, under five minutes, and under half CodeRabbit equivalent cost."
+  },
+  "developmentCases": [],
+  "unscoredHistoricalNotes": [],
+  "blindHoldoutSnapshots": [
+    "360:1a274858dde9ebc9b0f1bd2a2b2d6016f69fad8e",
+    "360:e682eed58edd9c610bc145a7af8bb721c9d5d3f1",
+    "360:840855b479c799cc35f76f756e56ba9bf7328165",
+    "344:957f6b5b1b40894b891c4f373eea612867becce6",
+    "344:a372f889a162a411f767cb658e50ff443741ab72",
+    "344:1c50da299c16b86cbc140e1f7dde7b871472ec6a",
+    "331:45173aaf358df126bba0ae1e8d40c38b1e4f4421",
+    "331:64987959d9906ecc7d238e1bb2de910769616acb",
+    "336:a6a03bc7a50efc15e58f0fafa1c239430d16c39f",
+    "336:8cc7edaa1d226df3d108f588df1899bca283963c",
+    "336:a4f21aba4c3604b3ab6f95e5a8520e40ed37393d",
+    "332:cc21cfd388f592bd667074e0aa875d494f1f91b6",
+    "332:c06606e096aa11f38dd29a4916854e72c6b342fd",
+    "332:4b38960c66aa858eabfd5f91eef601b3734e582a"
+  ],
+  "blindNegativeSnapshots": [
+    "360:840855b479c799cc35f76f756e56ba9bf7328165",
+    "344:1c50da299c16b86cbc140e1f7dde7b871472ec6a",
+    "331:64987959d9906ecc7d238e1bb2de910769616acb",
+    "336:a4f21aba4c3604b3ab6f95e5a8520e40ed37393d",
+    "332:4b38960c66aa858eabfd5f91eef601b3734e582a"
+  ],
+  "blindUpdatePairs": [
+    {
+      "before": "360:e682eed58edd9c610bc145a7af8bb721c9d5d3f1",
+      "after": "360:840855b479c799cc35f76f756e56ba9bf7328165"
+    },
+    {
+      "before": "344:957f6b5b1b40894b891c4f373eea612867becce6",
+      "after": "344:a372f889a162a411f767cb658e50ff443741ab72"
+    },
+    {
+      "before": "344:a372f889a162a411f767cb658e50ff443741ab72",
+      "after": "344:1c50da299c16b86cbc140e1f7dde7b871472ec6a"
+    },
+    {
+      "before": "336:8cc7edaa1d226df3d108f588df1899bca283963c",
+      "after": "336:a4f21aba4c3604b3ab6f95e5a8520e40ed37393d"
+    },
+    {
+      "before": "332:c06606e096aa11f38dd29a4916854e72c6b342fd",
+      "after": "332:4b38960c66aa858eabfd5f91eef601b3734e582a"
+    }
+  ],
+  "holdoutCases": [
+    {
+      "pr": 360,
+      "base": "310016bcc1af749c4553391cea8f5a811308b3e7",
+      "head": "1a274858dde9ebc9b0f1bd2a2b2d6016f69fad8e",
+      "changedFiles": [
+        "backend/functions/scripts/validate-walk-placement.ts",
+        "backend/functions/src/endpoints/walk-beat.ts",
+        "backend/functions/src/services/walk-nav-bridge-prompt.ts"
+      ],
+      "labels": [
+        {
+          "file": "backend/functions/scripts/validate-walk-placement.ts",
+          "rootCause": "the placement-validator catch invokes the narration builder again after a builder failure and masks the original error",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/services/walk-nav-bridge-prompt.ts",
+          "rootCause": "valid punctuated stop names and short authoritative directions violate the runtime narration validator",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 360,
+      "base": "22a4e162f518485b732e312bafcfc6d961e0dbf5",
+      "head": "e682eed58edd9c610bc145a7af8bb721c9d5d3f1",
+      "changedFiles": [
+        "backend/functions/scripts/validate-walk-placement.ts",
+        "backend/functions/src/endpoints/walk-beat.ts",
+        "backend/functions/src/services/walk-nav-bridge-prompt.ts"
+      ],
+      "labels": [
+        {
+          "file": "backend/functions/scripts/validate-walk-placement.ts",
+          "rootCause": "the short-direction validation check discards its generation or validation exception",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 360,
+      "base": "22a4e162f518485b732e312bafcfc6d961e0dbf5",
+      "head": "840855b479c799cc35f76f756e56ba9bf7328165",
+      "changedFiles": [
+        "backend/functions/scripts/validate-walk-placement.ts",
+        "backend/functions/src/endpoints/walk-beat.ts",
+        "backend/functions/src/services/walk-nav-bridge-prompt.ts"
+      ],
+      "labels": []
+    },
+    {
+      "pr": 344,
+      "base": "1073822612cb6e533c442652f2faffd6d140b7a4",
+      "head": "957f6b5b1b40894b891c4f373eea612867becce6",
+      "changedFiles": [
+        "studio/web/google-ads-api.html",
+        "studio/web/images/google-ads-api/consumer-discovery.png",
+        "studio/web/images/google-ads-api/consumer-playback.png",
+        "studio/web/images/google-ads-api/creator-route.png"
+      ],
+      "labels": [
+        {
+          "file": "studio/web/google-ads-api.html",
+          "rootCause": "the public compliance page claims account enumeration is Suelio-only while the CLI returns every OAuth-visible account",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 344,
+      "base": "1073822612cb6e533c442652f2faffd6d140b7a4",
+      "head": "a372f889a162a411f767cb658e50ff443741ab72",
+      "changedFiles": [
+        "studio/web/google-ads-api.html",
+        "studio/web/images/google-ads-api/consumer-discovery.png",
+        "studio/web/images/google-ads-api/consumer-playback.png",
+        "studio/web/images/google-ads-api/creator-route.png"
+      ],
+      "labels": [
+        {
+          "file": "studio/web/google-ads-api.html",
+          "rootCause": "Google spend-increasing writes enforce the Google reservation but omit the cross-channel shared-cap guard",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 344,
+      "base": "1073822612cb6e533c442652f2faffd6d140b7a4",
+      "head": "1c50da299c16b86cbc140e1f7dde7b871472ec6a",
+      "changedFiles": [
+        "studio/ops/ads/cli.py",
+        "studio/ops/ads/test_google_ads.py",
+        "studio/web/google-ads-api.html",
+        "studio/web/images/google-ads-api/consumer-discovery.png",
+        "studio/web/images/google-ads-api/consumer-playback.png",
+        "studio/web/images/google-ads-api/creator-route.png"
+      ],
+      "labels": []
+    },
+    {
+      "pr": 331,
+      "base": "e0adf9c9ac2c01ebeb2ee474666427a71382eec0",
+      "head": "45173aaf358df126bba0ae1e8d40c38b1e4f4421",
+      "changedFiles": [
+        "studio/ops/ads/test_spend_controls.py",
+        "studio/ops/config.json"
+      ],
+      "labels": [
+        {
+          "file": "studio/ops/config.json",
+          "rootCause": "Apple spend is enabled before release readiness while launch has no release guard",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 331,
+      "base": "dec46504f7cccc064ff6e0855a336832172d6e50",
+      "head": "64987959d9906ecc7d238e1bb2de910769616acb",
+      "changedFiles": [
+        "studio/ops/README.md"
+      ],
+      "labels": []
+    },
+    {
+      "pr": 336,
+      "base": "86a59661945f26bb82058e2fb362c2d53a80a0f5",
+      "head": "a6a03bc7a50efc15e58f0fafa1c239430d16c39f",
+      "changedFiles": [
+        "studio/cli/mix-studio-cli.mjs",
+        "studio/ops/README.md",
+        "studio/ops/ads/cli.py",
+        "studio/ops/ads/markets.py",
+        "studio/ops/ads/test_markets.py",
+        "studio/ops/appstore/cpp_localization.py",
+        "studio/ops/appstore/test_cpp_localization.py",
+        "studio/ops/config.json",
+        "studio/ops/data/advertising-markets.json",
+        "studio/ops/data/cpp/audio-experience/localization.json"
+      ],
+      "labels": [
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "the shared option parser accepts spend --live but the spend branch silently discards it",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "nested markets help reaches the value-option parser before help handling",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/appstore/cpp_localization.py",
+          "rootCause": "campaignId integer validation accepts JSON booleans",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/appstore/cpp_localization.py",
+          "rootCause": "localization validation reads removed excluded_locales and crashes",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 336,
+      "base": "86a59661945f26bb82058e2fb362c2d53a80a0f5",
+      "head": "8cc7edaa1d226df3d108f588df1899bca283963c",
+      "changedFiles": [
+        "studio/cli/mix-studio-cli.mjs",
+        "studio/ops/ads/cli.py",
+        "studio/ops/ads/markets.py",
+        "studio/ops/ads/test_markets.py",
+        "studio/ops/appstore/cpp_localization.py",
+        "studio/ops/appstore/test_cpp_localization.py",
+        "studio/ops/config.json",
+        "studio/ops/data/advertising-markets.json",
+        "studio/ops/data/cpp/audio-experience/localization.json"
+      ],
+      "labels": [
+        {
+          "file": "studio/ops/ads/markets.py",
+          "rootCause": "the market loader permits no en-US localization while reporting indexes en-US unconditionally",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/ads/test_markets.py",
+          "rootCause": "status tests derive observed live data from the same MARKETS object used as expected data",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 336,
+      "base": "86a59661945f26bb82058e2fb362c2d53a80a0f5",
+      "head": "a4f21aba4c3604b3ab6f95e5a8520e40ed37393d",
+      "changedFiles": [
+        "studio/cli/mix-studio-cli.mjs",
+        "studio/ops/ads/cli.py",
+        "studio/ops/ads/markets.py",
+        "studio/ops/ads/test_markets.py",
+        "studio/ops/appstore/cpp_localization.py",
+        "studio/ops/appstore/test_cpp_localization.py",
+        "studio/ops/config.json",
+        "studio/ops/data/advertising-markets.json",
+        "studio/ops/data/cpp/audio-experience/localization.json"
+      ],
+      "labels": [
+        {
+          "file": "studio/ops/ads/markets.py",
+          "rootCause": "the market loader still permits no en-US localization while reporting indexes en-US unconditionally",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/ads/test_markets.py",
+          "rootCause": "the final status fixture still derives live values from its expected market object",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "live status constructs the credential-backed client before deterministic local market validation",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 332,
+      "base": "86a59661945f26bb82058e2fb362c2d53a80a0f5",
+      "head": "cc21cfd388f592bd667074e0aa875d494f1f91b6",
+      "changedFiles": [
+        "backend/functions/src/endpoints/narration-language.ts",
+        "backend/functions/src/utils/narration-language.ts",
+        "ios/AR/ci_scripts/check_localization_completeness.sh"
+      ],
+      "labels": [
+        {
+          "file": "ios/AR/ci_scripts/check_localization_completeness.sh",
+          "rootCause": "shell validation defaults missing locale.source to en but the later parity check indexes source directly",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 332,
+      "base": "35720f598afbc854414dfe7430dbd359a834efa8",
+      "head": "c06606e096aa11f38dd29a4916854e72c6b342fd",
+      "changedFiles": [
+        "backend/functions/src/endpoints/narration-language.ts",
+        "backend/functions/src/utils/narration-language.ts",
+        "ios/AR/ci_scripts/check_localization_completeness.sh"
+      ],
+      "labels": [
+        {
+          "file": "ios/AR/ci_scripts/check_localization_completeness.sh",
+          "rootCause": "the parity checker omits the backend's trim-and-lowercase language-tag normalization",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 332,
+      "base": "35720f598afbc854414dfe7430dbd359a834efa8",
+      "head": "4b38960c66aa858eabfd5f91eef601b3734e582a",
+      "changedFiles": [
+        "backend/functions/src/endpoints/narration-language.ts",
+        "backend/functions/src/utils/narration-language.ts",
+        "ios/AR/ci_scripts/check_localization_completeness.sh"
+      ],
+      "labels": []
+    }
+  ],
+  "holdoutNegativeControls": [
+    {
+      "pr": 360,
+      "base": "22a4e162f518485b732e312bafcfc6d961e0dbf5",
+      "head": "840855b479c799cc35f76f756e56ba9bf7328165",
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/scripts/validate-walk-placement.ts",
+          "rootCause": "the catch re-invokes the narration builder",
+          "reason": "stale: the catch only appends previously captured output",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/services/walk-nav-bridge-prompt.ts",
+          "rootCause": "punctuated stops and short directions fail narration validation",
+          "reason": "stale: punctuation and minimum length are normalized",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/scripts/validate-walk-placement.ts",
+          "rootCause": "the determinism check calls the builder only once",
+          "reason": "stale: repeated output is generated and compared",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/scripts/validate-walk-placement.ts",
+          "rootCause": "the short-direction check discards failure details",
+          "reason": "stale: the exception is captured and reported",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 344,
+      "base": "1073822612cb6e533c442652f2faffd6d140b7a4",
+      "head": "1c50da299c16b86cbc140e1f7dde7b871472ec6a",
+      "rejectedCandidates": [
+        {
+          "file": "studio/web/google-ads-api.html",
+          "rootCause": "the compliance page misstates account-enumeration scope",
+          "reason": "stale: discovery and configured-customer operations are explicitly distinguished",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "Google writes omit shared-cap enforcement",
+          "reason": "stale: writes call cap_guardrail and focused tests prove rejection",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 331,
+      "base": "dec46504f7cccc064ff6e0855a336832172d6e50",
+      "head": "64987959d9906ecc7d238e1bb2de910769616acb",
+      "rejectedCandidates": [
+        {
+          "file": "studio/ops/README.md",
+          "rootCause": "Apple activation is permitted before public release",
+          "reason": "stale: config disables Apple and the release hold is documented",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 336,
+      "base": "86a59661945f26bb82058e2fb362c2d53a80a0f5",
+      "head": "a4f21aba4c3604b3ab6f95e5a8520e40ed37393d",
+      "rejectedCandidates": [
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "spend still silently accepts --live",
+          "reason": "stale: command-specific parsing rejects it",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "nested markets help still raises an option error",
+          "reason": "stale: help returns before parsing",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/appstore/cpp_localization.py",
+          "rootCause": "boolean campaign IDs remain accepted",
+          "reason": "stale: exact-type validation rejects bool",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/appstore/cpp_localization.py",
+          "rootCause": "validation still dereferences excluded_locales",
+          "reason": "stale: the obsolete dereference is absent",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/ads/test_markets.py",
+          "rootCause": "the spend rejection assertion is too broad because it names ValueError",
+          "reason": "not a defect: UsageError subclasses ValueError and the assertion matches the exact error text",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/ops/appstore/cpp_localization.py",
+          "rootCause": "dual import forms cause a runtime failure",
+          "reason": "not a defect: no identity, cache, or mutable-state behavior crosses the aliases",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 332,
+      "base": "35720f598afbc854414dfe7430dbd359a834efa8",
+      "head": "4b38960c66aa858eabfd5f91eef601b3734e582a",
+      "rejectedCandidates": [
+        {
+          "file": "ios/AR/ci_scripts/check_localization_completeness.sh",
+          "rootCause": "missing locale.source still raises KeyError",
+          "reason": "stale: get(source) defaults to en",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/ci_scripts/check_localization_completeness.sh",
+          "rootCause": "configured locale tags still diverge from backend normalization",
+          "reason": "stale: tags are trimmed, lowercased, and reduced to base language",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/ci_scripts/check_localization_completeness.sh",
+          "rootCause": "the walrus operator breaks a supported Python runtime",
+          "reason": "not a defect: the repository supports Python 3.11 or newer",
+          "source": "CodeRabbit"
+        }
+      ]
+    }
+  ]
+}

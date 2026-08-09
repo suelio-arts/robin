@@ -27,6 +27,11 @@ const ROBIN_LOCAL_AGENTS = new Set([
   "luna-5-6-low-api",
   "luna-5-6-low-subscription",
 ]);
+export const LOCAL_AGENT_COMPLETION_CONTRACT = [
+  "Act as a stateless model completion, not an autonomous coding agent.",
+  "Do not call tools, run commands, read files, browse, or inspect any repository.",
+  "Use only the evidence supplied in this prompt and return the requested response immediately.",
+].join(" ");
 
 function runFile(file: string, args: string[], options: { timeout: number; maxBuffer: number }): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -206,7 +211,14 @@ export class LLMClient {
       const prompt = join(root, "prompt.md");
       const workdir = join(root, "context");
       await mkdir(workdir, { mode: 0o700 });
-      await writeFile(prompt, ["# System", systemPrompt, "# User", userContent].join("\n\n"), { mode: 0o600 });
+      await writeFile(prompt, [
+        "# Completion contract",
+        LOCAL_AGENT_COMPLETION_CONTRACT,
+        "# System",
+        systemPrompt,
+        "# User",
+        userContent,
+      ].join("\n\n"), { mode: 0o600 });
       const timeoutSeconds = Math.max(1, Math.floor(this.timeoutMs / 1000));
       const stdout = await runFile(ROLLY_BIN, [
         "agent", "run",

@@ -54,7 +54,7 @@ describe("LLMClient", () => {
     });
 
     try {
-      const response = await new LLMClient(
+      const client = new LLMClient(
         "rolly-agent",
         "",
         "luna-5-6-high-subscription",
@@ -64,7 +64,8 @@ describe("LLMClient", () => {
         undefined,
         undefined,
         "codex"
-      ).chatCompletion("system", "user", true);
+      );
+      const response = await client.chatCompletion("system", "user", true);
       expect(response.content).toBe('{"summary":"clean"}');
       expect(response.callId).toBe("test-session");
       expect(response.provenance).toEqual({
@@ -80,6 +81,13 @@ describe("LLMClient", () => {
         reasoningOutputTokens: 5,
         durationMs: 1500,
       });
+      expect(client.getMetrics()).toEqual(expect.objectContaining({
+        calls: 1,
+        inputTokens: 100,
+        cachedInputTokens: 40,
+        outputTokens: 20,
+        reasoningOutputTokens: 5,
+      }));
       expect(execFile).toHaveBeenCalledWith(
         "/Users/rolly/.local/bin/rolly",
         expect.arrayContaining(["--caller", "codex", "--agent", "luna-5-6-high-subscription"]),

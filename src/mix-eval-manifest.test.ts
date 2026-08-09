@@ -212,7 +212,8 @@ describe("MIX review benchmark", () => {
 
   it("keeps evaluation contract and precision discovery aligned with production", () => {
     const source = readFileSync(resolve("scripts/eval-mix-recent-prs.ts"), "utf8");
-    expect(source).toContain("getContractSearchDiscoveryPass(chunk)");
+    expect(source).toContain("const [discovery, contractPlan] = await Promise.all");
+    expect(source).toContain("CONTRACT SEARCH EVIDENCE");
     expect(source).toContain('process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"');
     expect(source).toContain('evalConfig.transport === "api" ? "https://api.openai.com/v1" : "rolly-agent"');
     expect(source).toContain('throw new Error("OPENAI_API_KEY is required for API evaluation")');

@@ -293,7 +293,7 @@ async function main() {
       { cwd: mixRepo, encoding: "utf8", maxBuffer: 20 * 1024 * 1024 }
     );
     const selectedDiff = selectDiffFiles(diff, selectedFiles);
-    const reviewChunks = chunkDiffByFile(selectedDiff, 150000)
+    const reviewChunks = chunkDiffByFile(selectedDiff, 50000)
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     reviewChunks.flatMap(changedHeadPaths).forEach((path) => reviewedFiles.add(`${testCase.pr}:${testCase.head}:${path}`));
     const reviewedPaths = changedHeadPaths(diff);

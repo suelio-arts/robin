@@ -219,7 +219,7 @@ describe("MIX review benchmark", () => {
     expect(source).toContain('throw new Error("OPENAI_API_KEY is required for API evaluation")');
     expect(source).toContain("extractChangedContractQueries(selectedDiff)");
     const selectedDiffIndex = source.indexOf("const selectedDiff = selectDiffFiles(diff, selectedFiles)");
-    const reviewChunksIndex = source.indexOf("const reviewChunks = chunkDiffByFile(selectedDiff, 150000)");
+    const reviewChunksIndex = source.indexOf("const reviewChunks = chunkDiffByFile(selectedDiff, 50000)");
     expect(selectedDiffIndex).toBeGreaterThanOrEqual(0);
     expect(reviewChunksIndex).toBeGreaterThan(selectedDiffIndex);
     expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");

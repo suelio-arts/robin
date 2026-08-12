@@ -212,20 +212,20 @@ describe("MIX review benchmark", () => {
 
   it("keeps evaluation contract and precision discovery aligned with production", () => {
     const source = readFileSync(resolve("scripts/eval-mix-recent-prs.ts"), "utf8");
-    expect(source).toContain("const [discovery, contractPlan] = await Promise.all");
-    expect(source).toContain("CONTRACT SEARCH EVIDENCE");
+    expect(source).toContain("const discovery = await review");
+    expect(source).toContain("EXACT-HEAD REPOSITORY EVIDENCE");
     expect(source).toContain('process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"');
     expect(source).toContain('evalConfig.transport === "api" ? "https://api.openai.com/v1" : "rolly-agent"');
     expect(source).toContain('throw new Error("OPENAI_API_KEY is required for API evaluation")');
-    expect(source).toContain("{prioritizePlanned: true}");
+    expect(source).toContain("extractChangedContractQueries(selectedDiff)");
     const selectedDiffIndex = source.indexOf("const selectedDiff = selectDiffFiles(diff, selectedFiles)");
-    const reviewChunksIndex = source.indexOf("const reviewChunks = chunkDiffByFile(selectedDiff, 50000)");
+    const reviewChunksIndex = source.indexOf("const reviewChunks = chunkDiffByFile(selectedDiff, 150000)");
     expect(selectedDiffIndex).toBeGreaterThanOrEqual(0);
     expect(reviewChunksIndex).toBeGreaterThan(selectedDiffIndex);
     expect(source).toContain("const reviewedPaths = changedHeadPaths(diff)");
     expect(source).toContain(".slice(offset, offset + EVAL_CHUNK_CONCURRENCY)");
     expect(source).toContain("left.snapshotId.localeCompare(right.snapshotId) || left.id.localeCompare(right.id)");
-    expect(source).toContain("DISCOVERY CONTRACT EVIDENCE");
+    expect(source).toContain("CANDIDATE DIFF EVIDENCE");
     expect(source).toContain("JSON.stringify({file: candidate.file, rootCause: candidate.rootCause})");
     expect(source).not.toContain("CANDIDATE: ${JSON.stringify(candidate)}");
   });

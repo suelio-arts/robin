@@ -212,7 +212,7 @@ describe("MIX review benchmark", () => {
 
   it("keeps evaluation contract and precision discovery aligned with production", () => {
     const source = readFileSync(resolve("scripts/eval-mix-recent-prs.ts"), "utf8");
-    expect(source).toContain("const discovery = await review");
+    expect(source).toContain("const discovery = await Promise.all");
     expect(source).toContain("EXACT-HEAD REPOSITORY EVIDENCE");
     expect(source).toContain('process.env.EVAL_MANIFEST || "eval/mix-recent-prs.json"');
     expect(source).toContain('evalConfig.transport === "api" ? "https://api.openai.com/v1" : "rolly-agent"');

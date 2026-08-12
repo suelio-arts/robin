@@ -1,4 +1,4 @@
-import { DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt } from "./review-prompts";
+import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt } from "./review-prompts";
 
 describe("review prompts", () => {
   it("uses one broad discovery pass instead of incident-specific audit passes", () => {
@@ -6,6 +6,9 @@ describe("review prompts", () => {
     expect(DISCOVERY_INSTRUCTIONS).toContain("every concrete regression");
     expect(DISCOVERY_INSTRUCTIONS).toContain("one representative finding per root cause");
     expect(DISCOVERY_INSTRUCTIONS).not.toContain("Audit only");
+    expect(ADVERSARIAL_INSTRUCTIONS).toContain("valueless, empty, whitespace-only");
+    expect(ADVERSARIAL_INSTRUCTIONS).toContain("experimental or alternate modes");
+    expect(ADVERSARIAL_INSTRUCTIONS).not.toContain("Audit only");
   });
 
   it("gates evidence globally without MIX-specific memories", () => {

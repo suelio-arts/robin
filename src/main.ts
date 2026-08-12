@@ -17,7 +17,7 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
+import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent, validateExpectedHeadSha, workflowDispatchPrNumber } from "./events";
 import { buildFileContext } from "./review-context";
@@ -748,24 +748,19 @@ async function discoverChunk(
   reviewInstructions: string,
   jsonResponseMode: boolean
 ): Promise<StructuredReview> {
-  const response = await runReview(
-    llm,
-    diff,
-    reviewInstructions,
-    jsonResponseMode,
-    context,
-    DISCOVERY_INSTRUCTIONS
-  );
-  const parsed = ReviewParser.parseDetailed(response.content);
-  if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
-  return ReviewParser.parse((await runReview(
-    llm,
-    diff,
-    reviewInstructions,
-    true,
-    context,
-    `${DISCOVERY_INSTRUCTIONS}\n\nReturn ONLY a single valid JSON object.`
-  )).content);
+  const discover = async (instructions: string) => {
+    const response = await runReview(llm, diff, reviewInstructions, jsonResponseMode, context, instructions);
+    const parsed = ReviewParser.parseDetailed(response.content);
+    if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
+    return ReviewParser.parse((await runReview(
+      llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`
+    )).content);
+  };
+  const reviews = await Promise.all([DISCOVERY_INSTRUCTIONS, ADVERSARIAL_INSTRUCTIONS].map(discover));
+  const candidates = buildPrecisionCandidates(reviews);
+  const combined: StructuredReview = {summary: reviews.map(({summary}) => summary).join("\n"), high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
+  for (const {severity, finding} of candidates) combined[severity].push(finding);
+  return combined;
 }
 
 async function runFinalGate(

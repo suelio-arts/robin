@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, selectDiffFiles } from "../src/diff-filter";
-import { DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt } from "../src/prompts/review-prompts";
+import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
@@ -342,15 +342,17 @@ async function main() {
         "```",
       ].join("\n");
       const reviewPrompt = getReviewPrompt(MIX_REVIEW_INSTRUCTIONS);
-      const discovery = await review(reviewPrompt, `${reviewInput}\n\nREVIEW FOCUS:\n${DISCOVERY_INSTRUCTIONS}`);
+      const discovery = await Promise.all([DISCOVERY_INSTRUCTIONS, ADVERSARIAL_INSTRUCTIONS].map((instructions) =>
+        review(reviewPrompt, `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`)
+      ));
       return {
-        candidate: asReview(ReviewParser.parse(discovery.choices[0]?.message.content || "")),
-        usage: [discovery.usage],
+        candidates: discovery.map((response) => asReview(ReviewParser.parse(response.choices[0]?.message.content || ""))),
+        usage: discovery.map(({usage}) => usage),
       };
         })));
       writeProgress(results);
     }
-    const discovered = responses.map((item) => (item as {candidate: Partial<StructuredReview>}).candidate);
+    const discovered = responses.flatMap((item) => (item as {candidates: Partial<StructuredReview>[]}).candidates);
     const precisionCandidates = buildPrecisionCandidates(discovered);
     if (precisionCandidates.length > 0) {
       const contractQueries = extractChangedContractQueries(selectedDiff);

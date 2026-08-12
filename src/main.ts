@@ -802,6 +802,7 @@ async function runFinalGate(
 }
 
 function buildCandidateDiffEvidence(diff: string, findings: ReviewFinding[]): string {
+  if (diff.length <= 120000) return diff;
   const paths = new Set(findings.map(({file}) => file).filter((path): path is string => Boolean(path)));
   const chunks = splitDiffIntoFiles(diff)
     .filter(({path}) => paths.has(path))

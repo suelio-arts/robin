@@ -362,7 +362,7 @@ async function main() {
       const candidatePaths = new Set(precisionCandidates
         .map(({finding}) => finding.file)
         .filter((path): path is string => Boolean(path)));
-      const candidateDiff = selectDiffFiles(selectedDiff, candidatePaths).slice(0, 120000);
+      const candidateDiff = (selectedDiff.length <= 120000 ? selectedDiff : selectDiffFiles(selectedDiff, candidatePaths)).slice(0, 120000);
       const precisionInput = [
         "CANDIDATES:",
         JSON.stringify(precisionCandidates),

@@ -7,6 +7,8 @@ describe("review prompts", () => {
     expect(DISCOVERY_INSTRUCTIONS).toContain("one representative finding per root cause");
     expect(DISCOVERY_INSTRUCTIONS).not.toContain("Audit only");
     expect(ADVERSARIAL_INSTRUCTIONS).toContain("valueless, empty, whitespace-only");
+    expect(ADVERSARIAL_INSTRUCTIONS).toContain("--flag=value");
+    expect(ADVERSARIAL_INSTRUCTIONS).toContain("monotonic session ordinals");
     expect(ADVERSARIAL_INSTRUCTIONS).toContain("experimental or alternate modes");
     expect(ADVERSARIAL_INSTRUCTIONS).not.toContain("Audit only");
   });

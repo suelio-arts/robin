@@ -70,6 +70,12 @@ describe("getReviewPrompt", () => {
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("exact counted collection");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("no reachable unvalidated writer");
     expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("reasserts that whole contract");
+    expect(VERIFICATION_INSTRUCTIONS.join("\n")).toContain("Never publish contradictory findings");
+    expect(VERIFICATION_INSTRUCTIONS.join("\n")).toContain("explicit hard-cut policy");
+    expect(VERIFICATION_INSTRUCTIONS.join("\n")).toContain("platform command flags");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("Never approve mutually incompatible findings");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("model memory is not evidence");
+    expect(PRECISION_INSTRUCTIONS.join("\n")).toContain("inert-markup");
   });
 
   it("spends the sixth pass on contract gaps for test infrastructure", () => {

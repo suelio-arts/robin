@@ -3,12 +3,12 @@ import { createHash } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
-import { chunkDiffByFile, selectDiffFiles } from "../src/diff-filter";
-import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, isContractChunk } from "../src/prompts/review-prompts";
+import { chunkDiffByFile, selectDiffFiles, splitDiffIntoFiles } from "../src/diff-filter";
+import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
-import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "../src/contract-discovery";
+import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "../src/contract-discovery";
 import { LLMClient } from "../src/llm-client";
 import { LUNA_API_PRICING, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
 
@@ -31,8 +31,10 @@ const manifest = JSON.parse(manifestSource) as {
 };
 const EVAL_AGENTS = {
   "luna-5-6-high-subscription": {effort: "high", transport: "subscription"},
+  "luna-5-6-medium-subscription": {effort: "medium", transport: "subscription"},
   "luna-5-6-low-subscription": {effort: "low", transport: "subscription"},
   "luna-5-6-high-api": {effort: "high", transport: "api"},
+  "luna-5-6-medium-api": {effort: "medium", transport: "api"},
   "luna-5-6-low-api": {effort: "low", transport: "api"},
 } as const;
 const evalAgent = process.env.EVAL_AGENT || "luna-5-6-high-subscription";
@@ -291,10 +293,32 @@ async function main() {
       { cwd: mixRepo, encoding: "utf8", maxBuffer: 20 * 1024 * 1024 }
     );
     const selectedDiff = selectDiffFiles(diff, selectedFiles);
-    const reviewChunks = chunkDiffByFile(selectedDiff, 50000)
+    const reviewChunks = splitDiffIntoFiles(selectedDiff).flatMap(({content}) => chunkDiffByFile(content, 50000))
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     reviewChunks.flatMap(changedHeadPaths).forEach((path) => reviewedFiles.add(`${testCase.pr}:${testCase.head}:${path}`));
     const reviewedPaths = changedHeadPaths(diff);
+    const localGit = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => {
+        try {
+          return execFileSync("git", ["show", `${ref}:${path}`], {cwd: mixRepo, encoding: "utf8", maxBuffer: 10 * 1024 * 1024});
+        } catch {
+          return "";
+        }
+      },
+      getTreePaths: async (_owner: string, _repo: string, ref: string) => execFileSync("git", ["ls-tree", "-r", "--name-only", ref], {
+        cwd: mixRepo, encoding: "utf8", maxBuffer: 10 * 1024 * 1024,
+      }).trim().split("\n"),
+      searchPaths: async (_owner: string, _repo: string, query: string) => {
+        try {
+          return execFileSync("git", ["grep", "-l", "-F", "-e", query, testCase.head], {
+            cwd: mixRepo, encoding: "utf8", maxBuffer: 10 * 1024 * 1024,
+          }).trim().split("\n").filter(Boolean).map((entry) => entry.replace(`${testCase.head}:`, ""));
+        } catch (error) {
+          if ((error as {status?: number}).status === 1) return [];
+          throw error;
+        }
+      },
+    };
     console.log(`PR ${testCase.pr}: ${reviewChunks.length} chunk(s)`);
     const responses: unknown[] = [];
     results.push({pr: testCase.pr, head: testCase.head, chunks: responses});
@@ -304,36 +328,6 @@ async function main() {
         .map(async (chunk, batchIndex) => {
       const index = offset + batchIndex;
       console.log(`PR ${testCase.pr}: reviewing chunk ${index + 1}/${reviewChunks.length}`);
-      const localGit = {
-        getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => {
-          try {
-            return execFileSync("git", ["show", `${ref}:${path}`], {
-              cwd: mixRepo,
-              encoding: "utf8",
-              maxBuffer: 10 * 1024 * 1024,
-            });
-          } catch {
-            return "";
-          }
-        },
-        getTreePaths: async (_owner: string, _repo: string, ref: string) => execFileSync("git", ["ls-tree", "-r", "--name-only", ref], {
-          cwd: mixRepo,
-          encoding: "utf8",
-          maxBuffer: 10 * 1024 * 1024,
-        }).trim().split("\n"),
-        searchPaths: async (_owner: string, _repo: string, query: string) => {
-          try {
-            return execFileSync("git", ["grep", "-l", "-F", "-e", query, testCase.head], {
-              cwd: mixRepo,
-              encoding: "utf8",
-              maxBuffer: 10 * 1024 * 1024,
-            }).trim().split("\n").filter(Boolean).map((entry) => entry.replace(`${testCase.head}:`, ""));
-          } catch (error) {
-            if ((error as {status?: number}).status === 1) return [];
-            throw error;
-          }
-        },
-      };
       const context = await buildFileContext(localGit, "", "", chunk, testCase.base, testCase.head);
       const reviewInput = [
         "Review this file-aware chunk from a historical pull request.",
@@ -348,109 +342,44 @@ async function main() {
         "```",
       ].join("\n");
       const reviewPrompt = getReviewPrompt(MIX_REVIEW_INSTRUCTIONS);
-      const discover = (instructions: string) => review(
-        reviewPrompt,
-        `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`
-      );
-      const contractChunk = isContractChunk(chunk);
-      const [discovery, contractPlan] = await Promise.all([
-        Promise.all(getInitialDiscoveryPasses(chunk).map(discover)),
-        contractChunk ? review(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, reviewInput) : Promise.resolve(undefined),
-      ]);
-      const toolUsage: unknown[] = [];
-      let contractQueries: string[] = [];
-      let contractEvidence = "";
-      if (contractPlan) {
-        toolUsage.push(contractPlan.usage);
-        contractQueries = completeContractSearchPlan(contractPlan.choices[0]?.message.content || "", chunk, context);
-        contractEvidence = await buildContractSearchEvidence(
-          localGit,
-          "",
-          "",
-          testCase.head,
-          contractQueries,
-          changedHeadPaths(chunk),
-          {reviewedPaths}
-        );
-      }
-      const candidates = discovery.map((candidate) =>
-        asReview(ReviewParser.parse(candidate.choices[0]?.message.content || ""))
-      );
-      const verification = await review(reviewPrompt, [
-        reviewInput,
-        "CANDIDATE FINDINGS:",
-        JSON.stringify(candidates),
-        contractEvidence && `CONTRACT SEARCH EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
-        "REVIEW FOCUS:",
-        VERIFICATION_INSTRUCTIONS.join("\n"),
-      ].filter(Boolean).join("\n\n"));
-      const verified = asReview(ReviewParser.parse(verification.choices[0]?.message.content || ""));
-      const precisionCandidates = buildPrecisionCandidates([...candidates, verified]);
-      let precisionQueries: string[] = [];
-      let precisionEvidence = "";
-      if (precisionCandidates.length > 0) {
-        const plan = await review(PRECISION_SEARCH_PLANNER_INSTRUCTIONS, [
-          "CANDIDATES:",
-          JSON.stringify(precisionCandidates),
-          reviewInput,
-        ].join("\n\n"));
-        toolUsage.push(plan.usage);
-        precisionQueries = completeContractSearchPlan(
-          plan.choices[0]?.message.content || "",
-          chunk,
-          context,
-          {prioritizePlanned: true}
-        );
-        precisionEvidence = await buildContractSearchEvidence(
-          localGit,
-          "",
-          "",
-          testCase.head,
-          precisionQueries,
-          changedHeadPaths(chunk),
-          {counterevidence: true, reviewedPaths}
-        );
-      }
-      const precisionPrompt = PRECISION_INSTRUCTIONS.join("\n");
-      const precisionInput = [
-        "CANDIDATES:",
-        JSON.stringify(precisionCandidates),
-        contractEvidence && `DISCOVERY CONTRACT EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
-        precisionEvidence && `CANDIDATE COUNTEREVIDENCE:\n${wrapContractSearchEvidence(precisionEvidence)}`,
-        reviewInput,
-      ].filter(Boolean).join("\n\n");
-      let precision = await review(precisionPrompt, precisionInput);
-      const precisionUsage: unknown[] = [precision.usage];
-      let approved;
-      try {
-        approved = selectApprovedCandidates(precisionCandidates, precision.choices[0]?.message.content || "", verified.summary || "");
-      } catch {
-        precision = await review(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput);
-        precisionUsage.push(precision.usage);
-        try {
-          approved = selectApprovedCandidates(precisionCandidates, precision.choices[0]?.message.content || "", verified.summary || "");
-        } catch (error) {
-          const reason = `Precision gate failed twice for PR ${testCase.pr} chunk ${index + 1}: ${error}`;
-          console.warn(reason);
-          return {
-            kind: "review-error",
-            error: reason,
-            candidates,
-            usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
-          };
-        }
-      }
+      const discovery = await Promise.all([DISCOVERY_INSTRUCTIONS, ADVERSARIAL_INSTRUCTIONS].map((instructions) =>
+        review(reviewPrompt, `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`)
+      ));
       return {
-        candidates,
-        response: approved,
-        contractQueries,
-        contractEvidence,
-        precisionQueries,
-        precisionEvidence,
-        usage: [...discovery.map(({ usage }) => usage), ...toolUsage, verification.usage, ...precisionUsage],
+        candidates: discovery.map((response) => asReview(ReviewParser.parse(response.choices[0]?.message.content || ""))),
+        usage: discovery.map(({usage}) => usage),
       };
         })));
       writeProgress(results);
+    }
+    const discovered = responses.flatMap((item) => (item as {candidates: Partial<StructuredReview>[]}).candidates);
+    const precisionCandidates = buildPrecisionCandidates(discovered);
+    if (precisionCandidates.length > 0) {
+      const contractQueries = extractChangedContractQueries(selectedDiff);
+      const contractEvidence = await buildContractSearchEvidence(
+        localGit, "", "", testCase.head, contractQueries, reviewedPaths, {counterevidence: true, reviewedPaths}
+      );
+      const candidatePaths = new Set(precisionCandidates
+        .map(({finding}) => finding.file)
+        .filter((path): path is string => Boolean(path)));
+      const candidateDiff = (selectedDiff.length <= 120000 ? selectedDiff : selectDiffFiles(selectedDiff, candidatePaths)).slice(0, 120000);
+      const precisionInput = [
+        "CANDIDATES:",
+        JSON.stringify(precisionCandidates),
+        contractEvidence && `EXACT-HEAD REPOSITORY EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
+        `CANDIDATE DIFF EVIDENCE:\n${annotateDiffWithLineNumbers(candidateDiff)}`,
+      ].filter(Boolean).join("\n\n");
+      let precision = await review(`${MIX_REVIEW_INSTRUCTIONS}\n\n${PRECISION_INSTRUCTIONS}`, precisionInput);
+      let approved;
+      try {
+        approved = selectApprovedCandidates(precisionCandidates, precision.choices[0]?.message.content || "", discovered.map(({summary}) => summary).filter(Boolean).join("\n"));
+      } catch {
+        precision = await review(`${MIX_REVIEW_INSTRUCTIONS}\n\n${PRECISION_INSTRUCTIONS}\n\nReturn only the required JSON object.`, precisionInput);
+        approved = selectApprovedCandidates(precisionCandidates, precision.choices[0]?.message.content || "", discovered.map(({summary}) => summary).filter(Boolean).join("\n"));
+      }
+      responses.push({response: approved, contractQueries, contractEvidence, usage: [precision.usage]});
+    } else {
+      responses.push({response: {summary: discovered.map(({summary}) => summary).filter(Boolean).join("\n"), high: [], medium: [], low: [], suggestions: []}});
     }
     finishSnapshot(id);
     writeProgress(results);

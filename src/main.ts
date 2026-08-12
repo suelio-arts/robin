@@ -17,12 +17,12 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, PRECISION_INSTRUCTIONS, PRECISION_SEARCH_PLANNER_INSTRUCTIONS, VERIFICATION_INSTRUCTIONS, getInitialDiscoveryPasses, getReviewPrompt, getSummaryPrompt, getHelpMessage, isContractChunk } from "./prompts/review-prompts";
+import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent, validateExpectedHeadSha, workflowDispatchPrNumber } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
-import { buildContractSearchEvidence, changedHeadPaths, completeContractSearchPlan, wrapContractSearchEvidence } from "./contract-discovery";
+import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "./contract-discovery";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -310,46 +310,35 @@ async function run(): Promise<void> {
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("summary"));
     } else {
       // Full review parsed and posted as a review
-      const findings: StructuredReview = {
-        summary: "",
-        high: [],
-        medium: [],
-        low: [],
-        suggestions: [],
-        rawResponse: "",
-      };
-      for (let start = 0; start < reviewChunks.length; start += 3) {
-        const batch = reviewChunks.slice(start, start + 3);
+      const candidateReviews: StructuredReview[] = [];
+      const searchContracts = async (queries: string[], counterevidence = false) => buildContractSearchEvidence(
+        gitUtils,
+        owner,
+        repo,
+        headRef,
+        queries,
+        reviewedPaths,
+        {counterevidence, reviewedPaths}
+      );
+      for (let start = 0; start < reviewChunks.length; start += 8) {
+        const batch = reviewChunks.slice(start, start + 8);
         const reviews = await Promise.all(batch.map(async (chunk, offset) => {
           core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
           const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
-          return runReviewPipeline(
-            llm,
-            async (queries, changedPaths, counterevidence = false) => buildContractSearchEvidence(
-              gitUtils,
-              owner,
-              repo,
-              headRef,
-              queries,
-              changedPaths,
-              {counterevidence, reviewedPaths}
-            ),
-            chunk,
-            context,
-            reviewInstructions,
-            useJsonMode
-          );
+          return discoverChunk(llm, chunk, context, reviewInstructions, useJsonMode);
         }));
-        for (const review of reviews) {
-          findings.summary += `${review.summary}\n`;
-          findings.high.push(...review.high);
-          findings.medium.push(...review.medium);
-          findings.low.push(...review.low);
-          findings.suggestions.push(...review.suggestions);
-        }
+        candidateReviews.push(...reviews);
       }
-
-      deduplicateFindings(findings);
+      const priorRobinFindings = await loadPriorRobinFindings(octokit, owner, repo, prNumber);
+      const contractEvidence = await searchContracts(extractChangedContractQueries(reviewDiff), true);
+      const findings = await runFinalGate(
+        llm,
+        candidateReviews,
+        reviewDiff,
+        contractEvidence,
+        priorRobinFindings,
+        reviewInstructions
+      );
       const metrics = llm.getMetrics();
       findings.summary += [
         "",
@@ -752,95 +741,57 @@ async function runReview(
   return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
 }
 
-async function runReviewPipeline(
+async function discoverChunk(
   llm: LLMClient,
-  searchContracts: (queries: string[], changedPaths: string[], counterevidence?: boolean) => Promise<string>,
   diff: string,
   context: string,
   reviewInstructions: string,
   jsonResponseMode: boolean
 ): Promise<StructuredReview> {
   const discover = async (instructions: string) => {
-    const response = await runReview(
-      llm,
-      diff,
-      reviewInstructions,
-      jsonResponseMode,
-      context,
-      instructions
-    );
+    const response = await runReview(llm, diff, reviewInstructions, jsonResponseMode, context, instructions);
     const parsed = ReviewParser.parseDetailed(response.content);
     if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
     return ReviewParser.parse((await runReview(
-      llm,
-      diff,
-      reviewInstructions,
-      true,
-      context,
-      `${instructions}\n\nReturn ONLY a single valid JSON object.`
+      llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`
     )).content);
   };
-  const contractChunk = isContractChunk(diff);
-  const [discovery, contractPlan] = await Promise.all([
-    Promise.all(getInitialDiscoveryPasses(diff).map(discover)),
-    contractChunk
-      ? llm.chatCompletion(CONTRACT_SEARCH_PLANNER_INSTRUCTIONS, buildReviewInput(diff, context), true)
-      : Promise.resolve(undefined),
-  ]);
-  let contractEvidence = "";
-  if (contractPlan) {
-    const changedPaths = changedHeadPaths(diff);
-    contractEvidence = await searchContracts(
-      completeContractSearchPlan(contractPlan.content, diff, context),
-      changedPaths
-    );
+  const reviews = await Promise.all([DISCOVERY_INSTRUCTIONS, ADVERSARIAL_INSTRUCTIONS].map(discover));
+  const candidates = buildPrecisionCandidates(reviews);
+  const combined: StructuredReview = {summary: reviews.map(({summary}) => summary).join("\n"), high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
+  for (const {severity, finding} of candidates) combined[severity].push(finding);
+  return combined;
+}
+
+async function runFinalGate(
+  llm: LLMClient,
+  reviews: StructuredReview[],
+  diff: string,
+  contractEvidence: string,
+  priorRobinFindings: string,
+  reviewInstructions: string
+): Promise<StructuredReview> {
+  const candidates = buildPrecisionCandidates(reviews);
+  const summary = reviews.map(({summary}) => summary).filter(Boolean).join("\n");
+  if (candidates.length === 0) {
+    return {summary, high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
   }
-  const candidates = JSON.stringify(discovery.map(({ rawResponse: _, ...review }) => review));
-  const verified = ReviewParser.parse((await runReview(
-    llm,
-    diff,
-    reviewInstructions,
-    true,
-    context,
-    [
-      `CANDIDATE FINDINGS:\n${candidates}`,
-      contractEvidence && `CONTRACT SEARCH EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
-      ...VERIFICATION_INSTRUCTIONS,
-    ].filter(Boolean).join("\n\n")
-  )).content);
-  const precisionCandidates = buildPrecisionCandidates([...discovery, verified]);
-  let precisionEvidence = "";
-  if (precisionCandidates.length > 0) {
-    const plan = await llm.chatCompletion(
-      PRECISION_SEARCH_PLANNER_INSTRUCTIONS,
-      [`CANDIDATES:\n${JSON.stringify(precisionCandidates)}`, buildReviewInput(diff, context)].join("\n\n"),
-      true
-    );
-    precisionEvidence = await searchContracts(
-      completeContractSearchPlan(plan.content, diff, context, {prioritizePlanned: true}),
-      changedHeadPaths(diff),
-      true
-    );
-  }
-  const precisionPrompt = [
-    reviewInstructions,
-    ...PRECISION_INSTRUCTIONS,
-  ].filter(Boolean).join("\n\n");
+  const precisionPrompt = [reviewInstructions, PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n");
   const precisionInput = [
     "CANDIDATES:",
-    JSON.stringify(precisionCandidates),
-    contractEvidence && `DISCOVERY CONTRACT EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
-    precisionEvidence && `CANDIDATE COUNTEREVIDENCE:\n${wrapContractSearchEvidence(precisionEvidence)}`,
-    buildReviewInput(diff, context),
+    JSON.stringify(candidates),
+    contractEvidence && `EXACT-HEAD REPOSITORY EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
+    priorRobinFindings && `PRIOR ROBIN FINDINGS (keep only if still present):\n${priorRobinFindings}`,
+    `CANDIDATE DIFF EVIDENCE:\n${buildCandidateDiffEvidence(diff, candidates.map(({finding}) => finding))}`,
   ].filter(Boolean).join("\n\n");
   let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
   let precise: StructuredReview;
   try {
-    precise = selectApprovedCandidates(precisionCandidates, verdict.content, verified.summary);
+    precise = selectApprovedCandidates(candidates, verdict.content, summary);
   } catch {
     try {
       verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
-      precise = selectApprovedCandidates(precisionCandidates, verdict.content, verified.summary);
+      precise = selectApprovedCandidates(candidates, verdict.content, summary);
     } catch (error) {
       throw new Error(`Precision gate failed twice; refusing an unverified review: ${error}`);
     }
@@ -848,6 +799,38 @@ async function runReviewPipeline(
 
   deduplicateFindings(precise);
   return precise;
+}
+
+function buildCandidateDiffEvidence(diff: string, findings: ReviewFinding[]): string {
+  if (diff.length <= 120000) return diff;
+  const paths = new Set(findings.map(({file}) => file).filter((path): path is string => Boolean(path)));
+  const chunks = splitDiffIntoFiles(diff)
+    .filter(({path}) => paths.has(path))
+    .map(({content}) => content.length > 20000 ? `${content.slice(0, 20000)}\n[... truncated ...]` : content);
+  return chunks.join("\n").slice(0, 120000);
+}
+
+async function loadPriorRobinFindings(
+  octokit: ReturnType<typeof github.getOctokit>,
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<string> {
+  const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+    owner, repo, pull_number: pullNumber, per_page: 100,
+  });
+  const ids = new Set(reviews
+    .filter(({body}) => (body || "").includes(ROBIN_SIGNATURE))
+    .map(({id}) => id));
+  if (ids.size === 0) return "";
+  const comments = await octokit.paginate(octokit.rest.pulls.listReviewComments, {
+    owner, repo, pull_number: pullNumber, per_page: 100,
+  });
+  return comments
+    .filter(({pull_request_review_id: id}) => id !== null && ids.has(id))
+    .map(({path, line, body}) => `${path}:${line || 0}: ${body}`)
+    .join("\n\n")
+    .slice(-30000);
 }
 
 function deduplicateFindings(review: StructuredReview): void {

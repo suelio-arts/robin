@@ -1,0 +1,29 @@
+{
+  "developmentCases": [
+    {"pr": 400, "base": "eb264c63ec5ff82ca3803f6870a904a7480219c0", "head": "f5461d89659c2e11718de6259909b64564d304c9", "labels": []},
+    {"pr": 405, "base": "783e14d34b7926ac53ed91f220e8f431f544d6b5", "head": "fdf0ac673405104c8f8ec0036c7455805e775b11", "labels": []},
+    {"pr": 405, "base": "b8f334b4f82543733a5c37f19e4087797b4935f3", "head": "ed162402c2e20530e2ab8b37c445cb564c8658d0", "labels": []},
+    {"pr": 410, "base": "c2c314ad9f0024bc0ad49376d2b3d248c2f26ba0", "head": "8a8d37e70237338d0db7caec440b4b7be114dd9b", "labels": []},
+    {"pr": 411, "base": "c2c314ad9f0024bc0ad49376d2b3d248c2f26ba0", "head": "cd1958cf9f9c57ca68aef2b3f5d7d3e8d91e9ee6", "labels": []}
+  ],
+  "unscoredHistoricalNotes": [],
+  "blindHoldoutSnapshots": [],
+  "blindNegativeSnapshots": [],
+  "blindUpdatePairs": [],
+  "holdoutCases": [],
+  "holdoutNegativeControls": [
+    {
+      "pr": 352,
+      "base": "d33944b7f950f199054932a8c935eaa8bcf1d4dd",
+      "head": "447f9088ce90a725f1ea7ff294e6fcc85f25169e",
+      "rejectedCandidates": [
+        {
+          "file": "studio/web/walk-manager-guide.html",
+          "rootCause": "the human-facing Walk Manager guide must repeat the autopilot role:ops identity contract for unattended automation",
+          "source": "CodeRabbit",
+          "reason": "the guide does not instruct unattended automation; linked CLI contracts already define the agent-only identity requirement"
+        }
+      ]
+    }
+  ]
+}

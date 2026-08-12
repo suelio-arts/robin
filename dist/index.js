@@ -1854,8 +1854,8 @@ async function run() {
             // Full review parsed and posted as a review
             const candidateReviews = [];
             const searchContracts = async (queries, counterevidence = false) => (0, contract_discovery_1.buildContractSearchEvidence)(gitUtils, owner, repo, headRef, queries, reviewedPaths, { counterevidence, reviewedPaths });
-            for (let start = 0; start < reviewChunks.length; start += 3) {
-                const batch = reviewChunks.slice(start, start + 3);
+            for (let start = 0; start < reviewChunks.length; start += 8) {
+                const batch = reviewChunks.slice(start, start + 8);
                 const reviews = await Promise.all(batch.map(async (chunk, offset) => {
                     core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
                     const context = await (0, review_context_1.buildFileContext)(gitUtils, owner, repo, chunk, baseRef, headRef);

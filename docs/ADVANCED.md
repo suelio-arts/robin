@@ -20,7 +20,7 @@ skip-paths:
 | `max-diff-size` | Used when the workflow still passes the action default (`50000`) |
 | `max-comments` | Used when the workflow still passes the action default (`15`) |
 | `json-response-mode` | Used when `use-json-response-mode` is empty (action default defers to this file) |
-| `request-changes` | Used when `request-changes` input is empty. `true` (default) requests changes on high findings and approves clean heads; `false` posts advisor-only comments |
+| `request-changes` | Used when `request-changes` input is empty. `true` (default) requests changes on high findings and approves otherwise; `false` posts advisor-only comments |
 | `skip-paths` | Extra paths removed from the diff before the LLM call |
 
 Lockfiles (npm, yarn, pnpm, Cargo, Gemfile, poetry), `dist/`, `node_modules/`, and minified assets are always skipped automatically. If every changed file is skipped, the action posts a status comment and skips the LLM call.

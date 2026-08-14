@@ -1020,13 +1020,13 @@ class GitHubReviewer {
         });
         await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
     }
-    /** Gatekeeper mode requests changes for High findings and approves clean heads. */
-    static resolveReviewEvent(hasHigh, hasFindings, requestChanges) {
+    /** Gatekeeper mode blocks only High findings; lower severities stay advisory. */
+    static resolveReviewEvent(hasHigh, requestChanges) {
         if (!requestChanges)
             return "COMMENT";
         if (hasHigh)
             return "REQUEST_CHANGES";
-        return hasFindings ? "COMMENT" : "APPROVE";
+        return "APPROVE";
     }
     /** A prior Robin CHANGES_REQUESTED review that a newly posted review supersedes. */
     static isStaleRobinReview(review, newReviewId) {
@@ -1084,7 +1084,7 @@ class GitHubReviewer {
             // Build the review summary body (high-level)
             const body = this.buildReviewBody(findings, postedFindings);
             // Determine review event type
-            const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, findings.high.length + findings.medium.length + findings.low.length + findings.suggestions.length > 0, requestChanges);
+            const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, requestChanges);
             let review;
             let postedInlineComments = comments.length;
             try {
@@ -2759,7 +2759,7 @@ function resolveJsonResponseMode(actionInput, repoConfig) {
         return false;
     return repoConfig?.jsonResponseMode ?? true;
 }
-/** Whether Robin requests changes on High findings and approves clean heads. Default true. */
+/** Whether Robin requests changes on High findings and approves otherwise. Default true. */
 function resolveRequestChanges(actionInput, repoConfig) {
     if (actionInput === "true")
         return true;

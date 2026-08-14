@@ -35,6 +35,17 @@ describe("GitHubReviewer", () => {
     expect(
       GitHubReviewer.isStaleRobinReview({ id: 1, state: "CHANGES_REQUESTED", body: null, user: bot }, 2)
     ).toBe(false);
+    expect(
+      GitHubReviewer.isStaleRobinReview(
+        {
+          id: 1,
+          state: "CHANGES_REQUESTED",
+          body: `${robinBody}\n\n### :page_facing_up: Findings Not Posted Inline\n\n:rotating_light: **1** — unsafe operation`,
+          user: bot,
+        },
+        2
+      )
+    ).toBe(false);
   });
 
   it("dismisses only stale Robin CHANGES_REQUESTED reviews after posting", async () => {

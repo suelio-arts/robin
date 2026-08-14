@@ -36,7 +36,7 @@ export function getReviewPrompt(extraInstructions = ""): string {
     "For each finding, state the exact trigger, failing path, material impact, and smallest root-cause fix. Omit it if any element is missing.",
     "Prefer false positives over false negatives only when the failure path is concrete; never invent reachability or product behavior.",
     "Return at most 10 distinct root causes. Do not report style, refactors, optional hardening, speculative fallbacks, or standalone requests for tests.",
-    "When a suspected material bug needs proof outside the supplied diff/context, request only that proof in evidenceRequests. Use at most 4 requests with kind symbol, file, callers, or tests; include query or path and a short reason. Do not request broad browsing.",
+    "When a suspected material bug needs proof outside the supplied diff/context, request only that proof in evidenceRequests. Use at most 4 requests with kind symbol, file, callers, or tests; include a query, the exact path whenever known, and a short reason. Do not request broad browsing.",
     "High blocks merge only for a proven production, security, data-loss, build, or migration failure. Medium is a concrete non-blocking bug. Put genuinely optional improvements in suggestions.",
     "Each diff line is prefixed with its NEW-file line number. Copy that number into line; never guess or recount.",
     "Return strict JSON only with this shape:",

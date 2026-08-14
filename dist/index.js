@@ -629,11 +629,11 @@ async function runDiscovery(complete, loadEvidence, budget) {
     const adversarial = await complete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS);
     const initial = combine([broad, adversarial]);
     const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
-    if (requests.length === 0 || !budget.claimFollowup()) {
+    if (requests.length === 0) {
         return { review: initial, evidenceRequests: requests.length, followedUp: false };
     }
     const evidence = await loadEvidence(requests);
-    if (!evidence)
+    if (!evidence || !budget.claimFollowup())
         return { review: initial, evidenceRequests: requests.length, followedUp: false };
     const followup = await complete([
         "EVIDENCE FOLLOW-UP: Re-evaluate the initial candidates against the exact-head evidence below.",
@@ -2630,7 +2630,7 @@ function getReviewPrompt(extraInstructions = "") {
         "For each finding, state the exact trigger, failing path, material impact, and smallest root-cause fix. Omit it if any element is missing.",
         "Prefer false positives over false negatives only when the failure path is concrete; never invent reachability or product behavior.",
         "Return at most 10 distinct root causes. Do not report style, refactors, optional hardening, speculative fallbacks, or standalone requests for tests.",
-        "When a suspected material bug needs proof outside the supplied diff/context, request only that proof in evidenceRequests. Use at most 4 requests with kind symbol, file, callers, or tests; include query or path and a short reason. Do not request broad browsing.",
+        "When a suspected material bug needs proof outside the supplied diff/context, request only that proof in evidenceRequests. Use at most 4 requests with kind symbol, file, callers, or tests; include a query, the exact path whenever known, and a short reason. Do not request broad browsing.",
         "High blocks merge only for a proven production, security, data-loss, build, or migration failure. Medium is a concrete non-blocking bug. Put genuinely optional improvements in suggestions.",
         "Each diff line is prefixed with its NEW-file line number. Copy that number into line; never guess or recount.",
         "Return strict JSON only with this shape:",

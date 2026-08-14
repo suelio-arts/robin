@@ -29,11 +29,11 @@ export async function runDiscovery(
   const adversarial = await complete(ADVERSARIAL_INSTRUCTIONS);
   const initial = combine([broad, adversarial]);
   const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
-  if (requests.length === 0 || !budget.claimFollowup()) {
+  if (requests.length === 0) {
     return {review: initial, evidenceRequests: requests.length, followedUp: false};
   }
   const evidence = await loadEvidence(requests);
-  if (!evidence) return {review: initial, evidenceRequests: requests.length, followedUp: false};
+  if (!evidence || !budget.claimFollowup()) return {review: initial, evidenceRequests: requests.length, followedUp: false};
   const followup = await complete([
     "EVIDENCE FOLLOW-UP: Re-evaluate the initial candidates against the exact-head evidence below.",
     "Keep every still-proven root cause, reject disproven candidates, and add newly proven roots. Request no further evidence.",

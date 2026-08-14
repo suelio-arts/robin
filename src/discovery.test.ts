@@ -30,4 +30,10 @@ describe("runDiscovery", () => {
     expect(calls).toBe(2);
     expect(result.followedUp).toBe(false);
   });
+
+  it("does not consume follow-up capacity when exact-head evidence is empty", async () => {
+    const budget = new ReviewBudget(1, Date.now() + 1_000);
+    await runDiscovery(async () => empty("", [{kind: "file", path: "missing.ts", reason: "proof"}]), async () => "", budget);
+    expect(budget.usedFollowups).toBe(0);
+  });
 });

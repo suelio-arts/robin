@@ -33,10 +33,8 @@ const manifest = JSON.parse(manifestSource) as {
 };
 const EVAL_AGENTS = {
   "luna-5-6-high-subscription": {effort: "high", transport: "subscription"},
-  "luna-5-6-medium-subscription": {effort: "medium", transport: "subscription"},
   "luna-5-6-low-subscription": {effort: "low", transport: "subscription"},
   "luna-5-6-high-api": {effort: "high", transport: "api"},
-  "luna-5-6-medium-api": {effort: "medium", transport: "api"},
   "luna-5-6-low-api": {effort: "low", transport: "api"},
 } as const;
 const evalAgent = process.env.EVAL_AGENT || "luna-5-6-high-subscription";

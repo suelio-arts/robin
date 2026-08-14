@@ -1033,11 +1033,16 @@ class GitHubReviewer {
         return (review.id !== newReviewId &&
             review.state === "CHANGES_REQUESTED" &&
             review.user?.type === "Bot" &&
-            (review.body || "").includes(exports.ROBIN_SIGNATURE));
+            (review.body || "").includes(exports.ROBIN_SIGNATURE) &&
+            !GitHubReviewer.hasUnpostedHighFinding(review.body || ""));
+    }
+    static hasUnpostedHighFinding(body) {
+        const section = body.split("### :page_facing_up: Findings Not Posted Inline", 2)[1];
+        return section?.includes(":rotating_light:") ?? false;
     }
     /**
-     * Dismiss earlier Robin CHANGES_REQUESTED reviews so a stale blocking review
-     * from a previous (possibly cancelled) run doesn't keep gating the PR.
+     * Dismiss superseded Robin CHANGES_REQUESTED reviews, except reviews with a
+     * body-only High that has no resolvable thread and must remain fail-closed.
      */
     async dismissStaleRobinReviews(owner, repo, pullNumber, newReviewId) {
         try {

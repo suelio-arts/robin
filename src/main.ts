@@ -17,12 +17,14 @@ import {
   resolveMaxDiffSize,
   resolveRequestChanges,
 } from "./repo-config";
-import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
+import { PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent, validateExpectedHeadSha, workflowDispatchPrNumber } from "./events";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "./contract-discovery";
+import { ReviewBudget, runDiscovery } from "./discovery";
+import { executeEvidenceRequests } from "./evidence-loop";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -311,6 +313,8 @@ async function run(): Promise<void> {
     } else {
       // Full review parsed and posted as a review
       const candidateReviews: StructuredReview[] = [];
+      const reviewBudget = new ReviewBudget(Math.min(4, Math.max(1, Math.ceil(reviewChunks.length / 2))), Date.now() + 205_000);
+      let evidenceRequests = 0;
       const searchContracts = async (queries: string[], counterevidence = false) => buildContractSearchEvidence(
         gitUtils,
         owner,
@@ -325,9 +329,14 @@ async function run(): Promise<void> {
         const reviews = await Promise.all(batch.map(async (chunk, offset) => {
           core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
           const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
-          return discoverChunk(llm, chunk, context, reviewInstructions, useJsonMode);
+          return discoverChunk(
+            llm, chunk, context, reviewInstructions, useJsonMode,
+            (requests) => executeEvidenceRequests(gitUtils, owner, repo, headRef, requests),
+            reviewBudget
+          );
         }));
-        candidateReviews.push(...reviews);
+        candidateReviews.push(...reviews.map(({review}) => review));
+        evidenceRequests += reviews.reduce((total, review) => total + review.evidenceRequests, 0);
       }
       const priorRobinFindings = await loadPriorRobinFindings(octokit, owner, repo, prNumber);
       const contractEvidence = await searchContracts(extractChangedContractQueries(reviewDiff), true);
@@ -342,7 +351,7 @@ async function run(): Promise<void> {
       const metrics = llm.getMetrics();
       findings.summary += [
         "",
-        `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning)`,
+        `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${reviewBudget.usedFollowups} evidence follow-ups`,
       ].join("\n");
 
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
@@ -746,9 +755,11 @@ async function discoverChunk(
   diff: string,
   context: string,
   reviewInstructions: string,
-  jsonResponseMode: boolean
-): Promise<StructuredReview> {
-  const discover = async (instructions: string) => {
+  jsonResponseMode: boolean,
+  loadEvidence: Parameters<typeof runDiscovery>[1],
+  budget: ReviewBudget
+): Promise<{review: StructuredReview; evidenceRequests: number; followedUp: boolean}> {
+  const complete = async (instructions: string) => {
     const response = await runReview(llm, diff, reviewInstructions, jsonResponseMode, context, instructions);
     const parsed = ReviewParser.parseDetailed(response.content);
     if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
@@ -756,11 +767,7 @@ async function discoverChunk(
       llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`
     )).content);
   };
-  const reviews = await Promise.all([DISCOVERY_INSTRUCTIONS, ADVERSARIAL_INSTRUCTIONS].map(discover));
-  const candidates = buildPrecisionCandidates(reviews);
-  const combined: StructuredReview = {summary: reviews.map(({summary}) => summary).join("\n"), high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
-  for (const {severity, finding} of candidates) combined[severity].push(finding);
-  return combined;
+  return runDiscovery(complete, loadEvidence, budget);
 }
 
 async function runFinalGate(

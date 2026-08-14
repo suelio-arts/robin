@@ -1,4 +1,5 @@
 import * as core from "@actions/core";
+import { EvidenceRequest, parseEvidenceRequests } from "./evidence-loop";
 
 export interface ReviewFinding {
   severity: "high" | "medium" | "low" | "suggestion";
@@ -17,6 +18,7 @@ export interface StructuredReview {
   medium: ReviewFinding[];
   low: ReviewFinding[];
   suggestions: ReviewFinding[];
+  evidenceRequests?: EvidenceRequest[];
   rawResponse: string;
 }
 
@@ -37,6 +39,7 @@ export class ReviewParser {
       medium: [],
       low: [],
       suggestions: [],
+      evidenceRequests: [],
       rawResponse: rawText,
     };
 
@@ -55,6 +58,7 @@ export class ReviewParser {
       review.medium = markdownReview.medium;
       review.low = markdownReview.low;
       review.suggestions = markdownReview.suggestions;
+      review.evidenceRequests = markdownReview.evidenceRequests;
 
       core.info(`Parsed: ${review.high.length} high, ${review.medium.length} medium, ${review.low.length} low, ${review.suggestions.length} suggestions`);
     } catch (error) {
@@ -78,6 +82,7 @@ export class ReviewParser {
         medium: this.normalizeFindings(parsed.medium ?? parsed.important, "medium"),
         low: this.normalizeFindings(parsed.low, "low"),
         suggestions: this.normalizeFindings(parsed.suggestions, "suggestion"),
+        evidenceRequests: parseEvidenceRequests(parsed.evidenceRequests),
         rawResponse: rawText,
       };
     } catch {

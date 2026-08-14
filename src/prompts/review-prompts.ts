@@ -24,8 +24,8 @@ export const PRECISION_INSTRUCTIONS = [
   "Repository instructions are authoritative. Reject recommendations that contradict them unless exact repository evidence proves the exception is required.",
   "Exact-head code and schemas outrank deleted lines, model memory, comments, tests, and prior review text. External product behavior needs authoritative supplied evidence.",
   "Keep required build, validation, test, workflow, and release gates when changed code can make the gate false-pass or fail.",
-  "Reconcile all candidates globally. Approve at most one representative per root cause, even across files, and reject a prior Robin finding when the current head has fixed it. Keep it when the defect remains.",
-  "Return strict JSON only: {\"approved\":{\"c1\":{\"trigger\":\"...\",\"path\":\"...\",\"impact\":\"...\",\"evidence\":\"...\"}},\"rejected\":{\"c2\":\"short reason\"}}",
+  "Reconcile all candidates globally. Approve at most one representative per root cause, even across files. Put a candidate in already_reported when the same root cause appears in PRIOR ROBIN FINDINGS and still exists; reject it when the current head has fixed it.",
+  "Return strict JSON only: {\"approved\":{\"c1\":{\"trigger\":\"...\",\"path\":\"...\",\"impact\":\"...\",\"evidence\":\"...\"}},\"rejected\":{\"c2\":\"short reason\"},\"already_reported\":{\"c3\":\"matching prior root\"}}",
 ].join("\n");
 
 export function getReviewPrompt(extraInstructions = ""): string {
@@ -36,10 +36,11 @@ export function getReviewPrompt(extraInstructions = ""): string {
     "For each finding, state the exact trigger, failing path, material impact, and smallest root-cause fix. Omit it if any element is missing.",
     "Prefer false positives over false negatives only when the failure path is concrete; never invent reachability or product behavior.",
     "Return at most 10 distinct root causes. Do not report style, refactors, optional hardening, speculative fallbacks, or standalone requests for tests.",
+    "When a suspected material bug needs proof outside the supplied diff/context, request only that proof in evidenceRequests. Use at most 4 requests with kind symbol, file, callers, or tests; include query or path and a short reason. Do not request broad browsing.",
     "High blocks merge only for a proven production, security, data-loss, build, or migration failure. Medium is a concrete non-blocking bug. Put genuinely optional improvements in suggestions.",
     "Each diff line is prefixed with its NEW-file line number. Copy that number into line; never guess or recount.",
     "Return strict JSON only with this shape:",
-    '{"summary":"Concise assessment","high":[{"file":"src/auth.ts","line":42,"category":"correctness","confidence":"high","description":"Exact trigger, failing path, and impact.","recommendation":"Smallest concrete fix.","codeSnippet":""}],"medium":[],"low":[],"suggestions":[]}',
+    '{"summary":"Concise assessment","high":[{"file":"src/auth.ts","line":42,"category":"correctness","confidence":"high","description":"Exact trigger, failing path, and impact.","recommendation":"Smallest concrete fix.","codeSnippet":""}],"medium":[],"low":[],"suggestions":[],"evidenceRequests":[{"kind":"callers","query":"parseAuth","reason":"Prove whether the changed parser receives untrusted input."}]}',
     "category must be correctness, security, reliability, integration, tests, or performance. confidence must be high, medium, or low. Use empty arrays and no markdown.",
   ];
   if (extraInstructions.trim()) {

@@ -36,7 +36,7 @@ export function selectApprovedCandidates(
   summary = ""
 ): StructuredReview {
   const json = response.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const parsed = JSON.parse(json) as { approved?: unknown; rejected?: unknown };
+  const parsed = JSON.parse(json) as { approved?: unknown; rejected?: unknown; already_reported?: unknown };
   if (!parsed.approved || typeof parsed.approved !== "object" || Array.isArray(parsed.approved)
     || !Object.values(parsed.approved).every((proof) => isApprovalProof(proof))) {
     throw new Error("Precision gate response must contain approved proof objects");
@@ -45,10 +45,15 @@ export function selectApprovedCandidates(
     || !Object.values(parsed.rejected).every((reason) => typeof reason === "string")) {
     throw new Error("Precision gate response must contain a rejected reason object");
   }
+  if (!parsed.already_reported || typeof parsed.already_reported !== "object" || Array.isArray(parsed.already_reported)
+    || !Object.values(parsed.already_reported).every((reason) => typeof reason === "string")) {
+    throw new Error("Precision gate response must contain an already_reported reason object");
+  }
 
   const approved = new Set(Object.keys(parsed.approved));
   const rejected = Object.keys(parsed.rejected);
-  const dispositions = [...approved, ...rejected];
+  const alreadyReported = Object.keys(parsed.already_reported);
+  const dispositions = [...approved, ...rejected, ...alreadyReported];
   const candidateIds = new Set(candidates.map(({ id }) => id));
   if (new Set(dispositions).size !== dispositions.length
     || dispositions.some((id) => !candidateIds.has(id))
@@ -61,6 +66,7 @@ export function selectApprovedCandidates(
     medium: [],
     low: [],
     suggestions: [],
+    evidenceRequests: [],
     rawResponse: response,
   };
   for (const candidate of candidates) {

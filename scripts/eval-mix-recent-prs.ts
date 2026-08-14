@@ -4,13 +4,15 @@ import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 import { annotateDiffWithLineNumbers } from "../src/diff-annotate";
 import { chunkDiffByFile, selectDiffFiles, splitDiffIntoFiles } from "../src/diff-filter";
-import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS, PRECISION_INSTRUCTIONS, getReviewPrompt } from "../src/prompts/review-prompts";
+import { PRECISION_INSTRUCTIONS, getReviewPrompt } from "../src/prompts/review-prompts";
 import { buildPrecisionCandidates, selectApprovedCandidates } from "../src/precision-gate";
 import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "../src/contract-discovery";
 import { LLMClient } from "../src/llm-client";
 import { LUNA_API_PRICING, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
+import { ReviewBudget, runDiscovery } from "../src/discovery";
+import { executeEvidenceRequests } from "../src/evidence-loop";
 
 type EvalCase = { pr: number; base: string; head: string; generation?: number; changedFiles?: string[]; labels?: Array<{file: string}>; rejectedCandidates?: Array<{file: string}> };
 type RejectedCandidate = { file: string; rootCause: string; reason: string };
@@ -297,6 +299,7 @@ async function main() {
       .filter((_chunk, index) => selectedChunks.size === 0 || selectedChunks.has(index + 1));
     reviewChunks.flatMap(changedHeadPaths).forEach((path) => reviewedFiles.add(`${testCase.pr}:${testCase.head}:${path}`));
     const reviewedPaths = changedHeadPaths(diff);
+    const reviewBudget = new ReviewBudget(Math.min(4, Math.max(1, Math.ceil(reviewChunks.length / 2))), Date.now() + EVAL_LAST_CALL_START_MS);
     const localGit = {
       getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => {
         try {
@@ -342,12 +345,17 @@ async function main() {
         "```",
       ].join("\n");
       const reviewPrompt = getReviewPrompt(MIX_REVIEW_INSTRUCTIONS);
-      const discovery = await Promise.all([DISCOVERY_INSTRUCTIONS, ADVERSARIAL_INSTRUCTIONS].map((instructions) =>
-        review(reviewPrompt, `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`)
-      ));
+      const usage: unknown[] = [];
+      const discovery = await runDiscovery(async (instructions) => {
+        const response = await review(reviewPrompt, `${reviewInput}\n\nREVIEW FOCUS:\n${instructions}`);
+        usage.push(response.usage);
+        return ReviewParser.parse(response.choices[0]?.message.content || "");
+      }, (requests) => executeEvidenceRequests(localGit, "", "", testCase.head, requests), reviewBudget);
       return {
-        candidates: discovery.map((response) => asReview(ReviewParser.parse(response.choices[0]?.message.content || ""))),
-        usage: discovery.map(({usage}) => usage),
+        candidates: [asReview(discovery.review)],
+        evidenceRequests: discovery.evidenceRequests,
+        followedUp: discovery.followedUp,
+        usage,
       };
         })));
       writeProgress(results);

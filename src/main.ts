@@ -324,8 +324,16 @@ async function run(): Promise<void> {
         reviewedPaths,
         {counterevidence, reviewedPaths}
       );
-      for (let start = 0; start < reviewChunks.length; start += 8) {
-        const batch = reviewChunks.slice(start, start + 8);
+      // Every chunk prompt shares a long prefix (system prompt + review
+      // instructions), but a provider prompt cache is only populated by a
+      // completed call. Fanning out from cold made all 8 calls cache *writes*
+      // — the largest line on the OpenAI bill — and reported cached=0. So the
+      // first chunk runs alone to warm the cache, then the rest fan out and
+      // hit it. Scheduling only: identical prompts, identical results, at the
+      // cost of one chunk's latency.
+      let batchSize = reviewChunks.length > 1 ? 1 : 8;
+      for (let start = 0; start < reviewChunks.length; start += batchSize, batchSize = 8) {
+        const batch = reviewChunks.slice(start, start + batchSize);
         const reviews = await Promise.all(batch.map(async (chunk, offset) => {
           core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
           const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);

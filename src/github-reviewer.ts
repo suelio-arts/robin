@@ -1,9 +1,86 @@
 import { Octokit } from "@octokit/rest";
 import * as core from "@actions/core";
+import { createHash } from "node:crypto";
 import { StructuredReview, ReviewFinding } from "./review-parser";
 
 /** Marker present in every Robin review body; used to recognize Robin's own reviews. */
 export const ROBIN_SIGNATURE = ":bow_and_arrow: Robin";
+
+/** HTML-comment marker carrying the content address of the reviewed diff. */
+const REVIEW_KEY_MARKER = "robin-review-key";
+const REVIEW_KEY_PATTERN = new RegExp(
+  `<!--\\s*${REVIEW_KEY_MARKER}:\\s*([0-9a-f]{64})\\s+(APPROVE|REQUEST_CHANGES|COMMENT)\\s*-->`
+);
+
+export type ReviewEvent = "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+
+/**
+ * Content address of everything that determines a verdict.
+ *
+ * A rebase onto a moved main dismisses Robin's approval but usually leaves the
+ * reviewed diff byte-identical, so the model would be asked to re-derive a
+ * verdict from inputs it has already seen. Hashing the prompts and model
+ * alongside the diff means any prompt, model, or repo-instruction edit
+ * invalidates the key automatically — there is no cache version to remember to
+ * bump.
+ */
+export function reviewKey(parts: {
+  model: string;
+  systemPrompt: string;
+  precisionPrompt: string;
+  gatekeeper: boolean;
+  diff: string;
+}): string {
+  return createHash("sha256")
+    .update(
+      [
+        parts.model,
+        parts.systemPrompt,
+        parts.precisionPrompt,
+        String(parts.gatekeeper),
+        parts.diff,
+      ].join("\0")
+    )
+    .digest("hex");
+}
+
+export function cacheMarker(key: string, event: ReviewEvent): string {
+  return `<!-- ${REVIEW_KEY_MARKER}: ${key} ${event} -->`;
+}
+
+export interface CachedVerdict {
+  event: ReviewEvent;
+  body: string;
+}
+
+/**
+ * Find a previous Robin review of this exact content.
+ *
+ * Deliberately does NOT filter on review state: `dismiss_stale_reviews` marks
+ * the reviews we most want to reuse as DISMISSED. The author check is a trust
+ * boundary, not a nicety — without it a collaborator could paste a marker into
+ * their own review body and have Robin post a genuine bot APPROVE, defeating
+ * `require_last_push_approval`.
+ */
+export function findCachedVerdict(
+  reviews: Array<{
+    body?: string | null;
+    user?: { login?: string; type?: string } | null;
+  }>,
+  key: string
+): CachedVerdict | null {
+  for (let i = reviews.length - 1; i >= 0; i--) {
+    const review = reviews[i];
+    if (review.user?.type !== "Bot") continue;
+    if (review.user?.login !== "github-actions[bot]") continue;
+    const body = review.body || "";
+    if (!body.includes(ROBIN_SIGNATURE)) continue;
+    const match = REVIEW_KEY_PATTERN.exec(body);
+    if (!match || match[1] !== key) continue;
+    return { event: match[2] as ReviewEvent, body };
+  }
+  return null;
+}
 
 export class GitHubReviewer {
   private octokit: Octokit;
@@ -102,12 +179,55 @@ export class GitHubReviewer {
     }
   }
 
+  /**
+   * Re-post a verdict already derived from byte-identical inputs.
+   *
+   * Body-only, with ZERO inline comments, and that constraint is the safety
+   * argument rather than a caveat on it. Re-mapping the original findings onto
+   * the new head would duplicate every thread on each rebase and un-resolve
+   * findings the author already fixed, so it is deliberately not done. Nothing
+   * here touches `required_conversation_resolution`.
+   *
+   * The prior body is reused verbatim so the `Findings Not Posted Inline`
+   * section survives — `isStaleRobinReview` keys on it to stay fail-closed on a
+   * body-only High — and so the marker and ROBIN_SIGNATURE come along for free.
+   */
+  async postCachedReview(
+    owner: string,
+    repo: string,
+    pullNumber: number,
+    cached: CachedVerdict
+  ): Promise<void> {
+    const body = [
+      "> Reused a prior review: this head's diff is byte-identical to one already",
+      "> reviewed on this pull request, so no model call was made. Edit or delete",
+      "> that review's body to force a full re-review.",
+      "",
+      cached.body,
+    ].join("\n");
+
+    const { data: review } = await this.octokit.rest.pulls.createReview({
+      owner,
+      repo,
+      pull_number: pullNumber,
+      body,
+      event: cached.event,
+    });
+
+    core.info(
+      "Reused cached " + cached.event + " verdict as review #" + review.id + " (0 model calls)"
+    );
+
+    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+  }
+
   async postReview(
     owner: string,
     repo: string,
     pullNumber: number,
     findings: StructuredReview,
-    requestChanges = true
+    requestChanges = true,
+    cacheKey?: string
   ): Promise<void> {
     try {
       core.info("Posting review to PR #" + pullNumber + "...");
@@ -123,14 +243,17 @@ export class GitHubReviewer {
       // Build line-level comments from findings
       const { comments, postedFindings } = this.buildReviewComments(findings, files);
 
-      // Build the review summary body (high-level)
-      const body = this.buildReviewBody(findings, postedFindings);
-      
       // Determine review event type
       const event = GitHubReviewer.resolveReviewEvent(
         findings.high.length > 0,
         requestChanges
       );
+
+      // Build the review summary body (high-level). The cache marker must be
+      // stamped on BOTH createReview calls below; missing the fallback would
+      // silently make those reviews unreusable.
+      const stamp = cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "";
+      const body = this.buildReviewBody(findings, postedFindings) + stamp;
       
       let review;
       let postedInlineComments = comments.length;
@@ -157,7 +280,7 @@ export class GitHubReviewer {
           repo,
           pull_number: pullNumber,
           // The failed review is not created, so include every finding in the fallback body.
-          body: this.buildReviewBody(findings, new Set()),
+          body: this.buildReviewBody(findings, new Set()) + stamp,
           event,
         });
         review = response.data;

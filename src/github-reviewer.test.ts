@@ -1,4 +1,4 @@
-import { GitHubReviewer } from "./github-reviewer";
+import { GitHubReviewer, reviewKey, cacheMarker, findCachedVerdict, ROBIN_SIGNATURE } from "./github-reviewer";
 
 describe("GitHubReviewer", () => {
   it("resolves review event from high findings and request-changes mode", () => {
@@ -169,5 +169,75 @@ describe("GitHubReviewer", () => {
     })).toBe(true);
 
     expect(shouldRetryWithoutInlineComments({ status: 403, message: "Forbidden" })).toBe(false);
+  });
+});
+
+
+describe("content-addressed review reuse", () => {
+  const base = {
+    model: "gpt-5.6-luna",
+    systemPrompt: "system",
+    precisionPrompt: "precision",
+    gatekeeper: true,
+    diff: "@@ -1 +1 @@\n-a\n+b\n",
+  };
+
+  it("is stable for identical inputs and sensitive to every field", () => {
+    expect(reviewKey(base)).toBe(reviewKey({ ...base }));
+    expect(reviewKey({ ...base, diff: base.diff + " " })).not.toBe(reviewKey(base));
+    expect(reviewKey({ ...base, model: "other" })).not.toBe(reviewKey(base));
+    expect(reviewKey({ ...base, systemPrompt: "changed" })).not.toBe(reviewKey(base));
+    expect(reviewKey({ ...base, precisionPrompt: "changed" })).not.toBe(reviewKey(base));
+    expect(reviewKey({ ...base, gatekeeper: false })).not.toBe(reviewKey(base));
+  });
+
+  it("cannot be spoofed by field concatenation", () => {
+    // Fields are NUL-joined, so moving a boundary must change the digest.
+    expect(reviewKey({ ...base, model: "a", systemPrompt: "b" }))
+      .not.toBe(reviewKey({ ...base, model: "ab", systemPrompt: "" }));
+  });
+
+  const key = reviewKey(base);
+  const robin = (event: "APPROVE" | "REQUEST_CHANGES", k = key) =>
+    "## " + ROBIN_SIGNATURE + "\n\nfindings…\n\n" + cacheMarker(k, event);
+  const bot = { login: "github-actions[bot]", type: "Bot" };
+
+  it("reuses a matching verdict regardless of dismissal state", () => {
+    // dismiss_stale_reviews marks exactly the reviews we want as DISMISSED,
+    // so state must not be part of the match.
+    expect(findCachedVerdict([{ body: robin("APPROVE"), user: bot }], key))
+      .toEqual({ event: "APPROVE", body: robin("APPROVE") });
+    expect(findCachedVerdict([{ body: robin("REQUEST_CHANGES"), user: bot }], key)?.event)
+      .toBe("REQUEST_CHANGES");
+  });
+
+  it("returns the most recent matching review", () => {
+    const reviews = [
+      { body: robin("REQUEST_CHANGES"), user: bot },
+      { body: robin("APPROVE"), user: bot },
+    ];
+    expect(findCachedVerdict(reviews, key)?.event).toBe("APPROVE");
+  });
+
+  it("misses on a different key", () => {
+    const other = reviewKey({ ...base, diff: "different" });
+    expect(findCachedVerdict([{ body: robin("APPROVE"), user: bot }], other)).toBeNull();
+  });
+
+  it("rejects forged markers", () => {
+    const body = robin("APPROVE");
+    // A human pasting the marker into their own review must not yield a bot APPROVE.
+    expect(findCachedVerdict([{ body, user: { login: "daydemir", type: "User" } }], key)).toBeNull();
+    // A different bot must not qualify either.
+    expect(findCachedVerdict([{ body, user: { login: "coderabbitai[bot]", type: "Bot" } }], key)).toBeNull();
+    // Bot author, right marker, but not a Robin review body.
+    expect(
+      findCachedVerdict([{ body: "no signature here\n" + cacheMarker(key, "APPROVE"), user: bot }], key)
+    ).toBeNull();
+  });
+
+  it("ignores reviews with no marker at all", () => {
+    expect(findCachedVerdict([{ body: "## " + ROBIN_SIGNATURE + "\n\nold review", user: bot }], key)).toBeNull();
+    expect(findCachedVerdict([{ body: null, user: bot }], key)).toBeNull();
   });
 });

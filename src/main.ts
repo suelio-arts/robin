@@ -896,11 +896,76 @@ async function loadPriorRobinFindings(
   const comments = await octokit.paginate(octokit.rest.pulls.listReviewComments, {
     owner, repo, pull_number: pullNumber, per_page: 100,
   });
+  const resolved = await resolvedReviewCommentIds(octokit, owner, repo, pullNumber);
+  return formatPriorFindings(comments, ids, resolved);
+}
+
+/** Prior Robin findings, minus any whose thread a human has resolved. */
+export function formatPriorFindings(
+  comments: Array<{id: number; path?: string; line?: number | null; body?: string; pull_request_review_id?: number | null}>,
+  robinReviewIds: Set<number>,
+  resolvedCommentIds: Set<number>
+): string {
   return comments
-    .filter(({pull_request_review_id: id}) => id !== null && ids.has(id))
+    .filter(({pull_request_review_id: id}) => id !== null && id !== undefined && robinReviewIds.has(id))
+    .filter(({id}) => !resolvedCommentIds.has(id))
     .map(({path, line, body}) => `${path}:${line || 0}: ${body}`)
     .join("\n\n")
     .slice(-30000);
+}
+
+/**
+ * Review-comment ids belonging to threads a human has resolved.
+ *
+ * Prior findings are replayed into the final gate as "keep only if still
+ * present", and the gate keeps anything it cannot affirmatively disprove. The
+ * REST listReviewComments endpoint carries no resolution state, so a finding
+ * the author explicitly rejected with evidence and resolved was replayed every
+ * round and re-kept forever — a ratchet that no amount of fixing could clear.
+ * Resolution lives only in the GraphQL reviewThreads connection.
+ *
+ * Failing open (returning an empty set) restores the previous behaviour rather
+ * than dropping prior findings wholesale, so a GraphQL outage costs noise, not
+ * a missed regression.
+ */
+async function resolvedReviewCommentIds(
+  octokit: ReturnType<typeof github.getOctokit>,
+  owner: string,
+  repo: string,
+  pullNumber: number
+): Promise<Set<number>> {
+  const resolved = new Set<number>();
+  try {
+    let cursor: string | null = null;
+    for (let page = 0; page < 20; page++) {
+      const response: any = await octokit.graphql(
+        `query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+          repository(owner: $owner, name: $repo) {
+            pullRequest(number: $number) {
+              reviewThreads(first: 100, after: $cursor) {
+                nodes { isResolved comments(first: 100) { nodes { databaseId } } }
+                pageInfo { hasNextPage endCursor }
+              }
+            }
+          }
+        }`,
+        {owner, repo, number: pullNumber, cursor}
+      );
+      const threads = response?.repository?.pullRequest?.reviewThreads;
+      for (const thread of threads?.nodes ?? []) {
+        if (!thread?.isResolved) continue;
+        for (const comment of thread.comments?.nodes ?? []) {
+          if (typeof comment?.databaseId === "number") resolved.add(comment.databaseId);
+        }
+      }
+      if (!threads?.pageInfo?.hasNextPage) break;
+      cursor = threads.pageInfo.endCursor;
+    }
+  } catch (error) {
+    core.warning("Could not read review-thread resolution; replaying all prior findings: " + error);
+    return new Set();
+  }
+  return resolved;
 }
 
 function deduplicateFindings(review: StructuredReview): void {

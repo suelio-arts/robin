@@ -11,6 +11,8 @@ describe("review prompts", () => {
     expect(ADVERSARIAL_INSTRUCTIONS).toContain("monotonic session ordinals");
     expect(ADVERSARIAL_INSTRUCTIONS).toContain("experimental or alternate modes");
     expect(ADVERSARIAL_INSTRUCTIONS).not.toContain("Audit only");
+    // A gate must be judged against the production behavior it stands in for, not its own title.
+    expect(ADVERSARIAL_INSTRUCTIONS).toContain("Enumerate every property of that production behavior separately");
   });
 
   it("gates evidence globally without MIX-specific memories", () => {
@@ -18,6 +20,8 @@ describe("review prompts", () => {
     expect(PRECISION_INSTRUCTIONS).toContain("Disposition every candidate ID exactly once");
     expect(PRECISION_INSTRUCTIONS).toContain("Approve at most one representative per root cause");
     expect(PRECISION_INSTRUCTIONS).toContain("current head has fixed it");
+    // One fix, one comment: several angles on one weak construct are duplicates, not distinct roots.
+    expect(PRECISION_INSTRUCTIONS).toContain("one single edit would resolve together are one root cause");
     expect(PRECISION_INSTRUCTIONS).not.toMatch(/buildStoryWalk|pollJob|OverridesById/);
   });
 

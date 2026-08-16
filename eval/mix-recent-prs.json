@@ -7,13 +7,47 @@
   "blindHoldoutSnapshots": [
     "318:41e4d06be8eab388e93f41e5a88825407da77b09",
     "320:1ad70bd0636d26c8810d93c1f730aa36e6f6e314",
-    "353:50b3c98ea6da711700f32775f1b658be7427748e"
+    "353:50b3c98ea6da711700f32775f1b658be7427748e",
+    "356:f858e8f58e2d3429931fb1609054e33a5c0abd07",
+    "356:d0254e145e0ae5b13b282bcd4ce3733bdbdb628c",
+    "363:d668c782aea312f7185b7540e3c449b7e3dabf40",
+    "365:6e08044c7fe7563f3649f23ae520cf4bcd51faca",
+    "371:51688acd6244ebeb3a597e96a4e4ca4f147d2320",
+    "371:a99f1fd4bd56de3f1729fdaca5c06def94d31dab",
+    "378:bf435c04f1f1e192e2bbf8636676c23fbb7c2c86",
+    "380:2a691c2954ec9c122dfa7742ad005a0701aceab9",
+    "380:596798ae6dc186520c73cb4701ac931392acda14",
+    "393:9f3866c7a534000e9c04c5687a5f78bc261f9ea3",
+    "399:52e6477acee69de53c565dbf13ac668be7ed5cb7",
+    "404:84a277b0f88bcb744badcded033c74066c5d659d"
   ],
   "blindNegativeSnapshots": [
     "352:447f9088ce90a725f1ea7ff294e6fcc85f25169e",
-    "353:50b3c98ea6da711700f32775f1b658be7427748e"
+    "353:50b3c98ea6da711700f32775f1b658be7427748e",
+    "356:f858e8f58e2d3429931fb1609054e33a5c0abd07",
+    "363:d668c782aea312f7185b7540e3c449b7e3dabf40",
+    "365:6e08044c7fe7563f3649f23ae520cf4bcd51faca",
+    "370:ad114e53f984a401c6de9da0380359f45f8f6ec0",
+    "371:51688acd6244ebeb3a597e96a4e4ca4f147d2320",
+    "378:bf435c04f1f1e192e2bbf8636676c23fbb7c2c86",
+    "390:2023a08571a90dee126cad0ae8c464ebbcb2270e",
+    "399:69df88ccdbf6049b9845e6fedcb73870f33d20c2",
+    "403:d12d431c08f428d5c59cd0b888652f0d016ff5a3"
   ],
-  "blindUpdatePairs": [],
+  "blindUpdatePairs": [
+    {
+      "before": "356:f858e8f58e2d3429931fb1609054e33a5c0abd07",
+      "after": "356:d0254e145e0ae5b13b282bcd4ce3733bdbdb628c"
+    },
+    {
+      "before": "371:51688acd6244ebeb3a597e96a4e4ca4f147d2320",
+      "after": "371:a99f1fd4bd56de3f1729fdaca5c06def94d31dab"
+    },
+    {
+      "before": "380:2a691c2954ec9c122dfa7742ad005a0701aceab9",
+      "after": "380:596798ae6dc186520c73cb4701ac931392acda14"
+    }
+  ],
   "developmentCases": [
     {
       "pr": 265,
@@ -435,9 +469,21 @@
       "base": "5d4f56a13459f8a6d5a9b75b42345bb1ff2637d6",
       "head": "893124efa2f6941c8190be681dfb98ec34de0b4b",
       "labels": [
-        {"file": "backend/functions/src/endpoints/attribution.ts", "rootCause": "organic-to-paid reconciliation overwrites the original resolvedAt install timestamp with the later reconciliation time", "source": "CodeRabbit"},
-        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "fractional Singular click timestamps are sent as Double values to a backend schema that requires positive integers", "source": "CodeRabbit"},
-        {"file": "ios/AR/MIX iOS/Model/Analytics.swift", "rootCause": "NaN or infinite Singular click timestamps cannot be encoded or persisted and can lose the one-shot attribution callback", "source": "Luna"}
+        {
+          "file": "backend/functions/src/endpoints/attribution.ts",
+          "rootCause": "organic-to-paid reconciliation overwrites the original resolvedAt install timestamp with the later reconciliation time",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/MIX iOS/Model/Analytics.swift",
+          "rootCause": "fractional Singular click timestamps are sent as Double values to a backend schema that requires positive integers",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/MIX iOS/Model/Analytics.swift",
+          "rootCause": "NaN or infinite Singular click timestamps cannot be encoded or persisted and can lose the one-shot attribution callback",
+          "source": "Luna"
+        }
       ],
       "rejectedCandidates": [
         {
@@ -467,8 +513,16 @@
       "base": "52305556f3e379106893ca6332177bc63c45a483",
       "head": "12a8d81b293bdb7bbe681589189c14e3c6305079",
       "labels": [
-        {"file": "backend/functions/src/endpoints/walk-links.ts", "rootCause": "focused Boston preview links are absent from AASA and rejected by exact-path app routing", "source": "Greptile"},
-        {"file": "backend/functions/src/endpoints/walk-links.ts", "rootCause": "the new Boston public feed leaves a public cache header on 500 responses, making transient failures cacheable", "source": "Luna"}
+        {
+          "file": "backend/functions/src/endpoints/walk-links.ts",
+          "rootCause": "focused Boston preview links are absent from AASA and rejected by exact-path app routing",
+          "source": "Greptile"
+        },
+        {
+          "file": "backend/functions/src/endpoints/walk-links.ts",
+          "rootCause": "the new Boston public feed leaves a public cache header on 500 responses, making transient failures cacheable",
+          "source": "Luna"
+        }
       ]
     },
     {
@@ -476,7 +530,11 @@
       "base": "7844c3fb31950c11430f5c9e5c9322bf5d9b4e68",
       "head": "971ff608b06a6ac698042dcaaec1b6033d89db5a",
       "labels": [
-        {"file": "web/qr/800/index.html", "rootCause": "the page loads experience-v8.mjs while Firebase immutable caching covers only v1 through v7", "source": "Greptile"}
+        {
+          "file": "web/qr/800/index.html",
+          "rootCause": "the page loads experience-v8.mjs while Firebase immutable caching covers only v1 through v7",
+          "source": "Greptile"
+        }
       ]
     },
     {
@@ -484,7 +542,11 @@
       "base": "07f417c30044d8b48de455b720479f2a7a0b5d25",
       "head": "6c992a3bf3b73d03811f557ee5797366e7477d8b",
       "labels": [
-        {"file": "backend/functions/src/utils/types.ts", "rootCause": "playingBeatId requires UUID even though persisted beats use non-UUID Firestore auto IDs that the iOS client sends back", "source": "CodeRabbit"}
+        {
+          "file": "backend/functions/src/utils/types.ts",
+          "rootCause": "playingBeatId requires UUID even though persisted beats use non-UUID Firestore auto IDs that the iOS client sends back",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -492,21 +554,73 @@
       "base": "07f417c30044d8b48de455b720479f2a7a0b5d25",
       "head": "31eb20ecc9962fc73cac1a994cf01cd1b0cbb6b2",
       "labels": [
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "the ads snapshot schema accepts a runningCampaignCount that contradicts the independently persisted campaigns array", "source": "CodeRabbit"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "provider status and error are validated independently, allowing error states with no actionable error and ok states whose stored error is silently suppressed", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "a campaign's provider is not constrained to match its enclosing provider summary, allowing internally misattributed campaign data", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "providers length four permits duplicates and omissions instead of requiring each supported provider exactly once", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "an arbitrarily future generatedAt remains fresh and makes the monotonic writer reject subsequent current snapshots, freezing ads analytics", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "totalDailyBudgetUsd is accepted independently of the campaign budgets it summarizes, allowing persisted totals that contradict the campaign rows", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "failure to read the optional growth_ads document aborts the entire primary engagement report even though missing and invalid ads snapshots are explicitly supported", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "the response still describes network installs as non-binding but removes the network_installs blocker that explains the missing linkage whenever ads snapshot reporting is introduced", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "the top-level campaigns array is validated independently from providers[].campaigns, allowing two contradictory campaign inventories to be persisted and returned", "source": "Luna"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "raw Zod validation errors escape the callable boundary as internal failures instead of the invalid-argument contract clients need for permanent malformed requests", "source": "Luna"}
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "the ads snapshot schema accepts a runningCampaignCount that contradicts the independently persisted campaigns array",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "provider status and error are validated independently, allowing error states with no actionable error and ok states whose stored error is silently suppressed",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "a campaign's provider is not constrained to match its enclosing provider summary, allowing internally misattributed campaign data",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "providers length four permits duplicates and omissions instead of requiring each supported provider exactly once",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "an arbitrarily future generatedAt remains fresh and makes the monotonic writer reject subsequent current snapshots, freezing ads analytics",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "totalDailyBudgetUsd is accepted independently of the campaign budgets it summarizes, allowing persisted totals that contradict the campaign rows",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "failure to read the optional growth_ads document aborts the entire primary engagement report even though missing and invalid ads snapshots are explicitly supported",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "the response still describes network installs as non-binding but removes the network_installs blocker that explains the missing linkage whenever ads snapshot reporting is introduced",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "the top-level campaigns array is validated independently from providers[].campaigns, allowing two contradictory campaign inventories to be persisted and returned",
+          "source": "Luna"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "raw Zod validation errors escape the callable boundary as internal failures instead of the invalid-argument contract clients need for permanent malformed requests",
+          "source": "Luna"
+        }
       ],
       "rejectedCandidates": [
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "epoch seconds are accepted where readers assume milliseconds", "reason": "unproven: the sole authorized canonical producer emits epoch milliseconds and no corrupt-state producer is reachable"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "blank campaign IDs necessarily break downstream behavior", "reason": "unproven: no exact consumer requires a non-empty ID or demonstrates a failing path"},
-        {"file": "backend/functions/src/endpoints/engagement-stats.ts", "rootCause": "different snapshots sharing an exact millisecond overwrite each other", "reason": "unproven: no duplicate or concurrent canonical caller makes the theoretical collision reachable"}
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "epoch seconds are accepted where readers assume milliseconds",
+          "reason": "unproven: the sole authorized canonical producer emits epoch milliseconds and no corrupt-state producer is reachable"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "blank campaign IDs necessarily break downstream behavior",
+          "reason": "unproven: no exact consumer requires a non-empty ID or demonstrates a failing path"
+        },
+        {
+          "file": "backend/functions/src/endpoints/engagement-stats.ts",
+          "rootCause": "different snapshots sharing an exact millisecond overwrite each other",
+          "reason": "unproven: no duplicate or concurrent canonical caller makes the theoretical collision reachable"
+        }
       ]
     },
     {
@@ -514,34 +628,138 @@
       "base": "370ec4210d01936dac7118182c5ae23e11a11c25",
       "head": "559a2e474d29dad65cf7283966e3e1976689f4b7",
       "labels": [
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "a missing navigation center override is initialized as an empty object and only one edited axis is stored, so buildWalkPayload drops the incomplete center and silently loses the edit", "source": "CodeRabbit"},
-        {"file": "studio/web/js/walk-editor.mjs", "rootCause": "the Story inspector lets users create a thesis with an empty beats array but provides no control to add a first beat, while save validation rejects that state", "source": "CodeRabbit"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "clearing a visible stop coordinate converts the empty input to zero and persists a materially different location", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "clearing a navigation coordinate converts the empty input to zero and treats it as a valid override", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "selectNode changes the active section without rerendering the section tabs, leaving their visible selected state stale", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "renaming a stop rerenders the rail but not the map, leaving the marker tooltip stale", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "navigation title overrides update the stop rail even though the rail ignores the override and continues rendering the stale title", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "processNextEntry removes an entry before beat generation succeeds, permanently losing it on generation failure", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "a node is marked visited and added to the feed before audio is validated or playable, so playback failure permanently skips it", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "switching movement mode replaces the queue without invalidating an in-flight processor that can later consume the replacement queue", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "asynchronous generation can complete after the user changes workspaces and overwrite the newer workspace with stale output", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "playback reads defaultMusicUrl while saved walks and the editor use musicThemeUrl, silently dropping custom music", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "endWalk tears down local playback before the server end-session call succeeds, leaving an open server session in a torn-down UI on failure", "source": "Luna"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "media onerror and play rejection can both run recovery for one failure, duplicating messages, music transitions, and automatic processing", "source": "Luna"}
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "a missing navigation center override is initialized as an empty object and only one edited axis is stored, so buildWalkPayload drops the incomplete center and silently loses the edit",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/walk-editor.mjs",
+          "rootCause": "the Story inspector lets users create a thesis with an empty beats array but provides no control to add a first beat, while save validation rejects that state",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "clearing a visible stop coordinate converts the empty input to zero and persists a materially different location",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "clearing a navigation coordinate converts the empty input to zero and treats it as a valid override",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "selectNode changes the active section without rerendering the section tabs, leaving their visible selected state stale",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "renaming a stop rerenders the rail but not the map, leaving the marker tooltip stale",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "navigation title overrides update the stop rail even though the rail ignores the override and continues rendering the stale title",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "processNextEntry removes an entry before beat generation succeeds, permanently losing it on generation failure",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "a node is marked visited and added to the feed before audio is validated or playable, so playback failure permanently skips it",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "switching movement mode replaces the queue without invalidating an in-flight processor that can later consume the replacement queue",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "asynchronous generation can complete after the user changes workspaces and overwrite the newer workspace with stale output",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "playback reads defaultMusicUrl while saved walks and the editor use musicThemeUrl, silently dropping custom music",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "endWalk tears down local playback before the server end-session call succeeds, leaving an open server session in a torn-down UI on failure",
+          "source": "Luna"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "media onerror and play rejection can both run recovery for one failure, duplicating messages, music transitions, and automatic processing",
+          "source": "Luna"
+        }
       ],
       "rejectedCandidates": [
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "adding the first stop incorrectly disables save", "reason": "false: routed walks require at least two stops and an explicit route review before saving"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "routeless coordinate edits cannot be saved", "reason": "false: Apply sends the routeless payload and the backend permits route generation for that workflow"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "omitting branding and narrationFlavor from the payload clears persisted fields", "reason": "false: the exact-head backend does not persist or consume either request field"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "generated drafts retain a stale route baseline through pollJob", "reason": "false: the claimed pollJob path does not exist and openGeneratedWalk hydrates and recaptures the baseline"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "cloning route anchors creates a material memory regression", "reason": "unproven: no realistic input size or material memory threshold is established"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "JSON-stringifying route anchors creates a material UI regression", "reason": "unproven: linear comparison alone does not establish material latency at reachable sizes"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "rendering one marker per route anchor creates a material UI regression", "reason": "unproven: no realistic anchor count or measured failure is established"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "route anchors are dangerously unbounded", "reason": "unproven: absence of an arbitrary cap does not establish a reachable resource failure"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "map-created manual stops always have a source and skip materialization", "reason": "false: blank map stops have no source and search results carry genuine provider sources"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "retryAfterMs can be zero or negative", "reason": "false: the exact producer schema requires a positive integer"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "generation kickoff can omit status or return completed", "reason": "false: current producer contracts require generating, ready, or failed"},
-        {"file": "studio/web/js/walk-manager.mjs", "rootCause": "neighborhood generation must accept preview.walk", "reason": "false: the exact current response contract uses walk"}
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "adding the first stop incorrectly disables save",
+          "reason": "false: routed walks require at least two stops and an explicit route review before saving"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "routeless coordinate edits cannot be saved",
+          "reason": "false: Apply sends the routeless payload and the backend permits route generation for that workflow"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "omitting branding and narrationFlavor from the payload clears persisted fields",
+          "reason": "false: the exact-head backend does not persist or consume either request field"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "generated drafts retain a stale route baseline through pollJob",
+          "reason": "false: the claimed pollJob path does not exist and openGeneratedWalk hydrates and recaptures the baseline"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "cloning route anchors creates a material memory regression",
+          "reason": "unproven: no realistic input size or material memory threshold is established"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "JSON-stringifying route anchors creates a material UI regression",
+          "reason": "unproven: linear comparison alone does not establish material latency at reachable sizes"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "rendering one marker per route anchor creates a material UI regression",
+          "reason": "unproven: no realistic anchor count or measured failure is established"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "route anchors are dangerously unbounded",
+          "reason": "unproven: absence of an arbitrary cap does not establish a reachable resource failure"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "map-created manual stops always have a source and skip materialization",
+          "reason": "false: blank map stops have no source and search results carry genuine provider sources"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "retryAfterMs can be zero or negative",
+          "reason": "false: the exact producer schema requires a positive integer"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "generation kickoff can omit status or return completed",
+          "reason": "false: current producer contracts require generating, ready, or failed"
+        },
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "neighborhood generation must accept preview.walk",
+          "reason": "false: the exact current response contract uses walk"
+        }
       ]
     },
     {
@@ -549,9 +767,21 @@
       "base": "9c22c2ae028093fa42b59c70a8f82420d8dca374",
       "head": "18e82cfb11689dbf671920d23baef19e6b9997ed",
       "labels": [
-        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "negating verify_release_once suppresses errexit without asserting the expected failure, so an unexpectedly successful retry can still pass the self-test", "source": "CodeRabbit"},
-        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "the self-test injects retry arguments directly into verify_release_once and never exercises the production failure-classification-cache-reset-retry orchestration it claims to protect", "source": "Luna"},
-        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "substring call-count checks over flattened argv accept invalid option suffixes and do not prove the exact invocation set", "source": "Luna"}
+        {
+          "file": "ios/AR/ci_scripts/verify_release_compile.sh",
+          "rootCause": "negating verify_release_once suppresses errexit without asserting the expected failure, so an unexpectedly successful retry can still pass the self-test",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "ios/AR/ci_scripts/verify_release_compile.sh",
+          "rootCause": "the self-test injects retry arguments directly into verify_release_once and never exercises the production failure-classification-cache-reset-retry orchestration it claims to protect",
+          "source": "Luna"
+        },
+        {
+          "file": "ios/AR/ci_scripts/verify_release_compile.sh",
+          "rootCause": "substring call-count checks over flattened argv accept invalid option suffixes and do not prove the exact invocation set",
+          "source": "Luna"
+        }
       ]
     },
     {
@@ -559,8 +789,16 @@
       "base": "0505ccb89927655d9b7450915e16b9cbf3b80dfc",
       "head": "f296746b6d3c9bc1f0c1986f73e422abc6d9e806",
       "labels": [
-        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "survival verification compares a trimmed persisted navigation title with the raw untrimmed requested title and falsely reports a failed save", "source": "CodeRabbit"},
-        {"file": "backend/functions/src/endpoints/studio-simulator.ts", "rootCause": "Studio projects existing navigation titles but both save surfaces omit title from navNodeOverridesById, so rebuild discards authored titles and hidden beats fall back", "source": "Greptile"}
+        {
+          "file": "studio/cli/mix-studio-cli.mjs",
+          "rootCause": "survival verification compares a trimmed persisted navigation title with the raw untrimmed requested title and falsely reports a failed save",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/endpoints/studio-simulator.ts",
+          "rootCause": "Studio projects existing navigation titles but both save surfaces omit title from navNodeOverridesById, so rebuild discards authored titles and hidden beats fall back",
+          "source": "Greptile"
+        }
       ]
     },
     {
@@ -568,7 +806,11 @@
       "base": "065ff57c7d1e344cb0d1ebdfa49f9e691300e3b3",
       "head": "f4387ed210cb8b45f5b842c634aae6f55a641076",
       "labels": [
-        {"file": "studio/ingestion_backend/store.py", "rootCause": "prompt or keyterm transcription forces universal-3-pro while forwarding unsupported language codes unchanged instead of validating or selecting the compatible model", "source": "CodeRabbit"}
+        {
+          "file": "studio/ingestion_backend/store.py",
+          "rootCause": "prompt or keyterm transcription forces universal-3-pro while forwarding unsupported language codes unchanged instead of validating or selecting the compatible model",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -576,7 +818,11 @@
       "base": "3ad1aca1307b386fe2b2651c7f227a8329bc7e1f",
       "head": "a972064a70157536d3bd9b20be35459a161e9e93",
       "labels": [
-        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "the workflow checks out a Robin SHA different from the immutable robinHead declared by the loaded benchmark manifest, so results are attributed to the wrong review pipeline", "source": "CodeRabbit"}
+        {
+          "file": ".github/workflows/robin-benchmark.yml",
+          "rootCause": "the workflow checks out a Robin SHA different from the immutable robinHead declared by the loaded benchmark manifest, so results are attributed to the wrong review pipeline",
+          "source": "CodeRabbit"
+        }
       ]
     }
   ],
@@ -686,7 +932,11 @@
       "base": "17cd40d099949e60d88d738e7728b6902649f015",
       "head": "00a5b2d915f35f045d61ea3b94a5314f1c411f16",
       "labels": [
-        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "verify_async_algorithms_pin parses commented PBX properties and lets them overwrite active fields, allowing a moving dependency to pass the revision-pin gate", "source": "CodeRabbit"}
+        {
+          "file": "ios/AR/ci_scripts/verify_release_compile.sh",
+          "rootCause": "verify_async_algorithms_pin parses commented PBX properties and lets them overwrite active fields, allowing a moving dependency to pass the revision-pin gate",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -694,7 +944,13 @@
       "base": "0d3035e3c073b63e6c4d6f7abc6d6556658baadc",
       "head": "534bd0735137c72e0c581da08db2b8f15bd1dd86",
       "generation": 2,
-      "labels": [{"file": "studio/ops/release/xcode-cloud.py", "rootCause": "pagination follows an arbitrary links.next URL while api_request attaches the App Store Connect bearer token, allowing credential exfiltration to another host", "source": "CodeRabbit"}]
+      "labels": [
+        {
+          "file": "studio/ops/release/xcode-cloud.py",
+          "rootCause": "pagination follows an arbitrary links.next URL while api_request attaches the App Store Connect bearer token, allowing credential exfiltration to another host",
+          "source": "CodeRabbit"
+        }
+      ]
     },
     {
       "pr": 243,
@@ -709,7 +965,13 @@
       "base": "abbc49e3759c6fbd98db6a70ba3cc6ca0a746f87",
       "head": "ffe723aeda956af3d977a2f46844934be5dc7209",
       "generation": 2,
-      "labels": [{"file": "studio/ops/ads/cli.py", "rootCause": "a non-PAUSED campaign, ad group, or ad is rejected only after creation, leaving a live spend-capable resource despite the staged-paused guarantee", "source": "CodeRabbit"}]
+      "labels": [
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "a non-PAUSED campaign, ad group, or ad is rejected only after creation, leaving a live spend-capable resource despite the staged-paused guarantee",
+          "source": "CodeRabbit"
+        }
+      ]
     },
     {
       "pr": 294,
@@ -732,7 +994,13 @@
       "base": "fa6dc8a0cd650d9da021854668ded1578420aae7",
       "head": "87fe3fe8cab52c567e287f907dab354433bb25ab",
       "generation": 2,
-      "labels": [{"file": "studio/web/js/walk-manager.mjs", "rootCause": "dirty workspace state survives sign-out or account switch and can expose or save the prior user's unpublished content under the next user", "source": "CodeRabbit"}]
+      "labels": [
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "dirty workspace state survives sign-out or account switch and can expose or save the prior user's unpublished content under the next user",
+          "source": "CodeRabbit"
+        }
+      ]
     }
   ],
   "holdoutCases": [
@@ -897,7 +1165,11 @@
       "base": "2aabd6ce2a4761ba9f39e9d0e2a3795902aef60c",
       "head": "d3e780caab03367390a95c95ff6d1e805c15d601",
       "labels": [
-        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "the cleanup gate feeds simctl's OpenStep plist output directly to plistlib, so parse failure is mistaken for an absent app", "source": "CodeRabbit"}
+        {
+          "file": "ios/AR/ci_scripts/verify_release_compile.sh",
+          "rootCause": "the cleanup gate feeds simctl's OpenStep plist output directly to plistlib, so parse failure is mistaken for an absent app",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -905,7 +1177,11 @@
       "base": "b3b20085033cca76377bb94df782cd5bb1da8550",
       "head": "f1cc4c1e75c9be75cd08d846dc81eef9e7470cbe",
       "labels": [
-        {"file": "studio/web/js/admin-page-bootstrap.mjs", "rootCause": "roleless auth callbacks force repeated and concurrent token refreshes because refresh work is not coordinated per signed-in UID", "source": "CodeRabbit"}
+        {
+          "file": "studio/web/js/admin-page-bootstrap.mjs",
+          "rootCause": "roleless auth callbacks force repeated and concurrent token refreshes because refresh work is not coordinated per signed-in UID",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -913,7 +1189,11 @@
       "base": "fb19bb00992b54529c30ceb3b8ddadab1768238f",
       "head": "db361347a16c118452bdbfbe64b554f0ec89586d",
       "labels": [
-        {"file": "docs/subsystems/xcode-cloud-trigger.md", "rootCause": "root and iOS READMEs still claim automatic TestFlight after the runbook switched to manual Main Daily", "source": "Greptile"}
+        {
+          "file": "docs/subsystems/xcode-cloud-trigger.md",
+          "rootCause": "root and iOS READMEs still claim automatic TestFlight after the runbook switched to manual Main Daily",
+          "source": "Greptile"
+        }
       ]
     },
     {
@@ -921,25 +1201,42 @@
       "base": "22b9a01915a8c85caf18bf86d033024deca33906",
       "head": "f76a34ecdf095bb9592b0cfb6beeefb1ed68b550",
       "labels": [
-        {"file": "workbench/server/run_retention.py", "rootCause": "a run created between the initial scan and recording_temp_plan is absent from decision_by_run and raises KeyError", "source": "Greptile"}
+        {
+          "file": "workbench/server/run_retention.py",
+          "rootCause": "a run created between the initial scan and recording_temp_plan is absent from decision_by_run and raises KeyError",
+          "source": "Greptile"
+        }
       ]
     },
     {
       "pr": 320,
       "base": "57ef7d92227fd5f36dece2b0157359d556ca6060",
       "head": "1ad70bd0636d26c8810d93c1f730aa36e6f6e314",
-      "changedFiles": ["ios/AR/ci_scripts/verify_ui_screen_flow_suite.sh"],
+      "changedFiles": [
+        "ios/AR/ci_scripts/verify_ui_screen_flow_suite.sh"
+      ],
       "labels": [
-        {"file": "ios/AR/ci_scripts/verify_ui_screen_flow_suite.sh", "rootCause": "the xcodebuild-argument self-test overwrites captures and greps a substring, so extra invocations or a missing screenshot environment argument still pass", "source": "CodeRabbit"}
+        {
+          "file": "ios/AR/ci_scripts/verify_ui_screen_flow_suite.sh",
+          "rootCause": "the xcodebuild-argument self-test overwrites captures and greps a substring, so extra invocations or a missing screenshot environment argument still pass",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
       "pr": 318,
       "base": "9c22c2ae028093fa42b59c70a8f82420d8dca374",
       "head": "41e4d06be8eab388e93f41e5a88825407da77b09",
-      "changedFiles": ["studio/tests/walk-manager.spec.mjs", "studio/web/walk-manager.html"],
+      "changedFiles": [
+        "studio/tests/walk-manager.spec.mjs",
+        "studio/web/walk-manager.html"
+      ],
       "labels": [
-        {"file": "studio/tests/walk-manager.spec.mjs", "rootCause": "the layout test asserts only display grid and a loose input width, so a two-column label/control layout still passes despite the intended stacked full-width contract", "source": "CodeRabbit"}
+        {
+          "file": "studio/tests/walk-manager.spec.mjs",
+          "rootCause": "the layout test asserts only display grid and a loose input width, so a two-column label/control layout still passes despite the intended stacked full-width contract",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -947,7 +1244,11 @@
       "base": "559d358245ef2157e01076c0745dcb58ab035562",
       "head": "4ef6393035c885266198705e84f62996f5d7c582",
       "labels": [
-        {"file": "web/qr/800/experience-v9.mjs", "rootCause": "UPDATED image-target events reapply position and scale while retaining the recognition heading, destabilizing world-fixed placement", "source": "Greptile"}
+        {
+          "file": "web/qr/800/experience-v9.mjs",
+          "rootCause": "UPDATED image-target events reapply position and scale while retaining the recognition heading, destabilizing world-fixed placement",
+          "source": "Greptile"
+        }
       ]
     },
     {
@@ -955,7 +1256,11 @@
       "base": "fa6dc8a0cd650d9da021854668ded1578420aae7",
       "head": "c0c41345d8837973c077472be8aa9cf0ec0d9123",
       "labels": [
-        {"file": "studio/tests/walk-manager.spec.mjs", "rootCause": "the auth race test emits signed-in and signed-out events synchronously, invalidating the epoch before catalog loading starts and never exercising an in-flight stale catalog response", "source": "CodeRabbit"}
+        {
+          "file": "studio/tests/walk-manager.spec.mjs",
+          "rootCause": "the auth race test emits signed-in and signed-out events synchronously, invalidating the epoch before catalog loading starts and never exercising an in-flight stale catalog response",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -963,7 +1268,11 @@
       "base": "d327e6421fc7e9d74189e8bcfe1f54458077cfc5",
       "head": "70ea58705f167a1fa74524c6302e5394a83e28c5",
       "labels": [
-        {"file": "ios/AR/ci_scripts/verify_release_compile.sh", "rootCause": "a standalone negated classifier command suppresses errexit, so an unexpectedly successful negative case continues to print PASS and exits zero", "source": "CodeRabbit"}
+        {
+          "file": "ios/AR/ci_scripts/verify_release_compile.sh",
+          "rootCause": "a standalone negated classifier command suppresses errexit, so an unexpectedly successful negative case continues to print PASS and exits zero",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -971,7 +1280,11 @@
       "base": "20703acae2ce0e6cbf6ab3a7ffaa8add7a240757",
       "head": "96385d40d006f93a25afb92aefa7829c5cd9469c",
       "labels": [
-        {"file": "docs/subsystems/800-ar-release.md", "rootCause": "the release runbook retains an obsolete canonical 800 layout hash while generated code, assets, layout JSON, and verifiers pin the new hash", "source": "Greptile"}
+        {
+          "file": "docs/subsystems/800-ar-release.md",
+          "rootCause": "the release runbook retains an obsolete canonical 800 layout hash while generated code, assets, layout JSON, and verifiers pin the new hash",
+          "source": "Greptile"
+        }
       ]
     },
     {
@@ -979,7 +1292,11 @@
       "base": "0d98e743a18bbfcfa83873438cd1de1075a77c81",
       "head": "b7446c0c102c0e46fa58e750fe2969d0f09e5612",
       "labels": [
-        {"file": "AR/MIX iOS/Views/NarrativeDebugView.swift", "rootCause": "the primary button is labeled Stop but still calls playLastNarrative while a second real Stop button is rendered", "source": "CodeRabbit"}
+        {
+          "file": "AR/MIX iOS/Views/NarrativeDebugView.swift",
+          "rootCause": "the primary button is labeled Stop but still calls playLastNarrative while a second real Stop button is rendered",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -987,7 +1304,11 @@
       "base": "2aabd6ce2a4761ba9f39e9d0e2a3795902aef60c",
       "head": "e5e3c576c19fb6c34af7f2efeea8947d2e5ce676",
       "labels": [
-        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "benchmark inputs accept mutable or abbreviated refs and record them as exact snapshots without requiring immutable 40-character commit SHAs", "source": "CodeRabbit"}
+        {
+          "file": ".github/workflows/robin-benchmark.yml",
+          "rootCause": "benchmark inputs accept mutable or abbreviated refs and record them as exact snapshots without requiring immutable 40-character commit SHAs",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -995,8 +1316,16 @@
       "base": "2ae990fbd1340ca1755aa42b1c9fd3e79dc3c2d6",
       "head": "abb58780b429e58be09dbc016f1c802e9ef3ea8e",
       "labels": [
-        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "benchmark executes evaluated Robin code while checkout credentials remain persisted in local Git configuration", "source": "CodeRabbit"},
-        {"file": ".github/workflows/robin-benchmark.yml", "rootCause": "benchmark workflow uses mutable action tags instead of immutable full commit SHAs", "source": "CodeRabbit"}
+        {
+          "file": ".github/workflows/robin-benchmark.yml",
+          "rootCause": "benchmark executes evaluated Robin code while checkout credentials remain persisted in local Git configuration",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": ".github/workflows/robin-benchmark.yml",
+          "rootCause": "benchmark workflow uses mutable action tags instead of immutable full commit SHAs",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -1004,7 +1333,11 @@
       "base": "2ae990fbd1340ca1755aa42b1c9fd3e79dc3c2d6",
       "head": "e5d8fd3753d81cd71c3b7b2d61ddda11c55e7403",
       "labels": [
-        {"file": ".github/benchmarks/artifacts/fourth-holdout-supplemental-prelabel-freeze-2.json", "rootCause": "supplemental freeze stores selected PR 301 only under prs while cases-only consumers omit it, and also contains unselected PR 299", "source": "CodeRabbit"}
+        {
+          "file": ".github/benchmarks/artifacts/fourth-holdout-supplemental-prelabel-freeze-2.json",
+          "rootCause": "supplemental freeze stores selected PR 301 only under prs while cases-only consumers omit it, and also contains unselected PR 299",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -1012,7 +1345,11 @@
       "base": "651c753a2034ca11eec6ad181cef22412f65e13c",
       "head": "3af1e4e50a37e427ffeafc76454337416d7b121c",
       "labels": [
-        {"file": "web/qr/800/verify.mjs", "rootCause": "lifecycle dependency gate matches arbitrary path substrings rather than the actual import declaration", "source": "CodeRabbit"}
+        {
+          "file": "web/qr/800/verify.mjs",
+          "rootCause": "lifecycle dependency gate matches arbitrary path substrings rather than the actual import declaration",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -1020,7 +1357,13 @@
       "base": "8af51b083ee0048ef08f3082c4840b48513fc658",
       "head": "73c924647136dfd904df0281721544a3ba3566a1",
       "generation": 3,
-      "labels": [{"file": "web/qr/800/experience-v1.mjs", "rootCause": "layout JSON is fetched without a deadline, so a connection that keeps dribbling bytes leaves loadLayout pending forever and prevents the preview fallback", "source": "CodeRabbit"}]
+      "labels": [
+        {
+          "file": "web/qr/800/experience-v1.mjs",
+          "rootCause": "layout JSON is fetched without a deadline, so a connection that keeps dribbling bytes leaves loadLayout pending forever and prevents the preview fallback",
+          "source": "CodeRabbit"
+        }
+      ]
     },
     {
       "pr": 237,
@@ -1028,8 +1371,16 @@
       "head": "7fd1ad6b79950f00e164b611a29d251b4a2bd5cb",
       "generation": 3,
       "labels": [
-        {"file": "web/qr/800/experience-v2.mjs", "rootCause": "XR8.stop() is evaluated before settleSafely can handle it, so a synchronous throw escapes stopAR and prevents abortInvalidARStart from resetting the UI to paused preview", "source": "CodeRabbit"},
-        {"file": "web/qr/800/experience-v2.mjs", "rootCause": "preview teardown calls nonexistent THREE.Mesh.dispose(), throwing before geometry and material disposal and breaking lifecycle cleanup", "source": "CodeRabbit"}
+        {
+          "file": "web/qr/800/experience-v2.mjs",
+          "rootCause": "XR8.stop() is evaluated before settleSafely can handle it, so a synchronous throw escapes stopAR and prevents abortInvalidARStart from resetting the UI to paused preview",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "web/qr/800/experience-v2.mjs",
+          "rootCause": "preview teardown calls nonexistent THREE.Mesh.dispose(), throwing before geometry and material disposal and breaking lifecycle cleanup",
+          "source": "CodeRabbit"
+        }
       ]
     },
     {
@@ -1037,28 +1388,48 @@
       "base": "78ea88d1c9792b073049c21a881e35176e635763",
       "head": "6a2e29a9af28439029c696c242fff2fab35023ca",
       "generation": 3,
-      "labels": [{"file": "web/qr/800/verify.mjs", "rootCause": "persistent-placement verification rejects only two literal source spellings, so equivalent target-loss code can hide the field or clear its anchor while the gate still passes", "source": "CodeRabbit"}]
+      "labels": [
+        {
+          "file": "web/qr/800/verify.mjs",
+          "rootCause": "persistent-placement verification rejects only two literal source spellings, so equivalent target-loss code can hide the field or clear its anchor while the gate still passes",
+          "source": "CodeRabbit"
+        }
+      ]
     },
     {
       "pr": 247,
       "base": "c813a4ad4ddb6491dde87fd5f5bda4930e06a5df",
       "head": "af982c4f0f81370639780eab7dd9a7f7921cb2a5",
       "generation": 3,
-      "labels": [{"file": "ios/AR/Shared/Store/Store.swift", "rootCause": "each product request launches an unstructured 12-second timeout task that is never retained or cancelled after success, so completed or retried requests accumulate live timer tasks until their deadlines", "source": "CodeRabbit"}]
+      "labels": [
+        {
+          "file": "ios/AR/Shared/Store/Store.swift",
+          "rootCause": "each product request launches an unstructured 12-second timeout task that is never retained or cancelled after success, so completed or retried requests accumulate live timer tasks until their deadlines",
+          "source": "CodeRabbit"
+        }
+      ]
     },
     {
       "pr": 248,
       "base": "9b20cf9b364c21414914ea814e5ab838851185fd",
       "head": "fc4e11154470ad183dc9650b9fb78f3671e9787c",
       "generation": 3,
-      "labels": [{"file": "studio/ci_scripts/verify_studio_cli_contracts.sh", "rootCause": "RejectedItemClient.paged_request ignores params, so the contract test still passes if the production request drops fields[reviewSubmissionItems] or changes its page limit", "source": "CodeRabbit"}]
+      "labels": [
+        {
+          "file": "studio/ci_scripts/verify_studio_cli_contracts.sh",
+          "rootCause": "RejectedItemClient.paged_request ignores params, so the contract test still passes if the production request drops fields[reviewSubmissionItems] or changes its page limit",
+          "source": "CodeRabbit"
+        }
+      ]
     },
     {
       "pr": 353,
       "base": "1cd5e108b178103918b083b3d8c8a5c82e404848",
       "head": "50b3c98ea6da711700f32775f1b658be7427748e",
       "generation": 6,
-      "changedFiles": ["backend/functions/scripts/migrate-great-walk-sources.ts"],
+      "changedFiles": [
+        "backend/functions/scripts/migrate-great-walk-sources.ts"
+      ],
       "labels": [
         {
           "file": "backend/functions/scripts/migrate-great-walk-sources.ts",
@@ -1074,6 +1445,223 @@
       "generation": 3,
       "labels": [],
       "rejected": "An unused timestamp is dead state, not a proven user-visible regression"
+    },
+    {
+      "pr": 356,
+      "base": "727d3d101fb61c80ea0f82abbee4a9f6700bc4a0",
+      "head": "f858e8f58e2d3429931fb1609054e33a5c0abd07",
+      "generation": 7,
+      "changedFiles": [
+        "backend/functions/src/endpoints/story-walks.ts",
+        "studio/tests/walk-manager.spec.mjs",
+        "studio/web/css/walk-manager.css",
+        "studio/web/js/walk-manager.mjs"
+      ],
+      "labels": [
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "a stop-preview failure calls stopAudioPreview unconditionally, so a stale rejected request stops the preview a newer request already started",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 356,
+      "base": "727d3d101fb61c80ea0f82abbee4a9f6700bc4a0",
+      "head": "d0254e145e0ae5b13b282bcd4ce3733bdbdb628c",
+      "generation": 7,
+      "changedFiles": [
+        "backend/functions/src/endpoints/story-walks.ts",
+        "studio/tests/walk-manager.spec.mjs",
+        "studio/web/css/walk-manager.css",
+        "studio/web/js/walk-manager.mjs"
+      ],
+      "labels": []
+    },
+    {
+      "pr": 363,
+      "base": "3d0929a5c8cb74f0d65b6949d0de4d04477a8c21",
+      "head": "d668c782aea312f7185b7540e3c449b7e3dabf40",
+      "generation": 7,
+      "changedFiles": [
+        "backend/functions/src/endpoints/studio-simulator.ts",
+        "studio/web/css/walk-manager.css",
+        "studio/web/js/walk-editor.mjs",
+        "studio/web/js/walk-editor.test.mjs",
+        "studio/web/js/walk-manager.mjs"
+      ],
+      "labels": [
+        {
+          "file": "studio/web/css/walk-manager.css",
+          "rootCause": "the .stop-source-link small rule matches no rendered element because renderStopSources emits <small> inside an <a> with no stop-source-link class",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 365,
+      "base": "3d0929a5c8cb74f0d65b6949d0de4d04477a8c21",
+      "head": "6e08044c7fe7563f3649f23ae520cf4bcd51faca",
+      "generation": 7,
+      "changedFiles": [
+        "backend/functions/scripts/provision-canonical-walks-world.ts"
+      ],
+      "labels": [
+        {
+          "file": "backend/functions/scripts/provision-canonical-walks-world.ts",
+          "rootCause": "a verbatim audio node without elementId is skipped by both the extraction and hydration guards, so the script provisions an unhydrated node instead of failing",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 371,
+      "base": "a96932336edcd985ae9f24f18249eb338da72cc1",
+      "head": "51688acd6244ebeb3a597e96a4e4ca4f147d2320",
+      "generation": 7,
+      "changedFiles": [
+        "backend/functions/scripts/validate-mixpanel.ts",
+        "backend/functions/src/endpoints/analytics.ts",
+        "backend/functions/src/utils/mixpanel.ts",
+        "docs/subsystems/cli-products.md"
+      ],
+      "labels": [
+        {
+          "file": "backend/functions/src/utils/mixpanel.ts",
+          "rootCause": "mixpanelExportUrl interpolates MIXPANEL_EXPORT_SERVER into the URL without restricting it to Mixpanel hosts, so the export Basic Auth credentials can be sent to an arbitrary host",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/utils/mixpanel.ts",
+          "rootCause": "String(response.data ?? \"\") turns a missing or non-text export body into an empty event stream, so analytics report zero Mixpanel events instead of a malformed upstream response",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "backend/functions/src/endpoints/analytics.ts",
+          "rootCause": "Mixpanel events are fetched with the earliest user's response window while each user's activity uses that user's own window, so later-created users receive events from outside their activity window",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 371,
+      "base": "a96932336edcd985ae9f24f18249eb338da72cc1",
+      "head": "a99f1fd4bd56de3f1729fdaca5c06def94d31dab",
+      "generation": 7,
+      "changedFiles": [
+        "backend/functions/scripts/validate-mixpanel.ts",
+        "backend/functions/src/endpoints/analytics.ts",
+        "backend/functions/src/utils/mixpanel.ts",
+        "docs/subsystems/cli-products.md"
+      ],
+      "labels": []
+    },
+    {
+      "pr": 378,
+      "base": "6a1e017afb4985cac0560da75e5607ce9975a625",
+      "head": "bf435c04f1f1e192e2bbf8636676c23fbb7c2c86",
+      "generation": 7,
+      "changedFiles": [
+        "studio/ops/ads/cli.py",
+        "studio/ops/ads/test_dashboard_snapshot.py"
+      ],
+      "labels": [
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "_nonnegative_metric converts a missing budget to 0.0, so a null CBO campaign or ad-group goal_value is reported as a $0/day budget instead of failing",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 380,
+      "base": "6a1e017afb4985cac0560da75e5607ce9975a625",
+      "head": "2a691c2954ec9c122dfa7742ad005a0701aceab9",
+      "generation": 7,
+      "changedFiles": [
+        "studio/cli/dashboard-growth-boundary.test.mjs",
+        "studio/tests/growth-dashboard-contract.mjs",
+        "studio/web/dashboard.html",
+        "studio/web/js/engagement-analytics.js",
+        "studio/web/js/services/dashboard-service.mjs"
+      ],
+      "labels": [
+        {
+          "file": "studio/web/dashboard.html",
+          "rootCause": "Promise.all couples the new launch-performance call to engagement statistics, so a failing or slow getLaunchPerformance hides every existing growth metric",
+          "source": "CodeRabbit"
+        },
+        {
+          "file": "studio/web/js/engagement-analytics.js",
+          "rootCause": "renderLaunchPerformance validates only p50Ms, p90Ms and sampleCount, so a malformed windowDays renders \"Last undefined days\" and p90Ms < p50Ms is accepted",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 380,
+      "base": "6a1e017afb4985cac0560da75e5607ce9975a625",
+      "head": "596798ae6dc186520c73cb4701ac931392acda14",
+      "generation": 7,
+      "changedFiles": [
+        "studio/cli/dashboard-growth-boundary.test.mjs",
+        "studio/tests/growth-dashboard-contract.mjs",
+        "studio/web/dashboard.html",
+        "studio/web/js/engagement-analytics.js",
+        "studio/web/js/services/dashboard-service.mjs"
+      ],
+      "labels": []
+    },
+    {
+      "pr": 393,
+      "base": "88468f229801537560745ced0326a0de9109ca69",
+      "head": "9f3866c7a534000e9c04c5687a5f78bc261f9ea3",
+      "generation": 7,
+      "changedFiles": [
+        "docs/subsystems/appstore-release.md",
+        "studio/ops/appstore/release.py",
+        "studio/ops/appstore/test_release.py"
+      ],
+      "labels": [
+        {
+          "file": "docs/subsystems/appstore-release.md",
+          "rootCause": "the cancellable-submission paragraph omits non-empty READY_FOR_REVIEW even though CANCELABLE_SUBMISSION_STATES still contains it, so the documented state list contradicts the code",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 399,
+      "base": "fbee69d40eb3ef97c3926955e3de332428003ef9",
+      "head": "52e6477acee69de53c565dbf13ac668be7ed5cb7",
+      "generation": 7,
+      "changedFiles": [
+        ".github/workflows/robin.yml",
+        "docs/pr-review.md"
+      ],
+      "labels": [
+        {
+          "file": "docs/pr-review.md",
+          "rootCause": "the policy documents one Robin review when a pull request becomes ready, but the workflow also triggers on opened and reopened without restricting the job to ready_for_review",
+          "source": "CodeRabbit"
+        }
+      ]
+    },
+    {
+      "pr": 404,
+      "base": "783e14d34b7926ac53ed91f220e8f431f544d6b5",
+      "head": "84a277b0f88bcb744badcded033c74066c5d659d",
+      "generation": 7,
+      "changedFiles": [
+        "backend/functions/src/constants/limits.ts"
+      ],
+      "labels": [
+        {
+          "file": "backend/functions/src/constants/limits.ts",
+          "rootCause": "the documented cutover instant 2026-08-12T07:06:50Z disagrees with PROVENANCE_EPOCH_MS 1_786_518_410_281 by 281 ms, so the comment and the authoritative constant describe different epochs",
+          "source": "CodeRabbit"
+        }
+      ]
     }
   ],
   "holdoutNegativeControls": [
@@ -1247,7 +1835,12 @@
       "base": "519529ee455cc557b804cb58e44d46d5c32a95ec",
       "head": "0673e370a9b5d13f98203e79c54551062b9a39e6",
       "rejectedCandidates": [
-        {"file": "scripts/periphery.sh", "rootCause": "macOS lacks /usr/bin/lockf and the command treats descriptor 9 as a pathname", "source": "CodeRabbit", "reason": "false on the target platform: /usr/bin/lockf exists and its native syntax explicitly accepts an already-open file descriptor"}
+        {
+          "file": "scripts/periphery.sh",
+          "rootCause": "macOS lacks /usr/bin/lockf and the command treats descriptor 9 as a pathname",
+          "source": "CodeRabbit",
+          "reason": "false on the target platform: /usr/bin/lockf exists and its native syntax explicitly accepts an already-open file descriptor"
+        }
       ]
     },
     {
@@ -1255,7 +1848,12 @@
       "base": "89fa3d79b1ba4409cfa3517ea67865202ad24dd2",
       "head": "41fe662b218a685214d742fd26d42112498108de",
       "rejectedCandidates": [
-        {"file": "ios/AR/Shared/UI/EightHundred/EightHundredScene.swift", "rootCause": "motion is defective because applyMotion runs only at the intentional 12 Hz visual update cadence", "source": "CodeRabbit", "reason": "unproven: exact code intentionally gates material and motion together at 12 Hz and no contract requires per-render motion"}
+        {
+          "file": "ios/AR/Shared/UI/EightHundred/EightHundredScene.swift",
+          "rootCause": "motion is defective because applyMotion runs only at the intentional 12 Hz visual update cadence",
+          "source": "CodeRabbit",
+          "reason": "unproven: exact code intentionally gates material and motion together at 12 Hz and no contract requires per-render motion"
+        }
       ]
     },
     {
@@ -1263,7 +1861,12 @@
       "base": "a1f8c07b178bdd158d782bbe262dfc6621b4e9aa",
       "head": "234e7dba78b6f8677a4b583a6fc47644b8d28cff",
       "rejectedCandidates": [
-        {"file": "studio/cli/mix-studio-cli.mjs", "rootCause": "omitting branding from the rebuilt payload clears persisted walk branding", "source": "Greptile", "reason": "false and retracted: WalkSchema has no branding field and buildStoryWalk does not persist one"}
+        {
+          "file": "studio/cli/mix-studio-cli.mjs",
+          "rootCause": "omitting branding from the rebuilt payload clears persisted walk branding",
+          "source": "Greptile",
+          "reason": "false and retracted: WalkSchema has no branding field and buildStoryWalk does not persist one"
+        }
       ]
     },
     {
@@ -1271,7 +1874,12 @@
       "base": "283bd5b0e29ef71ee6e0cf58a73075268f7e5c24",
       "head": "5517c28ad940808ff8038d57fc91a468e82e5f5e",
       "rejectedCandidates": [
-        {"file": "studio/ingestion_backend/tests/test_cli.py", "rootCause": "parseCommand has no empty-argument test", "source": "CodeRabbit", "reason": "stale at exact head: parseCommand([]) is asserted verbatim in the final test file"}
+        {
+          "file": "studio/ingestion_backend/tests/test_cli.py",
+          "rootCause": "parseCommand has no empty-argument test",
+          "source": "CodeRabbit",
+          "reason": "stale at exact head: parseCommand([]) is asserted verbatim in the final test file"
+        }
       ]
     },
     {
@@ -1309,6 +1917,141 @@
           "rootCause": "enumerating users and querying each WALK_BEATS subcollection must be replaced with a collection-group query filtered by walkId",
           "source": "CodeRabbit",
           "reason": "unproven optimization: the existing queries cover the canonical users and no omitted record or material scale failure is established"
+        }
+      ]
+    },
+    {
+      "pr": 356,
+      "base": "727d3d101fb61c80ea0f82abbee4a9f6700bc4a0",
+      "head": "f858e8f58e2d3429931fb1609054e33a5c0abd07",
+      "rejectedCandidates": [
+        {
+          "file": "studio/web/js/walk-manager.mjs",
+          "rootCause": "the new narration-source option values must be derived from the NARRATION_MODE constant instead of raw strings",
+          "source": "CodeRabbit",
+          "reason": "style-only: the literals equal the canonical NARRATION_MODE values and no divergent value or changed behavior is proven"
+        }
+      ]
+    },
+    {
+      "pr": 363,
+      "base": "3d0929a5c8cb74f0d65b6949d0de4d04477a8c21",
+      "head": "d668c782aea312f7185b7540e3c449b7e3dabf40",
+      "rejectedCandidates": [
+        {
+          "file": "studio/web/js/walk-editor.test.mjs",
+          "rootCause": "the stopSourceLinks test does not cover image sources, http URLs, or malformed URLs",
+          "source": "CodeRabbit",
+          "reason": "test-coverage request: no defect in the changed code is established, only untested branches"
+        }
+      ]
+    },
+    {
+      "pr": 365,
+      "base": "3d0929a5c8cb74f0d65b6949d0de4d04477a8c21",
+      "head": "6e08044c7fe7563f3649f23ae520cf4bcd51faca",
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/scripts/provision-canonical-walks-world.ts",
+          "rootCause": "the verbatim, audio, and data_layer_record identifiers must be centralized and shared through one audio-node predicate",
+          "source": "CodeRabbit",
+          "reason": "style-only DRY request: the repeated literals match their schemas and no divergent value or failure path is proven"
+        }
+      ]
+    },
+    {
+      "pr": 370,
+      "base": "4df096b0a787979c0b89e4a7f5d62fd09563c779",
+      "head": "ad114e53f984a401c6de9da0380359f45f8f6ec0",
+      "rejectedCandidates": [
+        {
+          "file": ".github/workflows/robin-benchmark.yml",
+          "rootCause": "job-level continue-on-error must be removed so checkout, fetch, and setup failures cannot report success",
+          "source": "CodeRabbit",
+          "reason": "re-litigates a documented deliberate decision: the added comment states the benchmark job is advisory telemetry that must not raise failed-run notifications"
+        }
+      ]
+    },
+    {
+      "pr": 371,
+      "base": "a96932336edcd985ae9f24f18249eb338da72cc1",
+      "head": "51688acd6244ebeb3a597e96a4e4ca4f147d2320",
+      "rejectedCandidates": [
+        {
+          "file": "backend/functions/scripts/validate-mixpanel.ts",
+          "rootCause": "the validator asserts only the where clause and must also assert project_id, date bounds, Basic Auth, responseType and timeout",
+          "source": "CodeRabbit",
+          "reason": "test-coverage request: the production request already sets those fields and no incorrect request is established"
+        }
+      ]
+    },
+    {
+      "pr": 378,
+      "base": "6a1e017afb4985cac0560da75e5607ce9975a625",
+      "head": "bf435c04f1f1e192e2bbf8636676c23fbb7c2c86",
+      "rejectedCandidates": [
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "the RuntimeError message must move into a dedicated contract exception type to satisfy Ruff TRY003",
+          "source": "CodeRabbit",
+          "reason": "lint-only: the repository does not enforce Ruff and the message is already actionable; withdrawn by its author"
+        },
+        {
+          "file": "studio/ops/ads/cli.py",
+          "rootCause": "the Any parameter annotations must be replaced with an explicit provider-metric type to satisfy Ruff ANN401",
+          "source": "CodeRabbit",
+          "reason": "lint-only: provider-boundary values are intentionally runtime-validated and the repository does not enforce Ruff; withdrawn by its author"
+        }
+      ]
+    },
+    {
+      "pr": 390,
+      "base": "46d3691318143cc976f4b66852f32b045618040a",
+      "head": "2023a08571a90dee126cad0ae8c464ebbcb2270e",
+      "rejectedCandidates": [
+        {
+          "file": "studio/ops/growth/campaigns/reddit_walks_2026.md",
+          "rootCause": "the document body starts with ## Log instead of a top-level heading, so markdownlint reports MD041",
+          "source": "CodeRabbit",
+          "reason": "style-only lint preference on a front-matter document; no behavior or contract is affected"
+        },
+        {
+          "file": "studio/ops/growth/origins/reddit_us_walks.md",
+          "rootCause": "the document body starts with ## Copy instead of a top-level heading, so markdownlint reports MD041",
+          "source": "CodeRabbit",
+          "reason": "style-only lint preference on a front-matter document; no behavior or contract is affected"
+        }
+      ]
+    },
+    {
+      "pr": 399,
+      "base": "fbee69d40eb3ef97c3926955e3de332428003ef9",
+      "head": "69df88ccdbf6049b9845e6fedcb73870f33d20c2",
+      "rejectedCandidates": [
+        {
+          "file": ".github/workflows/robin.yml",
+          "rootCause": "the job permissions must be documented and minimized because zizmor reports them as undocumented",
+          "source": "CodeRabbit",
+          "reason": "lint-only: the retained actions read, contents read and pull-requests write scopes are all required by the pinned action; only explanatory comments are missing"
+        },
+        {
+          "file": ".github/workflows/robin.yml",
+          "rootCause": "continue-on-error must be removed so provider, input, or timeout failures cannot produce a successful job with no review",
+          "source": "CodeRabbit",
+          "reason": "re-litigates a documented deliberate decision: the workflow is the nonblocking informational shadow lane, and its timeouts match the stated execution budget; withdrawn by its author"
+        }
+      ]
+    },
+    {
+      "pr": 403,
+      "base": "8e2dee0e54238fec5a24a04e05f538ab4edaadd7",
+      "head": "d12d431c08f428d5c59cd0b888652f0d016ff5a3",
+      "rejectedCandidates": [
+        {
+          "file": "studio/ops/ads/test_reddit_ads.py",
+          "rootCause": "the unittest assertion must be converted or Ruff must be configured to exclude PT027 for this suite",
+          "source": "CodeRabbit",
+          "reason": "lint-configuration preference: the suite is unittest-based, the repository has no pytest dependency, and no defect in the changed code is established"
         }
       ]
     }

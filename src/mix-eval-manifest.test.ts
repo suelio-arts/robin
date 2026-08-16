@@ -169,12 +169,37 @@ describe("MIX review benchmark", () => {
       "318:41e4d06be8eab388e93f41e5a88825407da77b09",
       "320:1ad70bd0636d26c8810d93c1f730aa36e6f6e314",
       "353:50b3c98ea6da711700f32775f1b658be7427748e",
+      "356:f858e8f58e2d3429931fb1609054e33a5c0abd07",
+      "356:d0254e145e0ae5b13b282bcd4ce3733bdbdb628c",
+      "363:d668c782aea312f7185b7540e3c449b7e3dabf40",
+      "365:6e08044c7fe7563f3649f23ae520cf4bcd51faca",
+      "371:51688acd6244ebeb3a597e96a4e4ca4f147d2320",
+      "371:a99f1fd4bd56de3f1729fdaca5c06def94d31dab",
+      "378:bf435c04f1f1e192e2bbf8636676c23fbb7c2c86",
+      "380:2a691c2954ec9c122dfa7742ad005a0701aceab9",
+      "380:596798ae6dc186520c73cb4701ac931392acda14",
+      "393:9f3866c7a534000e9c04c5687a5f78bc261f9ea3",
+      "399:52e6477acee69de53c565dbf13ac668be7ed5cb7",
+      "404:84a277b0f88bcb744badcded033c74066c5d659d",
     ]);
     expect(manifest.blindNegativeSnapshots).toEqual([
       "352:447f9088ce90a725f1ea7ff294e6fcc85f25169e",
       "353:50b3c98ea6da711700f32775f1b658be7427748e",
+      "356:f858e8f58e2d3429931fb1609054e33a5c0abd07",
+      "363:d668c782aea312f7185b7540e3c449b7e3dabf40",
+      "365:6e08044c7fe7563f3649f23ae520cf4bcd51faca",
+      "370:ad114e53f984a401c6de9da0380359f45f8f6ec0",
+      "371:51688acd6244ebeb3a597e96a4e4ca4f147d2320",
+      "378:bf435c04f1f1e192e2bbf8636676c23fbb7c2c86",
+      "390:2023a08571a90dee126cad0ae8c464ebbcb2270e",
+      "399:69df88ccdbf6049b9845e6fedcb73870f33d20c2",
+      "403:d12d431c08f428d5c59cd0b888652f0d016ff5a3",
     ]);
-    expect(manifest.blindUpdatePairs).toEqual([]);
+    expect(manifest.blindUpdatePairs).toEqual([
+      {before: "356:f858e8f58e2d3429931fb1609054e33a5c0abd07", after: "356:d0254e145e0ae5b13b282bcd4ce3733bdbdb628c"},
+      {before: "371:51688acd6244ebeb3a597e96a4e4ca4f147d2320", after: "371:a99f1fd4bd56de3f1729fdaca5c06def94d31dab"},
+      {before: "380:2a691c2954ec9c122dfa7742ad005a0701aceab9", after: "380:596798ae6dc186520c73cb4701ac931392acda14"},
+    ]);
     const blindCaseIds = new Set(manifest.holdoutCases
       .map(({pr, head}) => `${pr}:${head}`)
       .filter((id) => manifest.blindHoldoutSnapshots.includes(id)));

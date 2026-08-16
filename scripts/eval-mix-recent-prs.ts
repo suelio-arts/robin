@@ -166,8 +166,20 @@ async function review(systemPrompt: string, userContent: string) {
   if (Date.now() - activeSnapshotStartedMs >= EVAL_LAST_CALL_START_MS) {
     throw new Error("PR snapshot exceeded its five-minute wall-clock budget before the next model call");
   }
+  const snapshotStartedMs = activeSnapshotStartedMs;
   const started = Date.now();
-  const response = await client.chatCompletion(systemPrompt, userContent, true);
+  // A provider timeout must not kill a whole multi-snapshot run, but the snapshot budget still decides:
+  // retry only while this snapshot could still start another call, so latency stays honestly measured.
+  let response;
+  for (;;) {
+    try {
+      response = await client.chatCompletion(systemPrompt, userContent, true);
+      break;
+    } catch (error) {
+      if (Date.now() - snapshotStartedMs >= EVAL_LAST_CALL_START_MS) throw error;
+      console.warn(`Retrying evaluation call after provider failure: ${error}`);
+    }
+  }
   if (!response.usage) throw new Error("Evaluation requires provider token usage for every model call");
   if (!response.callId) throw new Error("Evaluation requires a native provider session id for every model call");
   const provenance = response.provenance || (evalConfig.transport === "api"

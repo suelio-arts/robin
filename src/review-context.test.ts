@@ -82,6 +82,57 @@ describe("buildFileContext", () => {
     expect(lineNumbers).toEqual([...lineNumbers].sort((left, right) => left - right));
   });
 
+  it("keeps the enclosing scope of a hunk deep inside an oversized changed file", async () => {
+    const lines = Array.from({length: 8000}, (_, index) => `    let filler${index} = computeUnrelatedValue(${index})`);
+    lines[5399] = "    private func maybeStartAutoplayPrefetch(currentTime: Double) {";
+    lines[5423] = "        guard let locator else { return }";
+    lines[5442] = "        await generateBeat(locator: locator)";
+    const files: Record<string, string> = {"head:ios/Service.swift": lines.join("\n")};
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async () => [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/ios/Service.swift b/ios/Service.swift",
+      "--- a/ios/Service.swift",
+      "+++ b/ios/Service.swift",
+      "@@ -5440,3 +5440,3 @@ final class SpatialBeatService {",
+      "     let before = 1",
+      "-        await generateBeat(locator: locator)",
+      "+        await generateBeat(locator: locator, trigger: .prefetch)",
+      "     let after = 1",
+    ].join("\n"), "base", "head");
+    const section = context.split("\n\n").find((part) => part.startsWith("HEAD FILE: ios/Service.swift"));
+    expect(section).toBeDefined();
+    expect(section!.length).toBeLessThanOrEqual(20000);
+    expect(section).toContain("5424:         guard let locator else { return }");
+    expect(section).toContain("5400:     private func maybeStartAutoplayPrefetch(currentTime: Double) {");
+  });
+
+  it("shares the hunk anchor budget across every hunk in an oversized file", async () => {
+    const lines = Array.from({length: 9000}, (_, index) => `    let filler${index} = computeUnrelatedValue(${index})`);
+    const hunkLines = [400, 1800, 3600, 5400, 7200];
+    for (const line of hunkLines) lines[line - 9] = `        guard let anchor${line} else { return }`;
+    const files: Record<string, string> = {"head:ios/Service.swift": lines.join("\n")};
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async () => [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/ios/Service.swift b/ios/Service.swift",
+      "--- a/ios/Service.swift",
+      "+++ b/ios/Service.swift",
+      ...hunkLines.flatMap((line) => [
+        `@@ -${line},1 +${line},1 @@ final class SpatialBeatService {`,
+        `+    let touched${line} = computeUnrelatedValue(${line})`,
+      ]),
+    ].join("\n"), "base", "head");
+    const section = context.split("\n\n").find((part) => part.startsWith("HEAD FILE: ios/Service.swift"));
+    for (const line of hunkLines) expect(section).toContain(`guard let anchor${line} else { return }`);
+  });
+
   it("adds exact-head repository search matches", async () => {
     const files: Record<string, string> = {
       "head:src/route.ts": "const result = canonicalOperation(value);",

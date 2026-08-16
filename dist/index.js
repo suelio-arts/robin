@@ -3004,6 +3004,9 @@ const CONTEXT_LIMIT = 50000;
 const FILE_LIMIT = 20000;
 const RELATED_LIMIT = 12000;
 const RELATED_REQUEST_LIMIT = 24;
+const ANCHOR_LINES_ABOVE = 60;
+const ANCHOR_LINES_BELOW = 20;
+const ANCHOR_BUDGET_SHARE = 0.25;
 function excerpt(content, limit) {
     if (content.length <= limit)
         return content;
@@ -3040,7 +3043,7 @@ async function buildFileContext(git, owner, repo, chunk, base, head) {
             fetched.add(`${ref}:${path}`);
             const valueLimit = Math.min(FILE_LIMIT, remaining);
             const value = label === "HEAD" && content.length > valueLimit
-                ? matchingNeighborhoods(content, terms, valueLimit) || excerpt(content, valueLimit)
+                ? matchingNeighborhoods(content, terms, valueLimit, hunkRanges(file.content)) || excerpt(content, valueLimit)
                 : excerpt(content, valueLimit);
             sections.push(`${label} FILE: ${path}\n${value}`);
             remaining -= value.length;
@@ -3292,12 +3295,49 @@ async function resolveRelatedFile(git, owner, repo, importPath, head, fetched, b
     }
     return (await Promise.all(pending)).find(({ content }) => content) || undefined;
 }
-function matchingNeighborhoods(content, terms, limit) {
-    if (terms.length === 0)
+// New-side line ranges of each @@ hunk, so the enclosing scope of changed code survives truncation.
+function hunkRanges(fileDiff) {
+    return [...fileDiff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)].map((match) => {
+        const start = Number(match[1]);
+        const length = match[2] === undefined ? 1 : Number(match[2]);
+        return [start, start + Math.max(0, length - 1)];
+    });
+}
+// Zero-based line indexes around every hunk, nearest-first so multi-hunk files share the anchor budget evenly.
+function anchorIndexes(ranges, lineCount) {
+    const distances = new Map();
+    for (const [start, end] of ranges) {
+        const from = Math.max(1, start - ANCHOR_LINES_ABOVE);
+        const to = Math.min(lineCount, end + ANCHOR_LINES_BELOW);
+        for (let line = from; line <= to; line += 1) {
+            // Enclosing scope lives above the hunk, so lines below yield first when the budget is tight.
+            const away = line < start ? start - line : line > end ? (line - end) * 3 : 0;
+            const index = line - 1;
+            const prior = distances.get(index);
+            if (prior === undefined || away < prior)
+                distances.set(index, away);
+        }
+    }
+    return [...distances.entries()]
+        .sort((left, right) => left[1] - right[1] || left[0] - right[0])
+        .map(([index]) => index);
+}
+function matchingNeighborhoods(content, terms, limit, anchors = []) {
+    if (terms.length === 0 && anchors.length === 0)
         return "";
     const lines = content.split("\n");
     const selected = new Set();
     let selectedLength = 0;
+    const lineCost = (index) => String(index + 1).length + 2 + lines[index].length + 1;
+    const anchorLimit = Math.floor(limit * ANCHOR_BUDGET_SHARE);
+    for (const index of anchorIndexes(anchors, lines.length)) {
+        const lineLength = lineCost(index);
+        // continue, not break: one overlong line must not drop the rest of the enclosing scope.
+        if (selectedLength + lineLength > anchorLimit)
+            continue;
+        selected.add(index);
+        selectedLength += lineLength;
+    }
     const matches = lines
         .map((line, index) => ({
         index,
@@ -3309,7 +3349,7 @@ function matchingNeighborhoods(content, terms, limit) {
         for (let nearby = Math.max(0, index - 3); nearby <= Math.min(lines.length - 1, index + 3); nearby += 1) {
             if (selected.has(nearby))
                 continue;
-            const lineLength = String(nearby + 1).length + 2 + lines[nearby].length + 1;
+            const lineLength = lineCost(nearby);
             if (selectedLength + lineLength > limit)
                 continue;
             selected.add(nearby);

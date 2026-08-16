@@ -135,8 +135,22 @@ function chunkOversizedFile(content: string, maxChunkSize: number): string[] {
   for (const body of bodies) {
     if (body.length > bodyLimit) {
       flush();
-      for (let offset = 0; offset < body.length; offset += bodyLimit) {
-        pages.push(prefix + body.slice(offset, offset + bodyLimit));
+      // Cut on newline boundaries. A raw slice can bisect a long line, and the
+      // model then sees half a regex or string literal and reports it as
+      // unparseable — a false positive with no cause visible in the source.
+      // Fall back to a hard cut only when one line genuinely exceeds the limit.
+      let offset = 0;
+      while (offset < body.length) {
+        let end = offset + bodyLimit;
+        if (end < body.length) {
+          // Search from end-1: lastIndexOf is inclusive of its start index, so
+          // searching from `end` could return `end` and push the chunk one
+          // character past bodyLimit.
+          const boundary = body.lastIndexOf("\n", end - 1);
+          if (boundary >= offset) end = boundary + 1;
+        }
+        pages.push(prefix + body.slice(offset, end));
+        offset = end;
       }
       continue;
     }

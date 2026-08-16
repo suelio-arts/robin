@@ -115,3 +115,36 @@ describe("chunkDiffByFile", () => {
     expect(chunks.map((chunk) => chunk.slice(header.length)).join("")).toContain("+change");
   });
 });
+
+describe("chunkOversizedFile line boundaries", () => {
+  const header = "diff --git a/f b/f\n--- a/f\n+++ b/f\n";
+
+  it("never bisects a line when a newline boundary exists", () => {
+    const line = "+" + "x".repeat(39) + "\n";
+    const hunk = "@@ -1,20 +1,20 @@\n" + line.repeat(20);
+    const chunks = chunkDiffByFile(header + hunk, header.length + 200);
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      const payload = chunk.slice(header.length);
+      if (!payload) continue;
+      // Every chunk must end on a line boundary, so no line is ever bisected.
+      expect(payload.endsWith("\n")).toBe(true);
+    }
+    expect(chunks.map((c) => c.slice(header.length)).join("")).toBe(hunk);
+  });
+
+  it("still splits a single line that genuinely exceeds the limit", () => {
+    const hunk = "@@ -1 +1 @@\n+" + "y".repeat(500) + "\n";
+    const chunks = chunkDiffByFile(header + hunk, header.length + 100);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.map((c) => c.slice(header.length)).join("")).toBe(hunk);
+  });
+
+  it("never emits a chunk longer than the limit", () => {
+    const hunk = "@@ -1,30 +1,30 @@\n" + ("+" + "z".repeat(29) + "\n").repeat(30);
+    const limit = header.length + 97;
+    for (const chunk of chunkDiffByFile(header + hunk, limit)) {
+      expect(chunk.length).toBeLessThanOrEqual(limit);
+    }
+  });
+});

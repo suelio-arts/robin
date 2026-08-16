@@ -1235,7 +1235,7 @@
       "head": "c507fca44edec0337d1c38247c35e7ff3897c1fe",
       "rejectedCandidates": [
         {
-          "file": "studio/web/js/ads-dashboard.mjs",
+          "file": "studio/web/dashboard.html",
           "rootCause": "loadSelectedWindow leaks rejected promises from failed engagement data loads",
           "source": "CodeRabbit",
           "reason": "false at exact head: loadEngagementData catches its fetch and parse failures and resolves after rendering the error state"

@@ -229,5 +229,9 @@ describe("MIX review benchmark", () => {
     expect(source).toContain("CANDIDATE DIFF EVIDENCE");
     expect(source).toContain("JSON.stringify({file: candidate.file, rootCause: candidate.rootCause})");
     expect(source).not.toContain("CANDIDATE: ${JSON.stringify(candidate)}");
+    // The negative-control gate must judge with the shipped precision criteria, not a harness-local rewrite.
+    const negativeGateIndex = source.indexOf("This gate dispositions exactly one candidate");
+    expect(negativeGateIndex).toBeGreaterThan(0);
+    expect(source.slice(negativeGateIndex - 200, negativeGateIndex)).toContain("PRECISION_INSTRUCTIONS,");
   });
 });

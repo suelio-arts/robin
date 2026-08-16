@@ -992,9 +992,66 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.GitHubReviewer = exports.ROBIN_SIGNATURE = void 0;
+exports.reviewKey = reviewKey;
+exports.cacheMarker = cacheMarker;
+exports.findCachedVerdict = findCachedVerdict;
 const core = __importStar(__nccwpck_require__(7484));
+const node_crypto_1 = __nccwpck_require__(7598);
 /** Marker present in every Robin review body; used to recognize Robin's own reviews. */
 exports.ROBIN_SIGNATURE = ":bow_and_arrow: Robin";
+/** HTML-comment marker carrying the content address of the reviewed diff. */
+const REVIEW_KEY_MARKER = "robin-review-key";
+const REVIEW_KEY_PATTERN = new RegExp(`<!--\\s*${REVIEW_KEY_MARKER}:\\s*([0-9a-f]{64})\\s+(APPROVE|REQUEST_CHANGES|COMMENT)\\s*-->`);
+/**
+ * Content address of everything that determines a verdict.
+ *
+ * A rebase onto a moved main dismisses Robin's approval but usually leaves the
+ * reviewed diff byte-identical, so the model would be asked to re-derive a
+ * verdict from inputs it has already seen. Hashing the prompts and model
+ * alongside the diff means any prompt, model, or repo-instruction edit
+ * invalidates the key automatically — there is no cache version to remember to
+ * bump.
+ */
+function reviewKey(parts) {
+    return (0, node_crypto_1.createHash)("sha256")
+        .update([
+        parts.model,
+        parts.systemPrompt,
+        parts.precisionPrompt,
+        String(parts.gatekeeper),
+        parts.diff,
+    ].join("\0"))
+        .digest("hex");
+}
+function cacheMarker(key, event) {
+    return `<!-- ${REVIEW_KEY_MARKER}: ${key} ${event} -->`;
+}
+/**
+ * Find a previous Robin review of this exact content.
+ *
+ * Deliberately does NOT filter on review state: `dismiss_stale_reviews` marks
+ * the reviews we most want to reuse as DISMISSED. The author check is a trust
+ * boundary, not a nicety — without it a collaborator could paste a marker into
+ * their own review body and have Robin post a genuine bot APPROVE, defeating
+ * `require_last_push_approval`.
+ */
+function findCachedVerdict(reviews, key) {
+    for (let i = reviews.length - 1; i >= 0; i--) {
+        const review = reviews[i];
+        if (review.user?.type !== "Bot")
+            continue;
+        if (review.user?.login !== "github-actions[bot]")
+            continue;
+        const body = review.body || "";
+        if (!body.includes(exports.ROBIN_SIGNATURE))
+            continue;
+        const match = REVIEW_KEY_PATTERN.exec(body);
+        if (!match || match[1] !== key)
+            continue;
+        return { event: match[2], body };
+    }
+    return null;
+}
 class GitHubReviewer {
     octokit;
     maxComments;
@@ -1074,7 +1131,38 @@ class GitHubReviewer {
             core.warning("Could not check for stale Robin reviews: " + error);
         }
     }
-    async postReview(owner, repo, pullNumber, findings, requestChanges = true) {
+    /**
+     * Re-post a verdict already derived from byte-identical inputs.
+     *
+     * Body-only, with ZERO inline comments, and that constraint is the safety
+     * argument rather than a caveat on it. Re-mapping the original findings onto
+     * the new head would duplicate every thread on each rebase and un-resolve
+     * findings the author already fixed, so it is deliberately not done. Nothing
+     * here touches `required_conversation_resolution`.
+     *
+     * The prior body is reused verbatim so the `Findings Not Posted Inline`
+     * section survives — `isStaleRobinReview` keys on it to stay fail-closed on a
+     * body-only High — and so the marker and ROBIN_SIGNATURE come along for free.
+     */
+    async postCachedReview(owner, repo, pullNumber, cached) {
+        const body = [
+            "> Reused a prior review: this head's diff is byte-identical to one already",
+            "> reviewed on this pull request, so no model call was made. Edit or delete",
+            "> that review's body to force a full re-review.",
+            "",
+            cached.body,
+        ].join("\n");
+        const { data: review } = await this.octokit.rest.pulls.createReview({
+            owner,
+            repo,
+            pull_number: pullNumber,
+            body,
+            event: cached.event,
+        });
+        core.info("Reused cached " + cached.event + " verdict as review #" + review.id + " (0 model calls)");
+        await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+    }
+    async postReview(owner, repo, pullNumber, findings, requestChanges = true, cacheKey) {
         try {
             core.info("Posting review to PR #" + pullNumber + "...");
             // Fetch file patches to map line positions
@@ -1086,10 +1174,13 @@ class GitHubReviewer {
             });
             // Build line-level comments from findings
             const { comments, postedFindings } = this.buildReviewComments(findings, files);
-            // Build the review summary body (high-level)
-            const body = this.buildReviewBody(findings, postedFindings);
             // Determine review event type
             const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, requestChanges);
+            // Build the review summary body (high-level). The cache marker must be
+            // stamped on BOTH createReview calls below; missing the fallback would
+            // silently make those reviews unreusable.
+            const stamp = cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "";
+            const body = this.buildReviewBody(findings, postedFindings) + stamp;
             let review;
             let postedInlineComments = comments.length;
             try {
@@ -1113,7 +1204,7 @@ class GitHubReviewer {
                     repo,
                     pull_number: pullNumber,
                     // The failed review is not created, so include every finding in the fallback body.
-                    body: this.buildReviewBody(findings, new Set()),
+                    body: this.buildReviewBody(findings, new Set()) + stamp,
                     event,
                 });
                 review = response.data;
@@ -2033,6 +2124,45 @@ async function run() {
         const reviewInstructions = command === "review"
             ? await loadReviewInstructions(octokit, gitUtils, owner, repo, prNumber, inlineReviewInstructions, reviewInstructionsFile, baseRef)
             : "";
+        // Content-addressed review reuse.
+        //
+        // A rebase onto a moved main dismisses Robin's approval, but ~59% of those
+        // force-pushes leave the reviewed diff byte-identical. GitHub has already
+        // voided the approval by the time this runs, so skipping alone would
+        // deadlock the PR: the short-circuit must still POST a fresh review at the
+        // current head. It just must not call the model.
+        //
+        // Placed before the LLMClient is constructed so a hit makes a model call
+        // structurally impossible. A miss falls through to the untouched path.
+        let cacheKey;
+        if (command === "review") {
+            cacheKey = (0, github_reviewer_1.reviewKey)({
+                model,
+                systemPrompt: (0, review_prompts_1.getReviewPrompt)(reviewInstructions),
+                precisionPrompt: [reviewInstructions, review_prompts_1.PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n"),
+                gatekeeper: requestChanges,
+                diff: reviewDiff,
+            });
+            const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+                owner,
+                repo,
+                pull_number: prNumber,
+                per_page: 100,
+            });
+            const cached = (0, github_reviewer_1.findCachedVerdict)(priorReviews, cacheKey);
+            if (cached) {
+                core.info("Diff is byte-identical to an earlier review; reusing its " + cached.event + " verdict.");
+                const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
+                await reviewer.postCachedReview(owner, repo, prNumber, cached);
+                await updateStatusComment(octokit, owner, repo, statusCommentId, buildReusedStatusBody(cached.event));
+                if (cached.event === "REQUEST_CHANGES" && failOnHigh) {
+                    core.setFailed("Reused a blocking review for an unchanged diff.");
+                }
+                onJobCancelled = undefined;
+                core.info("Done.");
+                return;
+            }
+        }
         const llm = new llm_client_1.LLMClient(baseUrl, apiKey, model, maxOutputTokens, llmTimeoutMs, undefined, async (detail) => {
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildProgressStatusBody(detail, statusCommand, statusModel));
         }, reasoningEffortInput);
@@ -2074,7 +2204,7 @@ async function run() {
             ].join("\n");
             core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
             const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
-            await reviewer.postReview(owner, repo, prNumber, findings, requestChanges);
+            await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, cacheKey);
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("review", findings));
             if (findings.high.length > 0 && failOnHigh) {
                 core.setFailed(`Found ${findings.high.length} high severity issue(s). Failing check.`);
@@ -2163,6 +2293,20 @@ async function updateStatusComment(octokit, owner, repo, commentId, body) {
     catch (error) {
         core.warning(`Could not update status comment: ${error}`);
     }
+}
+function buildReusedStatusBody(event) {
+    const verdict = event === "REQUEST_CHANGES"
+        ? "re-posted the blocking review"
+        : event === "APPROVE"
+            ? "re-posted the approval"
+            : "re-posted the review";
+    return [
+        "## " + github_reviewer_1.ROBIN_SIGNATURE,
+        "",
+        `:recycle: This head's diff is byte-identical to one I already reviewed, so I ${verdict} without a model pass.`,
+        "",
+        "Edit or delete that review's body to force a full re-review.",
+    ].join("\n");
 }
 function buildCompletedStatusBody(command, findings) {
     if (command === "summary") {

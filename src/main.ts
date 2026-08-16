@@ -4,7 +4,7 @@ import { LLMClient } from "./llm-client";
 import { GitUtils } from "./git-utils";
 import { ReviewFinding, ReviewParser, StructuredReview } from "./review-parser";
 import { shouldRetryStructuredReview } from "./review-retry";
-import { GitHubReviewer, ROBIN_SIGNATURE } from "./github-reviewer";
+import { GitHubReviewer, ROBIN_SIGNATURE, reviewKey, findCachedVerdict } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
 import { chunkDiffByFile, filterDiff, splitDiffIntoFiles } from "./diff-filter";
 import { annotateDiffWithLineNumbers } from "./diff-annotate";
@@ -280,6 +280,54 @@ async function run(): Promise<void> {
       )
       : "";
 
+    // Content-addressed review reuse.
+    //
+    // A rebase onto a moved main dismisses Robin's approval, but ~59% of those
+    // force-pushes leave the reviewed diff byte-identical. GitHub has already
+    // voided the approval by the time this runs, so skipping alone would
+    // deadlock the PR: the short-circuit must still POST a fresh review at the
+    // current head. It just must not call the model.
+    //
+    // Placed before the LLMClient is constructed so a hit makes a model call
+    // structurally impossible. A miss falls through to the untouched path.
+    let cacheKey: string | undefined;
+    if (command === "review") {
+      cacheKey = reviewKey({
+        model,
+        systemPrompt: getReviewPrompt(reviewInstructions),
+        precisionPrompt: [reviewInstructions, PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n"),
+        gatekeeper: requestChanges,
+        diff: reviewDiff,
+      });
+
+      const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
+        owner,
+        repo,
+        pull_number: prNumber,
+        per_page: 100,
+      });
+      const cached = findCachedVerdict(priorReviews, cacheKey);
+
+      if (cached) {
+        core.info("Diff is byte-identical to an earlier review; reusing its " + cached.event + " verdict.");
+        const reviewer = new GitHubReviewer(octokit as any, maxComments);
+        await reviewer.postCachedReview(owner, repo, prNumber, cached);
+        await updateStatusComment(
+          octokit,
+          owner,
+          repo,
+          statusCommentId,
+          buildReusedStatusBody(cached.event)
+        );
+        if (cached.event === "REQUEST_CHANGES" && failOnHigh) {
+          core.setFailed("Reused a blocking review for an unchanged diff.");
+        }
+        onJobCancelled = undefined;
+        core.info("Done.");
+        return;
+      }
+    }
+
     const llm = new LLMClient(
       baseUrl,
       apiKey,
@@ -357,7 +405,7 @@ async function run(): Promise<void> {
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
 
       const reviewer = new GitHubReviewer(octokit as any, maxComments);
-      await reviewer.postReview(owner, repo, prNumber, findings, requestChanges);
+      await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, cacheKey);
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("review", findings));
 
       if (findings.high.length > 0 && failOnHigh) {
@@ -466,6 +514,21 @@ async function updateStatusComment(
   } catch (error) {
     core.warning(`Could not update status comment: ${error}`);
   }
+}
+
+function buildReusedStatusBody(event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT"): string {
+  const verdict = event === "REQUEST_CHANGES"
+    ? "re-posted the blocking review"
+    : event === "APPROVE"
+      ? "re-posted the approval"
+      : "re-posted the review";
+  return [
+    "## " + ROBIN_SIGNATURE,
+    "",
+    `:recycle: This head's diff is byte-identical to one I already reviewed, so I ${verdict} without a model pass.`,
+    "",
+    "Edit or delete that review's body to force a full re-review.",
+  ].join("\n");
 }
 
 function buildCompletedStatusBody(command: "review" | "summary", findings?: StructuredReview): string {

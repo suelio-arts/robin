@@ -23,7 +23,7 @@ export const PRECISION_INSTRUCTIONS = [
   "Reject pre-existing, already-fixed, unreachable, speculative, contradicted, style-only, optional-hardening, fallback, migration, abstraction, and standalone test-coverage claims.",
   "Repository instructions are authoritative. Reject recommendations that contradict them unless exact repository evidence proves the exception is required.",
   "Exact-head code and schemas outrank deleted lines, model memory, comments, tests, and prior review text. External product behavior needs authoritative supplied evidence.",
-  "Keep required build, validation, test, workflow, and release gates when changed code can make the gate false-pass or fail.",
+  "Keep required build, validation, test, workflow, and release gates when changed code can make the gate false-pass or fail. A standalone test-coverage claim asks for tests that do not exist; a changed test, self-test, or gate whose assertions cannot fail on the violation it exists to catch is a defect in the changed lines themselves, so approve it when the evidence names the violation that still passes.",
   "Reconcile all candidates globally. Approve at most one representative per root cause, even across files. Put a candidate in already_reported when the same root cause appears in PRIOR ROBIN FINDINGS and still exists; reject it when the current head has fixed it.",
   "Return strict JSON only: {\"approved\":{\"c1\":{\"trigger\":\"...\",\"path\":\"...\",\"impact\":\"...\",\"evidence\":\"...\"}},\"rejected\":{\"c2\":\"short reason\"},\"already_reported\":{\"c3\":\"matching prior root\"}}",
 ].join("\n");

@@ -2826,10 +2826,10 @@ exports.DISCOVERY_INSTRUCTIONS = [
 ].join("\n");
 exports.ADVERSARIAL_INSTRUCTIONS = [
     "Act as an adversarial failure analyst for the entire supplied diff. Find concrete regressions the normal happy path hides.",
-    "For every changed parser, CLI option, selector, and trust boundary, try missing, valueless, empty, whitespace-only, duplicate, incompatible, and out-of-range inputs and trace them to the real effect. For a changed flag, distinguish --flag, --flag=value, and --flag value; reject value-bearing forms when the flag contract is boolean.",
+    "For every changed parser, CLI option, selector, and trust boundary, try missing, valueless, empty, whitespace-only, duplicate, incompatible, and out-of-range inputs and trace them to the real effect. For a changed flag, distinguish --flag, --flag=value, and --flag value, but report an unhandled form only when supplied evidence shows a caller, workflow, docs, or test that actually passes it; a hypothetical mistyped invocation is not a defect.",
     "For every changed stateful operation, trace identity and state across production versus test modes, retries, partial failure, re-entry, ordering, pagination, first/last items, and persisted readback. Check that experimental or alternate modes cannot mutate production state.",
     "For changed calculations and policies, test branch boundaries, combined conditions, caps, ordinals, empty history, and whether counts include the current item or only prior items. Verify bounded histories do not masquerade as monotonic session ordinals.",
-    "For changed gates and tests, prove the asserted behavior actually reaches the production path and cannot false-pass.",
+    "For every changed test, self-test, verification script, or CI gate, name the contract it claims to enforce, construct the concrete violation it must catch, and check whether its assertions actually fail on that violation. Report a false-passing gate when a substring or loose matcher, an overwritten or single-shot capture, a stubbed callee, a narrowed filter, or an unasserted argument, exit status, or property lets the violation pass, and prove the asserted behavior reaches the production path.",
     "Return all distinct proven root causes, not hardening ideas or test wish lists.",
 ].join("\n");
 exports.PRECISION_INSTRUCTIONS = [

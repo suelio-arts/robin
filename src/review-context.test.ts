@@ -110,6 +110,28 @@ describe("buildFileContext", () => {
     expect(section).toContain("5400:     private func maybeStartAutoplayPrefetch(currentTime: Double) {");
   });
 
+  it("keeps the declaration and body of a helper the changed lines call", async () => {
+    const lines = Array.from({length: 9000}, (_, index) => `    filler${index} = computeUnrelatedValue(${index})`);
+    lines[6999] = "def normalizeReportMetric(value, field):";
+    lines[7003] = "    parsed = float(value) if value is not None else 0.0";
+    const files: Record<string, string> = {"head:ops/report.py": lines.join("\n")};
+    const git = {
+      getFileContent: async (_owner: string, _repo: string, path: string, ref: string) => files[`${ref}:${path}`] || "",
+      getTreePaths: async () => [],
+      searchPaths: async () => [],
+    };
+    const context = await buildFileContext(git, "o", "r", [
+      "diff --git a/ops/report.py b/ops/report.py",
+      "--- a/ops/report.py",
+      "+++ b/ops/report.py",
+      "@@ -8000,1 +8000,1 @@ def build_dashboard():",
+      "+    budget = normalizeReportMetric(computeUnrelatedValue(computeUnrelatedValue(0)), \"budget\")",
+    ].join("\n"), "base", "head");
+    const section = context.split("\n\n").find((part) => part.startsWith("HEAD FILE: ops/report.py"));
+    expect(section).toContain("7000: def normalizeReportMetric(value, field):");
+    expect(section).toContain("7004:     parsed = float(value) if value is not None else 0.0");
+  });
+
   it("shares the hunk anchor budget across every hunk in an oversized file", async () => {
     const lines = Array.from({length: 9000}, (_, index) => `    let filler${index} = computeUnrelatedValue(${index})`);
     const hunkLines = [400, 1800, 3600, 5400, 7200];

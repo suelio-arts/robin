@@ -20,6 +20,9 @@ describe("review prompts", () => {
     expect(PRECISION_INSTRUCTIONS).toContain("Disposition every candidate ID exactly once");
     expect(PRECISION_INSTRUCTIONS).toContain("Approve at most one representative per root cause");
     expect(PRECISION_INSTRUCTIONS).toContain("current head has fixed it");
+    // A compiler outcome nobody ran is not evidence: the declaration that fails must be supplied.
+    expect(PRECISION_INSTRUCTIONS).toContain("You cannot compile, type-check, or lint anything");
+    expect(PRECISION_INSTRUCTIONS).toContain("exact declaration, signature, or overload that makes it fail");
     // One fix, one comment: several angles on one weak construct are duplicates, not distinct roots.
     expect(PRECISION_INSTRUCTIONS).toContain("one single edit would resolve together are one root cause");
     expect(PRECISION_INSTRUCTIONS).not.toMatch(/buildStoryWalk|pollJob|OverridesById/);

@@ -2838,6 +2838,7 @@ exports.PRECISION_INSTRUCTIONS = [
     "Reject pre-existing, already-fixed, unreachable, speculative, contradicted, style-only, optional-hardening, fallback, migration, abstraction, and standalone test-coverage claims.",
     "Repository instructions are authoritative. Reject recommendations that contradict them unless exact repository evidence proves the exception is required.",
     "Exact-head code and schemas outrank deleted lines, model memory, comments, tests, and prior review text. External product behavior needs authoritative supplied evidence, but the ordinary documented contract of an API the changed code itself calls is not external product behavior; do not reject an otherwise concrete failing path merely because that contract is not quoted back to you.",
+    "You cannot compile, type-check, or lint anything. Reject a claim that changed code fails to build, fails to type-check, or has the wrong inferred type unless the supplied evidence contains the exact declaration, signature, or overload that makes it fail; a compiler outcome recalled from a library's API or from how a language usually infers is not evidence, and merged code that a repository gate already builds is contradicted by its own head.",
     "Keep required build, validation, test, workflow, and release gates when changed code can make the gate false-pass or fail. A standalone test-coverage claim asks for tests that do not exist; a changed test, self-test, or gate whose assertions cannot fail on the violation it exists to catch is a defect in the changed lines themselves, so approve it when the evidence names the violation that still passes.",
     "Reconcile all candidates globally. Approve at most one representative per root cause, even across files. Candidates that one single edit would resolve together are one root cause however different their lines, severities, or wording - several loose assertions in one changed test, several symptoms of one changed function, one weak gate described from several angles; approve only the candidate whose failing path is most concrete and reject the rest as duplicates of it. Put a candidate in already_reported when the same root cause appears in PRIOR ROBIN FINDINGS and still exists; reject it when the current head has fixed it.",
     "Return strict JSON only: {\"approved\":{\"c1\":{\"trigger\":\"...\",\"path\":\"...\",\"impact\":\"...\",\"evidence\":\"...\"}},\"rejected\":{\"c2\":\"short reason\"},\"already_reported\":{\"c3\":\"matching prior root\"}}",
@@ -3007,6 +3008,7 @@ const RELATED_REQUEST_LIMIT = 24;
 const ANCHOR_LINES_ABOVE = 60;
 const ANCHOR_LINES_BELOW = 20;
 const ANCHOR_BUDGET_SHARE = 0.25;
+const DECLARATION_LINE = /^\s*(?:export\s+|default\s+|public\s+|private\s+|internal\s+|static\s+|final\s+|abstract\s+|open\s+|async\s+)*(?:def|function|func|class|interface|type|enum|struct|protocol|extension|const|let|var)\s/;
 function excerpt(content, limit) {
     if (content.length <= limit)
         return content;
@@ -3341,12 +3343,15 @@ function matchingNeighborhoods(content, terms, limit, anchors = []) {
     const matches = lines
         .map((line, index) => ({
         index,
-        score: Math.max(0, ...terms.map((term, termIndex) => line.includes(term) ? terms.length - termIndex : 0)),
+        // A callee's declaration outranks another mention of it: reviewing a call needs what the callee does.
+        score: Math.max(0, ...terms.map((term, termIndex) => line.includes(term) ? terms.length - termIndex + (DECLARATION_LINE.test(line) ? terms.length : 0) : 0)),
     }))
         .filter(({ score }) => score > 0)
         .sort((left, right) => right.score - left.score || left.index - right.index);
     for (const { index } of matches) {
-        for (let nearby = Math.max(0, index - 3); nearby <= Math.min(lines.length - 1, index + 3); nearby += 1) {
+        // A declaration is only useful with the body that follows it.
+        const below = DECLARATION_LINE.test(lines[index]) ? 12 : 3;
+        for (let nearby = Math.max(0, index - 3); nearby <= Math.min(lines.length - 1, index + below); nearby += 1) {
             if (selected.has(nearby))
                 continue;
             const lineLength = lineCost(nearby);

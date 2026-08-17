@@ -9,6 +9,8 @@ const RELATED_REQUEST_LIMIT = 24;
 const ANCHOR_LINES_ABOVE = 60;
 const ANCHOR_LINES_BELOW = 20;
 const ANCHOR_BUDGET_SHARE = 0.25;
+const DECLARATION_LINE =
+  /^\s*(?:export\s+|default\s+|public\s+|private\s+|internal\s+|static\s+|final\s+|abstract\s+|open\s+|async\s+)*(?:def|function|func|class|interface|type|enum|struct|protocol|extension|const|let|var)\s/;
 type ReviewContextGit = Pick<GitUtils, "getFileContent" | "getTreePaths" | "searchPaths">;
 
 function excerpt(content: string, limit: number): string {
@@ -348,12 +350,16 @@ function matchingNeighborhoods(content: string, terms: string[], limit: number, 
   const matches = lines
     .map((line, index) => ({
       index,
-      score: Math.max(0, ...terms.map((term, termIndex) => line.includes(term) ? terms.length - termIndex : 0)),
+      // A callee's declaration outranks another mention of it: reviewing a call needs what the callee does.
+      score: Math.max(0, ...terms.map((term, termIndex) =>
+        line.includes(term) ? terms.length - termIndex + (DECLARATION_LINE.test(line) ? terms.length : 0) : 0)),
     }))
     .filter(({ score }) => score > 0)
     .sort((left, right) => right.score - left.score || left.index - right.index);
   for (const { index } of matches) {
-    for (let nearby = Math.max(0, index - 3); nearby <= Math.min(lines.length - 1, index + 3); nearby += 1) {
+    // A declaration is only useful with the body that follows it.
+    const below = DECLARATION_LINE.test(lines[index]) ? 12 : 3;
+    for (let nearby = Math.max(0, index - 3); nearby <= Math.min(lines.length - 1, index + below); nearby += 1) {
       if (selected.has(nearby)) continue;
       const lineLength = lineCost(nearby);
       if (selectedLength + lineLength > limit) continue;

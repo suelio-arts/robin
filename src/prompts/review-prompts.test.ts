@@ -22,6 +22,9 @@ describe("review prompts", () => {
     expect(PRECISION_INSTRUCTIONS).toContain("current head has fixed it");
     // A compiler outcome nobody ran is not evidence: the declaration that fails must be supplied.
     expect(PRECISION_INSTRUCTIONS).toContain("You cannot compile, type-check, or lint anything");
+    // A documented deliberate choice is not re-litigated, but a code/doc contradiction still is.
+    expect(PRECISION_INSTRUCTIONS).toContain("states the changed behavior is deliberate settles intent");
+    expect(PRECISION_INSTRUCTIONS).toContain("contradict each other is not that");
     // An unenforced lint rule is style, not a gate failure.
     expect(PRECISION_INSTRUCTIONS).toContain("runs that rule in a required gate");
     expect(PRECISION_INSTRUCTIONS).toContain("exact declaration, signature, or overload that makes it fail");

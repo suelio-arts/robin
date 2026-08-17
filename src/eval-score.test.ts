@@ -158,6 +158,16 @@ describe("MIX evaluation scorer", () => {
     ])).toBe(false);
   });
 
+  it("accepts a per-chunk discovery entry but not a chunk that produced nothing", () => {
+    const raw = artifact("shaped");
+    const sha = "7".repeat(64);
+    const first = raw.results[0] as {chunks: unknown[]};
+    first.chunks.unshift({candidates: [{summary: "discovery pass"}], usage: []});
+    expect(scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha)).complete).toBe(true);
+    first.chunks.unshift({usage: []});
+    expect(scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha)).complete).toBe(false);
+  });
+
   it("keeps an emitted high false positive from passing precision", () => {
     const raw = artifact("noisy", true);
     const sha = "4".repeat(64);

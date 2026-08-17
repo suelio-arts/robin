@@ -304,7 +304,11 @@ export function scoreEvaluation(
     if (Array.isArray(result.chunks)) {
       if (!blindSnapshotIds.has(id) || positiveSnapshots.has(id)) throw new Error(`Unknown or duplicate positive snapshot: ${id}`);
       positiveSnapshots.add(id);
-      if (result.chunks.some((chunk) => !asObject(asObject(chunk)?.response))) artifactHasErrors = true;
+      // A snapshot records one discovery entry per chunk plus one gate response; a chunk that produced neither failed.
+      if (result.chunks.some((chunk) => {
+        const entry = asObject(chunk);
+        return !asObject(entry?.response) && !Array.isArray(entry?.candidates);
+      })) artifactHasErrors = true;
     } else if (result.kind === "candidate-rejection") {
       // Validated against the manifest below.
     } else {

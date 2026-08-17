@@ -189,7 +189,6 @@ describe("MIX review benchmark", () => {
       "363:d668c782aea312f7185b7540e3c449b7e3dabf40",
       "365:6e08044c7fe7563f3649f23ae520cf4bcd51faca",
       "370:ad114e53f984a401c6de9da0380359f45f8f6ec0",
-      "371:51688acd6244ebeb3a597e96a4e4ca4f147d2320",
       "378:bf435c04f1f1e192e2bbf8636676c23fbb7c2c86",
       "390:2023a08571a90dee126cad0ae8c464ebbcb2270e",
       "399:69df88ccdbf6049b9845e6fedcb73870f33d20c2",

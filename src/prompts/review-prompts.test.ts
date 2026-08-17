@@ -13,6 +13,12 @@ describe("review prompts", () => {
     expect(ADVERSARIAL_INSTRUCTIONS).not.toContain("Audit only");
     // A gate must be judged against the production behavior it stands in for, not its own title.
     expect(ADVERSARIAL_INSTRUCTIONS).toContain("Enumerate every property of that production behavior separately");
+    // A doc, comment, style, or config change is reviewed against the code it describes.
+    expect(DISCOVERY_INSTRUCTIONS).toContain("is not a reason to stop");
+    // A substituted default must stay distinguishable from a genuine value at the consumer.
+    expect(ADVERSARIAL_INSTRUCTIONS).toContain("tell that substitute from a genuine value");
+    // A changed value reaching a credentialed URL, command, or header is a trust boundary.
+    expect(ADVERSARIAL_INSTRUCTIONS).toContain("redirect it to an unintended destination");
   });
 
   it("gates evidence globally without MIX-specific memories", () => {

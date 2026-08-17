@@ -140,6 +140,18 @@ function validateSnapshot(testCase: EvalCase): void {
   }
 }
 
+const approvedBySnapshot = new Map<string, StructuredReview>();
+const predecessorOf = new Map(manifest.blindUpdatePairs.map(({before, after}) => [after, before]));
+
+/** The predecessor head's posted findings, shaped like production's PRIOR ROBIN FINDINGS block. */
+function formatEvalPriorFindings(review?: StructuredReview): string {
+  if (!review) return "";
+  return [...review.high, ...review.medium, ...review.low]
+    .map(({file, line, description, recommendation}) => `${file}:${line || 0}: ${description}\n${recommendation}`)
+    .join("\n\n")
+    .slice(-30000);
+}
+
 function validateBlindUpdatePairs(): void {
   const cases = new Map(manifest.holdoutCases.map((testCase) => [snapshotId(testCase.pr, testCase.head), testCase]));
   for (const {before, after} of manifest.blindUpdatePairs) {
@@ -381,10 +393,14 @@ async function main() {
         .map(({finding}) => finding.file)
         .filter((path): path is string => Boolean(path)));
       const candidateDiff = (selectedDiff.length <= 120000 ? selectedDiff : selectDiffFiles(selectedDiff, candidatePaths)).slice(0, 120000);
+      // Production replays the predecessor head's posted findings into the gate; an update snapshot
+      // reviewed from scratch measures re-reporting that a human would never have seen twice.
+      const priorFindings = formatEvalPriorFindings(approvedBySnapshot.get(predecessorOf.get(id) || ""));
       const precisionInput = [
         "CANDIDATES:",
         JSON.stringify(precisionCandidates),
         contractEvidence && `EXACT-HEAD REPOSITORY EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
+        priorFindings && `PRIOR ROBIN FINDINGS (keep only if still present):\n${priorFindings}`,
         `CANDIDATE DIFF EVIDENCE:\n${annotateDiffWithLineNumbers(candidateDiff)}`,
       ].filter(Boolean).join("\n\n");
       let precision = await review(`${MIX_REVIEW_INSTRUCTIONS}\n\n${PRECISION_INSTRUCTIONS}`, precisionInput);
@@ -395,7 +411,8 @@ async function main() {
         precision = await review(`${MIX_REVIEW_INSTRUCTIONS}\n\n${PRECISION_INSTRUCTIONS}\n\nReturn only the required JSON object.`, precisionInput);
         approved = selectApprovedCandidates(precisionCandidates, precision.choices[0]?.message.content || "", discovered.map(({summary}) => summary).filter(Boolean).join("\n"));
       }
-      responses.push({response: approved, contractQueries, contractEvidence, usage: [precision.usage]});
+      approvedBySnapshot.set(id, approved);
+      responses.push({response: approved, contractQueries, contractEvidence, priorFindings, usage: [precision.usage]});
     } else {
       responses.push({response: {summary: discovered.map(({summary}) => summary).filter(Boolean).join("\n"), high: [], medium: [], low: [], suggestions: []}});
     }

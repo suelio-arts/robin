@@ -1,14 +1,25 @@
 import { Octokit } from "@octokit/rest";
 import * as core from "@actions/core";
+import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { promisify } from "node:util";
+
+const exec = promisify(execFile);
 
 export class GitUtils {
   private octokit: Octokit;
   private contents = new Map<string, Promise<string>>();
   private treePaths = new Map<string, Promise<string[]>>();
   private searches = new Map<string, Promise<string[]>>();
+  private workspace: string;
 
-  constructor(octokit: Octokit) {
+  constructor(octokit: Octokit, workspace = process.env.GITHUB_WORKSPACE) {
+    if (!workspace || !existsSync(join(workspace, ".git"))) {
+      throw new Error("Robin repository search requires actions/checkout");
+    }
     this.octokit = octokit;
+    this.workspace = workspace;
   }
 
   async getPullRequestDiff(owner: string, repo: string, pullNumber: number): Promise<string> {
@@ -45,13 +56,7 @@ export class GitUtils {
 
   async searchPaths(owner: string, repo: string, query: string): Promise<string[]> {
     const key = `${owner}/${repo}:${query}`;
-    if (!this.searches.has(key)) {
-      const pending = this.fetchSearchPaths(owner, repo, query).catch((error) => {
-        core.warning(`Repository search unavailable for ${owner}/${repo} (${query}); continuing without it: ${error}`);
-        return [];
-      });
-      this.searches.set(key, pending);
-    }
+    if (!this.searches.has(key)) this.searches.set(key, this.searchWorkspace(query));
     return this.searches.get(key) as Promise<string[]>;
   }
 
@@ -64,23 +69,17 @@ export class GitUtils {
     }
   }
 
-  private async fetchSearchPaths(owner: string, repo: string, query: string): Promise<string[]> {
-    let lastError: unknown;
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try {
-        const {data} = await this.octokit.rest.search.code({
-          q: `${query} repo:${owner}/${repo}`,
-          per_page: 10,
-        });
-        return data.items.map(({path}) => path);
-      } catch (error) {
-        lastError = error;
-        const status = (error as {status?: number}).status;
-        if (status && ![403, 429, 500, 502, 503, 504].includes(status)) throw error;
-        if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-      }
+  private async searchWorkspace(query: string): Promise<string[]> {
+    try {
+      const {stdout} = await exec("git", ["-C", this.workspace, "grep", "-l", "-z", "-F", "-e", query, "HEAD", "--"], {
+        encoding: "utf8",
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return stdout.split("\0").filter(Boolean).map((path) => path.replace(/^HEAD:/, ""));
+    } catch (error) {
+      if ((error as {code?: number}).code === 1) return [];
+      throw new Error(`Local repository search failed: ${error}`);
     }
-    throw lastError;
   }
 
   private async fetchTreePaths(owner: string, repo: string, ref: string): Promise<string[]> {

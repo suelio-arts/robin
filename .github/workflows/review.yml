@@ -119,6 +119,12 @@ jobs:
     runs-on: ${{ fromJSON(inputs.runner) }}
     timeout-minutes: 45
     steps:
+      - name: Checkout reviewed head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number || github.event.issue.number || inputs.pr-number }}/head
+          fetch-depth: 1
+          persist-credentials: false
       - name: Robin
         uses: antongulin/robin@main
         with:

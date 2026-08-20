@@ -877,13 +877,23 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.GitUtils = void 0;
 const core = __importStar(__nccwpck_require__(7484));
+const node_child_process_1 = __nccwpck_require__(1421);
+const node_fs_1 = __nccwpck_require__(3024);
+const node_path_1 = __nccwpck_require__(6760);
+const node_util_1 = __nccwpck_require__(7975);
+const exec = (0, node_util_1.promisify)(node_child_process_1.execFile);
 class GitUtils {
     octokit;
     contents = new Map();
     treePaths = new Map();
     searches = new Map();
-    constructor(octokit) {
+    workspace;
+    constructor(octokit, workspace = process.env.GITHUB_WORKSPACE) {
+        if (!workspace || !(0, node_fs_1.existsSync)((0, node_path_1.join)(workspace, ".git"))) {
+            throw new Error("Robin repository search requires actions/checkout");
+        }
         this.octokit = octokit;
+        this.workspace = workspace;
     }
     async getPullRequestDiff(owner, repo, pullNumber) {
         const response = await this.octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
@@ -916,13 +926,8 @@ class GitUtils {
     }
     async searchPaths(owner, repo, query) {
         const key = `${owner}/${repo}:${query}`;
-        if (!this.searches.has(key)) {
-            const pending = this.fetchSearchPaths(owner, repo, query).catch((error) => {
-                core.warning(`Repository search unavailable for ${owner}/${repo} (${query}); continuing without it: ${error}`);
-                return [];
-            });
-            this.searches.set(key, pending);
-        }
+        if (!this.searches.has(key))
+            this.searches.set(key, this.searchWorkspace(query));
         return this.searches.get(key);
     }
     async fetchFileContent(owner, repo, path, ref) {
@@ -934,26 +939,19 @@ class GitUtils {
             return "";
         }
     }
-    async fetchSearchPaths(owner, repo, query) {
-        let lastError;
-        for (let attempt = 1; attempt <= 3; attempt += 1) {
-            try {
-                const { data } = await this.octokit.rest.search.code({
-                    q: `${query} repo:${owner}/${repo}`,
-                    per_page: 10,
-                });
-                return data.items.map(({ path }) => path);
-            }
-            catch (error) {
-                lastError = error;
-                const status = error.status;
-                if (status && ![403, 429, 500, 502, 503, 504].includes(status))
-                    throw error;
-                if (attempt < 3)
-                    await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
-            }
+    async searchWorkspace(query) {
+        try {
+            const { stdout } = await exec("git", ["-C", this.workspace, "grep", "-l", "-z", "-F", "-e", query, "HEAD", "--"], {
+                encoding: "utf8",
+                maxBuffer: 10 * 1024 * 1024,
+            });
+            return stdout.split("\0").filter(Boolean).map((path) => path.replace(/^HEAD:/, ""));
         }
-        throw lastError;
+        catch (error) {
+            if (error.code === 1)
+                return [];
+            throw new Error(`Local repository search failed: ${error}`);
+        }
     }
     async fetchTreePaths(owner, repo, ref) {
         const { data } = await this.octokit.rest.git.getTree({ owner, repo, tree_sha: ref, recursive: "true" });
@@ -53822,6 +53820,14 @@ module.exports = require("node:async_hooks");
 
 "use strict";
 module.exports = require("node:buffer");
+
+/***/ }),
+
+/***/ 1421:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("node:child_process");
 
 /***/ }),
 

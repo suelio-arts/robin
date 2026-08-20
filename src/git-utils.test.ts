@@ -9,27 +9,26 @@ describe("GitUtils tree paths", () => {
     const getTree = jest.fn()
       .mockRejectedValueOnce(new Error("temporary"))
       .mockResolvedValueOnce({data: {truncated: false, tree: [{type: "blob", path: "src/a.ts"}]}});
-    const git = new GitUtils({rest: {git: {getTree}}} as never);
+    const git = new GitUtils({rest: {git: {getTree}}} as never, process.cwd());
 
     await expect(git.getTreePaths("o", "r", "head")).resolves.toEqual([]);
     await expect(git.getTreePaths("o", "r", "head")).resolves.toEqual(["src/a.ts"]);
     expect(getTree).toHaveBeenCalledTimes(2);
   });
 
-  it("coalesces repository code searches", async () => {
-    const code = jest.fn().mockResolvedValue({data: {items: [{path: "src/a.ts"}]}});
-    const git = new GitUtils({rest: {search: {code}}} as never);
+  it("searches the checked-out exact head and coalesces identical queries", async () => {
+    const git = new GitUtils({} as never, process.cwd());
+    const query = ["coalesces repository", " file reads"].join("");
 
     await expect(Promise.all([
-      git.searchPaths("o", "r", "thing"),
-      git.searchPaths("o", "r", "thing"),
-    ])).resolves.toEqual([["src/a.ts"], ["src/a.ts"]]);
-    expect(code).toHaveBeenCalledTimes(1);
+      git.searchPaths("o", "r", query),
+      git.searchPaths("o", "r", query),
+    ])).resolves.toEqual([["src/git-utils.test.ts"], ["src/git-utils.test.ts"]]);
   });
 
   it("coalesces repository file reads", async () => {
     const getContent = jest.fn().mockResolvedValue({data: {content: Buffer.from("value").toString("base64")}});
-    const git = new GitUtils({rest: {repos: {getContent}}} as never);
+    const git = new GitUtils({rest: {repos: {getContent}}} as never, process.cwd());
 
     await expect(Promise.all([
       git.getFileContent("o", "r", "src/a.ts", "head"),
@@ -38,36 +37,7 @@ describe("GitUtils tree paths", () => {
     expect(getContent).toHaveBeenCalledTimes(1);
   });
 
-  it("retries a failed repository code search", async () => {
-    jest.useFakeTimers();
-    const code = jest.fn()
-      .mockRejectedValueOnce(Object.assign(new Error("temporary"), {status: 429}))
-      .mockResolvedValueOnce({data: {items: [{path: "src/a.ts"}]}});
-    const git = new GitUtils({rest: {search: {code}}} as never);
-
-    const search = git.searchPaths("o", "r", "thing");
-    await jest.advanceTimersByTimeAsync(1000);
-    await expect(search).resolves.toEqual(["src/a.ts"]);
-    expect(code).toHaveBeenCalledTimes(2);
-  });
-
-  it("caches an unavailable search after three failures", async () => {
-    jest.useFakeTimers();
-    const code = jest.fn().mockRejectedValue(Object.assign(new Error("unavailable"), {status: 503}));
-    const git = new GitUtils({rest: {search: {code}}} as never);
-
-    const first = git.searchPaths("o", "r", "thing");
-    await jest.advanceTimersByTimeAsync(3000);
-    await expect(first).resolves.toEqual([]);
-    await expect(git.searchPaths("o", "r", "thing")).resolves.toEqual([]);
-    expect(code).toHaveBeenCalledTimes(3);
-  });
-
-  it("continues without a non-transient repository search failure", async () => {
-    const code = jest.fn().mockRejectedValue(Object.assign(new Error("invalid query"), {status: 422}));
-    const git = new GitUtils({rest: {search: {code}}} as never);
-
-    await expect(git.searchPaths("o", "r", "thing")).resolves.toEqual([]);
-    expect(code).toHaveBeenCalledTimes(1);
+  it("requires a checkout for repository search", async () => {
+    expect(() => new GitUtils({} as never, "")).toThrow("requires actions/checkout");
   });
 });

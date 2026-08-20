@@ -65,7 +65,7 @@ function workflowCallInputNames(source: string): string[] {
  */
 function mappingKeysAfterWith(source: string, withIndent: string): string[] {
   const marker = `\n${withIndent}with:\n`;
-  const start = source.indexOf(marker);
+  const start = source.lastIndexOf(marker);
   if (start < 0) return [];
   const body = source.slice(start + marker.length);
   const keyIndent = `${withIndent}  `;

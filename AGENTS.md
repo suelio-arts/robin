@@ -76,7 +76,8 @@ permissions:
   pull-requests: write
 ```
 
-`actions/checkout` is optional for review-only workflows.
+Robin requires the reviewed pull-request head to be checked out before a
+direct action step. The reusable workflow performs this checkout itself.
 
 ## Further reading
 

@@ -208,6 +208,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number || github.event.issue.number }}/head
+          fetch-depth: 1
+          persist-credentials: false
       - uses: antongulin/robin@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -240,7 +245,9 @@ If you raise `llm-timeout-ms` above 10 minutes, also raise the job `timeout-minu
 3. Author pushes fixes → no automatic re-review (by default).
 4. Maintainer comments `/robin` or `/review` for another pass.
 
-The action fetches diffs via the GitHub API. `actions/checkout` is not required unless other steps need local files.
+The action fetches diffs via the GitHub API and searches repository evidence
+locally. The reusable workflow checks out the reviewed head automatically;
+direct action steps must do so before invoking Robin.
 
 ## Model robustness
 

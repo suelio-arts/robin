@@ -56,10 +56,10 @@ export function selectApprovedCandidates(
   const dispositions = [...approved, ...rejected, ...alreadyReported];
   const candidateIds = new Set(candidates.map(({ id }) => id));
   if (new Set(dispositions).size !== dispositions.length
-    || dispositions.some((id) => !candidateIds.has(id))
-    || dispositions.length !== candidateIds.size) {
+    || dispositions.some((id) => !candidateIds.has(id))) {
     throw new Error("Precision gate must disposition every candidate ID exactly once");
   }
+  const dispositioned = new Set(dispositions);
   const result: StructuredReview = {
     summary,
     high: [],
@@ -70,8 +70,28 @@ export function selectApprovedCandidates(
     rawResponse: response,
   };
   for (const candidate of candidates) {
-    if (approved.has(candidate.id)) result[candidate.severity].push(candidate.finding);
+    if (approved.has(candidate.id) || !dispositioned.has(candidate.id)) {
+      result[candidate.severity].push(candidate.finding);
+    }
   }
+  return result;
+}
+
+export function retainAllCandidates(
+  candidates: PrecisionCandidate[],
+  summary = "",
+  rawResponse = ""
+): StructuredReview {
+  const result: StructuredReview = {
+    summary,
+    high: [],
+    medium: [],
+    low: [],
+    suggestions: [],
+    evidenceRequests: [],
+    rawResponse,
+  };
+  for (const candidate of candidates) result[candidate.severity].push(candidate.finding);
   return result;
 }
 

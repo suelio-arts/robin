@@ -2580,7 +2580,8 @@ async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFind
             precise = (0, precision_gate_1.selectApprovedCandidates)(candidates, verdict.content, summary);
         }
         catch (error) {
-            throw new Error(`Precision gate failed twice; refusing an unverified review: ${error}`);
+            core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
+            precise = (0, precision_gate_1.retainAllCandidates)(candidates, summary, verdict.content);
         }
     }
     deduplicateFindings(precise);
@@ -2730,6 +2731,7 @@ run();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.buildPrecisionCandidates = buildPrecisionCandidates;
 exports.selectApprovedCandidates = selectApprovedCandidates;
+exports.retainAllCandidates = retainAllCandidates;
 const SEVERITIES = ["high", "medium", "low", "suggestions"];
 function buildPrecisionCandidates(reviews) {
     const candidates = [];
@@ -2774,10 +2776,10 @@ function selectApprovedCandidates(candidates, response, summary = "") {
     const dispositions = [...approved, ...rejected, ...alreadyReported];
     const candidateIds = new Set(candidates.map(({ id }) => id));
     if (new Set(dispositions).size !== dispositions.length
-        || dispositions.some((id) => !candidateIds.has(id))
-        || dispositions.length !== candidateIds.size) {
+        || dispositions.some((id) => !candidateIds.has(id))) {
         throw new Error("Precision gate must disposition every candidate ID exactly once");
     }
+    const dispositioned = new Set(dispositions);
     const result = {
         summary,
         high: [],
@@ -2788,9 +2790,24 @@ function selectApprovedCandidates(candidates, response, summary = "") {
         rawResponse: response,
     };
     for (const candidate of candidates) {
-        if (approved.has(candidate.id))
+        if (approved.has(candidate.id) || !dispositioned.has(candidate.id)) {
             result[candidate.severity].push(candidate.finding);
+        }
     }
+    return result;
+}
+function retainAllCandidates(candidates, summary = "", rawResponse = "") {
+    const result = {
+        summary,
+        high: [],
+        medium: [],
+        low: [],
+        suggestions: [],
+        evidenceRequests: [],
+        rawResponse,
+    };
+    for (const candidate of candidates)
+        result[candidate.severity].push(candidate.finding);
     return result;
 }
 function isApprovalProof(value) {

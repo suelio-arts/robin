@@ -21,7 +21,7 @@ import { PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessa
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent, validateExpectedHeadSha, workflowDispatchPrNumber } from "./events";
 import { buildFileContext } from "./review-context";
-import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
+import { buildPrecisionCandidates, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "./contract-discovery";
 import { ReviewBudget, runDiscovery } from "./discovery";
 import { executeEvidenceRequests } from "./evidence-loop";
@@ -863,7 +863,8 @@ async function runFinalGate(
       verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
       precise = selectApprovedCandidates(candidates, verdict.content, summary);
     } catch (error) {
-      throw new Error(`Precision gate failed twice; refusing an unverified review: ${error}`);
+      core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
+      precise = retainAllCandidates(candidates, summary, verdict.content);
     }
   }
 

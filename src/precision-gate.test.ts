@@ -1,4 +1,4 @@
-import { buildPrecisionCandidates, selectApprovedCandidates } from "./precision-gate";
+import { buildPrecisionCandidates, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
 import { StructuredReview } from "./review-parser";
 
 const review = (description: string, line = 1): StructuredReview => ({
@@ -21,7 +21,7 @@ describe("precision gate", () => {
     expect(() => selectApprovedCandidates(candidates, "not json")).toThrow();
     expect(() => selectApprovedCandidates(candidates, "{}")).toThrow(/approved proof objects/);
     expect(() => selectApprovedCandidates(candidates, '{"approved":{"c999":{"trigger":"x","path":"x","impact":"x","evidence":"x"}},"rejected":{"c1":"no"},"already_reported":{}}')).toThrow(/every candidate/);
-    expect(() => selectApprovedCandidates(candidates, '{"approved":{},"rejected":{},"already_reported":{}}')).toThrow(/every candidate/);
+    expect(selectApprovedCandidates(candidates, '{"approved":{},"rejected":{},"already_reported":{}}').high).toHaveLength(1);
     expect(() => selectApprovedCandidates(candidates, '{"approved":{"c1":{"trigger":"","path":"x","impact":"x","evidence":"x"}},"rejected":{},"already_reported":{}}')).toThrow(/approved proof objects/);
     expect(() => selectApprovedCandidates(candidates, '{"approved":{"c1":{"trigger":"x","path":"x","impact":"x","evidence":"x"}},"rejected":{"c1":"no"},"already_reported":{}}')).toThrow(/every candidate/);
     expect(() => selectApprovedCandidates(candidates, '{"approved":{"c1":{"trigger":"x","path":"x","impact":"x","evidence":"x"}},"rejected":[],"already_reported":{}}')).toThrow(/rejected reason object/);
@@ -30,5 +30,16 @@ describe("precision gate", () => {
     expect(selectApprovedCandidates(candidates, '{"approved":{},"rejected":{},"already_reported":{"c1":"same prior root"}}').high).toEqual([]);
     expect(buildPrecisionCandidates([{ high: 5 } as never])).toEqual([]);
     expect(buildPrecisionCandidates([{}])).toEqual([]);
+  });
+
+  it("retains candidates omitted by the precision response", () => {
+    const candidates = buildPrecisionCandidates([review("First bug"), review("Second bug")]);
+    const selected = selectApprovedCandidates(
+      candidates,
+      '{"approved":{},"rejected":{"c1":"not proven"},"already_reported":{}}'
+    );
+
+    expect(selected.high.map(({ description }) => description)).toEqual(["Second bug"]);
+    expect(retainAllCandidates(candidates, "fallback").high).toHaveLength(2);
   });
 });

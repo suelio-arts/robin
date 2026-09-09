@@ -6,7 +6,7 @@ import { ReviewFinding, ReviewParser, StructuredReview } from "./review-parser";
 import { shouldRetryStructuredReview } from "./review-retry";
 import { GitHubReviewer, ROBIN_SIGNATURE, reviewKey, findCachedVerdict } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
-import { chunkDiffByFile, filterDiff, splitDiffIntoFiles } from "./diff-filter";
+import { chunkDiffByFile, filterDiff, isWhitespaceOnlyDiff, splitDiffIntoFiles } from "./diff-filter";
 import { annotateDiffWithLineNumbers } from "./diff-annotate";
 import {
   DEFAULT_CONFIG_FILE,
@@ -211,7 +211,7 @@ async function run(): Promise<void> {
     const requestChanges = resolveRequestChanges(requestChangesInput, repoConfig);
     gatekeeper = requestChanges;
 
-    const diff = await gitUtils.getPullRequestDiff(owner, repo, prNumber);
+    const diff = await gitUtils.getPullRequestDiff(baseRef, headRef);
     
     if (!diff || diff.trim().length === 0) {
       core.warning("No diff found for this PR.");
@@ -253,6 +253,11 @@ async function run(): Promise<void> {
         statusCommentId,
         buildFailedStatusBody("No reviewable diff remained after filtering skipped paths.", statusCommand)
       );
+      return;
+    }
+    if (isWhitespaceOnlyDiff(reviewDiff)) {
+      core.info("Only whitespace changed; no LLM review needed.");
+      await updateStatusComment(octokit, owner, repo, statusCommentId, buildSkippedWhitespaceStatusBody());
       return;
     }
     const reviewedPaths = changedHeadPaths(reviewDiff);
@@ -433,10 +438,9 @@ async function run(): Promise<void> {
           pullNumber,
           message
         );
-        core.warning(`Review blocked after execution failure: ${message}`);
-        return;
+        core.warning(`Incomplete review posted after execution failure: ${message}`);
       } catch (reviewError) {
-        core.error(`Could not post fail-closed review: ${reviewError}`);
+        core.error(`Could not post incomplete review: ${reviewError}`);
       }
     }
     if (gatekeeper) core.setFailed(message);
@@ -570,6 +574,14 @@ function buildSkippedFilterStatusBody(removedFiles: string[]): string {
     `Skipped: ${preview}${suffix}`,
     "",
     "Add `skip-paths` in `.github/robin.yml` if that's not what you expected.",
+  ].join("\n");
+}
+
+function buildSkippedWhitespaceStatusBody(): string {
+  return [
+    "## " + ROBIN_SIGNATURE,
+    "",
+    ":white_check_mark: Nothing substantive to review — only whitespace changed.",
   ].join("\n");
 }
 
@@ -842,7 +854,7 @@ async function runFinalGate(
   reviewInstructions: string
 ): Promise<StructuredReview> {
   const candidates = buildPrecisionCandidates(reviews);
-  const summary = reviews.map(({summary}) => summary).filter(Boolean).join("\n");
+  const summary = "";
   if (candidates.length === 0) {
     return {summary, high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
   }

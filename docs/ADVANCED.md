@@ -211,7 +211,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: refs/pull/${{ github.event.pull_request.number || github.event.issue.number }}/head
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - uses: antongulin/robin@main
         with:

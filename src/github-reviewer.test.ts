@@ -72,7 +72,7 @@ describe("GitHubReviewer", () => {
     );
   });
 
-  it("blocks a PR when review execution fails", async () => {
+  it("reports an incomplete review without pretending it blocks the PR", async () => {
     const createReview = jest.fn().mockResolvedValue({ data: { id: 20 } });
     const octokit = {
       paginate: jest.fn().mockResolvedValue([]),
@@ -83,9 +83,10 @@ describe("GitHubReviewer", () => {
 
     expect(createReview).toHaveBeenCalledWith(expect.objectContaining({
       pull_number: 7,
-      event: "REQUEST_CHANGES",
+      event: "COMMENT",
       body: expect.stringContaining("provider timeout"),
     }));
+    expect(createReview.mock.calls[0][0].body).toContain("was not reviewed");
   });
 
   it("detects new-file line numbers present in the diff", () => {

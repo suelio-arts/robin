@@ -101,11 +101,11 @@ export class GitHubReviewer {
       owner,
       repo,
       pull_number: pullNumber,
-      event: "REQUEST_CHANGES",
+      event: "COMMENT",
       body: [
         "## " + ROBIN_SIGNATURE,
         "",
-        "Robin could not complete this review, so this head is blocked fail-closed.",
+        "Robin could not complete this review. This head was not reviewed.",
         "",
         `\`${message}\``,
         "",

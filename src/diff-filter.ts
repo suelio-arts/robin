@@ -94,6 +94,16 @@ export function filterDiff(
   return { filtered: kept.join(""), removedFiles };
 }
 
+export function isWhitespaceOnlyDiff(diff: string): boolean {
+  const changed = (prefix: "+" | "-") => diff.split("\n")
+    .filter((line) => line.startsWith(prefix) && !line.startsWith(prefix.repeat(3)))
+    .map((line) => line.slice(1).trim())
+    .filter(Boolean);
+  const added = changed("+");
+  const removed = changed("-");
+  return added.length + removed.length > 0 && JSON.stringify(added) === JSON.stringify(removed);
+}
+
 export function chunkDiffByFile(diff: string, maxChunkSize: number): string[] {
   const chunks: string[] = [];
   let current = "";

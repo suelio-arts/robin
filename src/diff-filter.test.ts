@@ -1,4 +1,4 @@
-import { chunkDiffByFile, DEFAULT_SKIP_PATH_PATTERNS, filterDiff, matchPathPattern, selectDiffFiles, shouldSkipPath } from "./diff-filter";
+import { chunkDiffByFile, DEFAULT_SKIP_PATH_PATTERNS, filterDiff, isWhitespaceOnlyDiff, matchPathPattern, selectDiffFiles, shouldSkipPath } from "./diff-filter";
 
 describe("matchPathPattern", () => {
   it("matches lockfiles and dist paths", () => {
@@ -69,6 +69,14 @@ describe("shouldSkipPath", () => {
     expect(shouldSkipPath("crates/foo/Cargo.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
     expect(shouldSkipPath("Gemfile.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
     expect(shouldSkipPath("poetry.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
+  });
+});
+
+describe("isWhitespaceOnlyDiff", () => {
+  it("skips formatting-only changes without hiding changed text", () => {
+    expect(isWhitespaceOnlyDiff("diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-  value  \n+    value\n")).toBe(true);
+    expect(isWhitespaceOnlyDiff("diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-const value = 1\n+const value = 2\n")).toBe(false);
+    expect(isWhitespaceOnlyDiff("diff --git a/a.sh b/a.sh\nold mode 100644\nnew mode 100755\n")).toBe(false);
   });
 });
 

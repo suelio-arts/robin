@@ -460,6 +460,7 @@ exports.shouldSkipPath = shouldSkipPath;
 exports.splitDiffIntoFiles = splitDiffIntoFiles;
 exports.selectDiffFiles = selectDiffFiles;
 exports.filterDiff = filterDiff;
+exports.isWhitespaceOnlyDiff = isWhitespaceOnlyDiff;
 exports.chunkDiffByFile = chunkDiffByFile;
 const contract_discovery_1 = __nccwpck_require__(9972);
 exports.DEFAULT_SKIP_PATH_PATTERNS = [
@@ -537,6 +538,15 @@ function filterDiff(diff, extraSkipPatterns = []) {
         }
     }
     return { filtered: kept.join(""), removedFiles };
+}
+function isWhitespaceOnlyDiff(diff) {
+    const changed = (prefix) => diff.split("\n")
+        .filter((line) => line.startsWith(prefix) && !line.startsWith(prefix.repeat(3)))
+        .map((line) => line.slice(1).trim())
+        .filter(Boolean);
+    const added = changed("+");
+    const removed = changed("-");
+    return added.length + removed.length > 0 && JSON.stringify(added) === JSON.stringify(removed);
 }
 function chunkDiffByFile(diff, maxChunkSize) {
     const chunks = [];
@@ -895,16 +905,18 @@ class GitUtils {
         this.octokit = octokit;
         this.workspace = workspace;
     }
-    async getPullRequestDiff(owner, repo, pullNumber) {
-        const response = await this.octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
-            owner,
-            repo,
-            pull_number: pullNumber,
-            headers: {
-                accept: "application/vnd.github.v3.diff",
-            },
+    async getPullRequestDiff(baseRef, headRef) {
+        try {
+            await exec("git", ["-C", this.workspace, "merge-base", baseRef, headRef]);
+        }
+        catch {
+            throw new Error("Robin requires the complete pull request history; configure actions/checkout with fetch-depth: 0");
+        }
+        const { stdout } = await exec("git", ["-C", this.workspace, "diff", "--no-ext-diff", "--no-color", `${baseRef}...${headRef}`, "--"], {
+            encoding: "utf8",
+            maxBuffer: 100 * 1024 * 1024,
         });
-        return String(response.data);
+        return stdout;
     }
     async getFileContent(owner, repo, path, ref) {
         const key = `${owner}/${repo}@${ref}:${path}`;
@@ -1077,11 +1089,11 @@ class GitHubReviewer {
             owner,
             repo,
             pull_number: pullNumber,
-            event: "REQUEST_CHANGES",
+            event: "COMMENT",
             body: [
                 "## " + exports.ROBIN_SIGNATURE,
                 "",
-                "Robin could not complete this review, so this head is blocked fail-closed.",
+                "Robin could not complete this review. This head was not reviewed.",
                 "",
                 `\`${message}\``,
                 "",
@@ -2107,7 +2119,7 @@ async function run() {
         const jsonResponseMode = (0, repo_config_1.resolveJsonResponseMode)(jsonResponseModeInput, repoConfig);
         const requestChanges = (0, repo_config_1.resolveRequestChanges)(requestChangesInput, repoConfig);
         gatekeeper = requestChanges;
-        const diff = await gitUtils.getPullRequestDiff(owner, repo, prNumber);
+        const diff = await gitUtils.getPullRequestDiff(baseRef, headRef);
         if (!diff || diff.trim().length === 0) {
             core.warning("No diff found for this PR.");
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildFailedStatusBody("No diff found for this pull request.", statusCommand));
@@ -2127,6 +2139,11 @@ async function run() {
         if (!reviewDiff.trim()) {
             core.warning("No reviewable diff remained after filtering skipped paths.");
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildFailedStatusBody("No reviewable diff remained after filtering skipped paths.", statusCommand));
+            return;
+        }
+        if ((0, diff_filter_1.isWhitespaceOnlyDiff)(reviewDiff)) {
+            core.info("Only whitespace changed; no LLM review needed.");
+            await updateStatusComment(octokit, owner, repo, statusCommentId, buildSkippedWhitespaceStatusBody());
             return;
         }
         const reviewedPaths = (0, contract_discovery_1.changedHeadPaths)(reviewDiff);
@@ -2240,11 +2257,10 @@ async function run() {
         if (gatekeeper && octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
             try {
                 await new github_reviewer_1.GitHubReviewer(octokit).postFailureReview(statusOwner, statusRepo, pullNumber, message);
-                core.warning(`Review blocked after execution failure: ${message}`);
-                return;
+                core.warning(`Incomplete review posted after execution failure: ${message}`);
             }
             catch (reviewError) {
-                core.error(`Could not post fail-closed review: ${reviewError}`);
+                core.error(`Could not post incomplete review: ${reviewError}`);
             }
         }
         if (gatekeeper)
@@ -2357,6 +2373,13 @@ function buildSkippedFilterStatusBody(removedFiles) {
         `Skipped: ${preview}${suffix}`,
         "",
         "Add `skip-paths` in `.github/robin.yml` if that's not what you expected.",
+    ].join("\n");
+}
+function buildSkippedWhitespaceStatusBody() {
+    return [
+        "## " + github_reviewer_1.ROBIN_SIGNATURE,
+        "",
+        ":white_check_mark: Nothing substantive to review — only whitespace changed.",
     ].join("\n");
 }
 function buildFailedStatusBody(errorMessage, command) {
@@ -2557,7 +2580,7 @@ async function discoverChunk(llm, diff, context, reviewInstructions, jsonRespons
 }
 async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFindings, reviewInstructions) {
     const candidates = (0, precision_gate_1.buildPrecisionCandidates)(reviews);
-    const summary = reviews.map(({ summary }) => summary).filter(Boolean).join("\n");
+    const summary = "";
     if (candidates.length === 0) {
         return { summary, high: [], medium: [], low: [], suggestions: [], rawResponse: "" };
     }

@@ -40,4 +40,12 @@ describe("GitUtils tree paths", () => {
   it("requires a checkout for repository search", async () => {
     expect(() => new GitUtils({} as never, "")).toThrow("requires actions/checkout");
   });
+
+  it("reads the complete diff from the checkout instead of GitHub's aggregate diff endpoint", async () => {
+    const request = jest.fn();
+    const git = new GitUtils({request} as never, process.cwd());
+    const diff = await git.getPullRequestDiff("HEAD", "HEAD");
+    expect(diff).toBe("");
+    expect(request).not.toHaveBeenCalled();
+  });
 });

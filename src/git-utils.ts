@@ -22,17 +22,17 @@ export class GitUtils {
     this.workspace = workspace;
   }
 
-  async getPullRequestDiff(owner: string, repo: string, pullNumber: number): Promise<string> {
-    const response = await this.octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
-      owner,
-      repo,
-      pull_number: pullNumber,
-      headers: {
-        accept: "application/vnd.github.v3.diff",
-      },
+  async getPullRequestDiff(baseRef: string, headRef: string): Promise<string> {
+    try {
+      await exec("git", ["-C", this.workspace, "merge-base", baseRef, headRef]);
+    } catch {
+      throw new Error("Robin requires the complete pull request history; configure actions/checkout with fetch-depth: 0");
+    }
+    const {stdout} = await exec("git", ["-C", this.workspace, "diff", "--no-ext-diff", "--no-color", `${baseRef}...${headRef}`, "--"], {
+      encoding: "utf8",
+      maxBuffer: 100 * 1024 * 1024,
     });
-
-    return String(response.data);
+    return stdout;
   }
 
   async getFileContent(owner: string, repo: string, path: string, ref: string): Promise<string> {

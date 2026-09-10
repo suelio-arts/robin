@@ -272,18 +272,30 @@ function preflightWorkflows(session) {
 /**
  * Can this run be reviewing our head?
  *
- *   "head"  — the API ties it to this pull request, or to this exact head with
- *             no pull request named.
+ *   "head"  — the API ties it to this exact head: it is this head's run.
+ *   "pr"    — the API ties it to this pull request but it started at an older
+ *             commit. It is NOT coverage of the current head, but it is still
+ *             very much ours: the reusable workflow checks out `refs/pull/N/head`
+ *             at run start and the engine re-reads the PR's current head from
+ *             the API at run time, so such a run can legitimately post an
+ *             exact-head receipt for the head we are asking about. It must be
+ *             waited for, and never cancelled by posting `/robin` over it.
  *   "other" — the API names pull requests and ours is not among them, so it is
  *             not ours even when the head SHA matches (two PRs can share a head).
  *   "none"  — comment- or dispatch-triggered. Those runs carry the DEFAULT
  *             BRANCH head and an empty `pull_requests`, so the API cannot say
  *             which PR they review. Never treat them as covering this head, but
  *             never assume they are somebody else's either.
+ *
+ * Only "head" is coverage. "pr" and "none" block and are waited for; "other"
+ * never blocks. Do not collapse these four back into a boolean.
  */
 function correlationOf(session, run) {
   const pulls = run.pull_requests || [];
-  if (pulls.length) return pulls.some((pull) => pull.number === session.number) ? "head" : "other";
+  if (pulls.length) {
+    if (!pulls.some((pull) => pull.number === session.number)) return "other";
+    return run.head_sha === session.head ? "head" : "pr";
+  }
   if (run.head_sha === session.head) return "head";
   if (run.event === "pull_request" || run.event === "pull_request_target") return "other";
   return "none";
@@ -342,9 +354,8 @@ function snapshot(session, workflows) {
     runs,
     receipts,
     receipt: receipts[0] || null,
-    active: active[0] || null,
+    active: active.find((run) => run.correlation === "head") || active[0] || null,
     activeCorrelated: active.find((run) => run.correlation === "head") || null,
-    activeUncorrelated: active.find((run) => run.correlation === "none") || null,
   };
 }
 
@@ -565,12 +576,17 @@ function runLocal(session, options, workflows) {
     (run) => run.status !== "completed" && run.correlation !== "other"
   );
   if (active) {
+    const head = short(session.head);
+    const why =
+      active.correlation === "head"
+        ? `A Robin workflow run is already active on ${head}.`
+        : active.correlation === "pr"
+          ? `A Robin run for this pull request started at an older commit is still active in ${session.repo}; Robin reviews the current head at run time, so it may cover ${head}.`
+          : `A Robin comment-triggered run is active in ${session.repo}; the API does not tie it to a pull request, so it may be reviewing this PR.`;
     return buildResult(session, {
       coverage: "running",
       check: active,
-      message: active.correlation === "head"
-        ? `A Robin workflow run is already active on ${short(session.head)}; not starting a local run. Wait for it, or re-run this command.`
-        : `A Robin comment-triggered run is active in ${session.repo}; the API does not tie it to a pull request, so it may be reviewing this PR. Not starting a local run. Wait for it, or re-run this command.`,
+      message: `${why} Not starting a local run: it would duplicate that one. Wait for it, or re-run this command.`,
     });
   }
   if (!options.rerun) {
@@ -734,6 +750,18 @@ function observe(session, options, workflows) {
   });
 }
 
+/** Say exactly how the active run relates to this head — never more than the API knows. */
+function runningMessage(session, run) {
+  const head = short(session.head);
+  if (run.correlation === "head") {
+    return `Robin is still running on ${head} after ${session.options.timeout}s. Re-run this command to keep waiting.`;
+  }
+  if (run.correlation === "pr") {
+    return `A Robin run for this pull request started at an older commit is still active in ${session.repo}; Robin reviews the current head at run time, so it may cover ${head}. Waited ${session.options.timeout}s without a review at ${head}. Re-run to keep waiting.`;
+  }
+  return `A Robin comment-triggered run is active in ${session.repo}; the API does not tie it to a pull request, so it may be reviewing this PR. Waited ${session.options.timeout}s without a review at ${head}. Re-run to keep waiting.`;
+}
+
 const unavailableMessage = (session, workflows) =>
   workflows.error
     ? `Could not determine whether ${session.repo} has an active Robin workflow (${workflows.error}). Not waiting and not posting.`
@@ -776,14 +804,7 @@ function report(session, workflows, state, waited, extra = {}) {
     });
   }
   if (state.active) {
-    const correlated = state.activeCorrelated;
-    return buildResult(session, {
-      coverage: "running",
-      check: correlated || state.activeUncorrelated,
-      message: correlated
-        ? `Robin is still running on ${short(session.head)} after ${session.options.timeout}s. Re-run this command to keep waiting.`
-        : `A Robin comment-triggered run is active in ${session.repo}; the API does not tie it to a pull request, so it may be reviewing this PR. Waited ${session.options.timeout}s without a review at ${short(session.head)}. Re-run to keep waiting.`,
-    });
+    return buildResult(session, { coverage: "running", check: state.active, message: runningMessage(session, state.active) });
   }
   if (check) {
     // A run that succeeded but posted nothing is not a failed review: a workflow

@@ -19,8 +19,9 @@
 
 const YAML = require("yaml");
 
+/** Fully anchored: a reference must carry a complete, well-formed ref after the `@`. */
 const ROBIN_USES =
-  /^(?:antongulin|suelio-arts)\/(?:robin|universal-code-reviewer)(?:\/\.github\/workflows\/review\.ya?ml)?@/;
+  /^(?:antongulin|suelio-arts)\/(?:robin|universal-code-reviewer)(?:\/\.github\/workflows\/review\.ya?ml)?@[A-Za-z0-9._/-]+$/;
 
 /**
  * A modern Robin pin, whose owner and ref the installer preserves — in either

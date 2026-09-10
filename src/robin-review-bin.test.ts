@@ -140,6 +140,31 @@ describe("robin-review CLI", () => {
     ).toBe(true);
   });
 
+  it("requires a complete ref before treating a reference as Robin", () => {
+    const { isRobinWorkflow } = require("../bin/robin-workflow-ref");
+    const step = (reference: string) =>
+      `name: Robin\njobs:\n  review:\n    steps:\n      - uses: ${reference}\n`;
+
+    expect(isRobinWorkflow(step("antongulin/robin@"))).toBe(false);
+    expect(isRobinWorkflow(step("antongulin/robin@main@invalid"))).toBe(false);
+    expect(isRobinWorkflow(step("suelio-arts/robin@f6ab9388c57d9c907c1fd87e413f31c8c53c2f0a"))).toBe(true);
+    expect(
+      isRobinWorkflow("name: Robin\njobs:\n  review:\n    uses: antongulin/robin/.github/workflows/review.yml@v1\n"),
+    ).toBe(true);
+  });
+
+  it("leaves a workflow with a malformed Robin reference alone", () => {
+    const workflows = path.join(dir, ".github", "workflows");
+    fs.mkdirSync(workflows, { recursive: true });
+    const malformed = "name: Robin\njobs:\n  review:\n    steps:\n      - uses: antongulin/robin@\n";
+    fs.writeFileSync(path.join(workflows, "broken.yml"), malformed);
+
+    run();
+
+    expect(fs.readFileSync(path.join(workflows, "broken.yml"), "utf8")).toBe(malformed);
+    expect(fs.existsSync(path.join(dir, ".github", "robin-workflow-archive"))).toBe(false);
+  });
+
   it("does not carry a legacy universal-code-reviewer reference forward as a pin", () => {
     const { robinWorkflowPin } = require("../bin/robin-workflow-ref");
 
@@ -1015,6 +1040,34 @@ describe("robin-review pr", () => {
 
     expect(result.status).toBe(0);
     expect(parse(result)).toEqual(expect.objectContaining({ status: "clean", check: null }));
+  });
+
+  it("waits for this PR's run that started at an older commit without claiming it covers the head", () => {
+    withFixture({
+      runs: [
+        prRun({
+          id: 7,
+          head_sha: OLD_HEAD,
+          status: "in_progress",
+          conclusion: null,
+          pull_requests: [{ number: 7, head: { sha: OLD_HEAD } }],
+        }),
+      ],
+    });
+
+    const result = pr(["--rerun", "--timeout", "0.4"]);
+
+    expect(result.status).toBe(3);
+    const body = parse(result);
+    expect(body).toEqual(
+      expect.objectContaining({
+        status: "running",
+        coverage: "running",
+        check: expect.objectContaining({ correlated: false, event: "pull_request" }),
+      }),
+    );
+    expect(body.message).toContain("started at an older commit");
+    expect(ghCalls().some((call) => call.startsWith("pr comment"))).toBe(false);
   });
 
   it("trusts explicit PR identity over a shared head SHA", () => {

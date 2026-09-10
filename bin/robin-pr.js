@@ -163,7 +163,10 @@ function receiptFromBody(body, head, allowLegacy = true) {
   const marker = parseOutcomeMarker(body);
   if (marker) {
     if (marker.head !== head) return null;
-    return { outcome: marker.outcome, counts: marker.outcome === "incomplete" ? { ...ZERO_COUNTS } : marker.counts };
+    if (marker.outcome === "incomplete") return { outcome: marker.outcome, counts: { ...ZERO_COUNTS } };
+    // A body cached before markers existed is re-stamped without a counts tail;
+    // its stat blocks still carry the numbers.
+    return { outcome: marker.outcome, counts: marker.counts || parseStatBlocks(body) };
   }
   if (!allowLegacy) return null;
   const text = String(body || "");
@@ -269,37 +272,56 @@ function preflightWorkflows(session) {
 /**
  * Can this run be reviewing our head?
  *
- *   "head"  — the API ties it to this exact head or to this pull request.
- *   "other" — the API ties it to a different pull request, so it is not ours.
+ *   "head"  — the API ties it to this pull request, or to this exact head with
+ *             no pull request named.
+ *   "other" — the API names pull requests and ours is not among them, so it is
+ *             not ours even when the head SHA matches (two PRs can share a head).
  *   "none"  — comment- or dispatch-triggered. Those runs carry the DEFAULT
  *             BRANCH head and an empty `pull_requests`, so the API cannot say
  *             which PR they review. Never treat them as covering this head, but
  *             never assume they are somebody else's either.
  */
 function correlationOf(session, run) {
-  if (run.head_sha === session.head) return "head";
   const pulls = run.pull_requests || [];
-  if (pulls.some((pull) => pull.number === session.number)) return "head";
-  if (pulls.length) return "other";
+  if (pulls.length) return pulls.some((pull) => pull.number === session.number) ? "head" : "other";
+  if (run.head_sha === session.head) return "head";
   if (run.event === "pull_request" || run.event === "pull_request_target") return "other";
   return "none";
 }
 
 /**
- * Runs of the recognized Robin workflows, newest first, each tagged with its
- * correlation. Listed per workflow rather than by `?head_sha=`, because a
- * `head_sha` query only ever returns `pull_request` runs — the `/robin` comment
- * path would be invisible.
+ * Runs of the recognized Robin workflows, newest first, deduped by id and each
+ * tagged with its correlation.
+ *
+ * One page of recent runs is not enough in a busy repository, and unbounded
+ * pagination is not an option, so ask five bounded, targeted questions per
+ * workflow instead: the three active states (a run in flight must never be
+ * missed — posting `/robin` would cancel it), everything at this head (which is
+ * exactly what `pull_request` runs carry), and one page of recent runs so a
+ * freshly dispatched `issue_comment` run — which carries the DEFAULT BRANCH
+ * head and no pull request, and so appears in neither of the others — is seen.
  */
+const RUN_QUERIES = [
+  "status=queued&per_page=100",
+  "status=in_progress&per_page=100",
+  "status=waiting&per_page=100",
+  "per_page=50",
+];
+
 function robinRuns(session, workflows) {
-  const runs = [];
+  const byId = new Map();
+  const queries = [...RUN_QUERIES, `head_sha=${session.head}&per_page=100`];
   for (const workflow of workflows) {
-    const payload = ghJson(["api", `repos/${session.repo}/actions/workflows/${workflow.id}/runs?per_page=30`]);
-    for (const run of (payload && payload.workflow_runs) || []) {
-      runs.push({ ...run, correlation: correlationOf(session, run) });
+    for (const query of queries) {
+      const payload = ghJson(["api", `repos/${session.repo}/actions/workflows/${workflow.id}/runs?${query}`]);
+      for (const run of (payload && payload.workflow_runs) || []) {
+        if (!byId.has(run.id)) byId.set(run.id, { ...run, correlation: correlationOf(session, run) });
+      }
     }
   }
-  return runs.sort((left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0));
+  return [...byId.values()].sort(
+    (left, right) => new Date(right.created_at || 0) - new Date(left.created_at || 0)
+  );
 }
 
 const currentHead = (session) => {

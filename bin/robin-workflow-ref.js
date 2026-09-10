@@ -7,58 +7,78 @@
  * repository actually has an active Robin workflow before it waits for a run or
  * posts `/robin`.
  *
- * Robin ships from two owners — antongulin/robin (public) and suelio-arts/robin
- * (the fork MIX pins as a direct action step) — in two shapes: the reusable
- * workflow (`uses: <owner>/robin/.github/workflows/review.yml@ref`) and the
- * action step (`- uses: <owner>/robin@ref`). All four combinations count.
+ * Recognition parses the YAML rather than scanning lines: a `uses:` line inside
+ * a `run: |` script block is text, not a workflow reference, and `on` may be a
+ * string, a sequence, a block mapping, or a flow mapping. A file we cannot parse
+ * is treated as not-Robin, which is the safe answer on both sides — the
+ * installer leaves it alone and the CLI neither waits nor posts.
+ *
+ * Robin ships from two owners: antongulin/robin (public) and suelio-arts/robin
+ * (the fork MIX pins).
  */
 
-const ROBIN_OWNER = "(?:antongulin|suelio-arts)";
-const ROBIN_REPO = "(?:robin|universal-code-reviewer)";
+const YAML = require("yaml");
 
-/** A workflow file that runs Robin in any supported shape. */
-const robinReference = new RegExp(
-  `^[ \\t]*(?:-[ \\t]*)?uses:\\s*${ROBIN_OWNER}\\/${ROBIN_REPO}(?:\\/\\.github\\/workflows\\/review\\.ya?ml)?@[^\\s#]+`,
-  "im"
-);
+const ROBIN_USES =
+  /^(?:antongulin|suelio-arts)\/(?:robin|universal-code-reviewer)(?:\/\.github\/workflows\/review\.ya?ml)?@/;
 
 /**
- * The ref of a modern reusable-workflow reference, so the installer can preserve
- * a consumer's existing pin. Only the canonical published path qualifies: the
- * installer regenerates that exact line.
+ * A modern Robin pin, whose owner and ref the installer preserves — in either
+ * shape, since consumers pin the fork as a direct action step. Only the `robin`
+ * repository counts: legacy `universal-code-reviewer` references migrate to the
+ * current defaults instead of being carried forward.
  */
-const currentRobinRef =
-  /^[ \t]*(?:-[ \t]*)?uses:\s*antongulin\/robin\/\.github\/workflows\/review\.ya?ml@([A-Za-z0-9._/-]+)/im;
+const MODERN_PIN =
+  /^(antongulin|suelio-arts)\/robin(?:\/\.github\/workflows\/review\.ya?ml)?@([A-Za-z0-9._/-]+)$/;
 
-const isRobinWorkflow = (source) => robinReference.test(String(source || ""));
+const DEFAULT_OWNER = "antongulin";
 
-const uncomment = (value) => String(value).replace(/\s+#.*$/, "").trim();
-const indentOf = (line) => line.match(/^[ \t]*/)[0].length;
-const isBlank = (line) => !line.trim() || /^\s*#/.test(line);
+function parseWorkflow(source) {
+  try {
+    const document = YAML.parse(String(source || ""), { logLevel: "silent" });
+    return document && typeof document === "object" ? document : null;
+  } catch {
+    return null;
+  }
+}
 
-/** The `on:` mapping: its inline value (if any) and the indented block under it. */
-function triggerSection(source) {
-  const lines = String(source || "").replace(/\r\n/g, "\n").split("\n");
-  for (let index = 0; index < lines.length; index += 1) {
-    const header = lines[index].match(/^(?:on|"on"|'on'):[ \t]*(.*)$/);
-    if (!header) continue;
-    const block = [];
-    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      const line = lines[cursor];
-      if (isBlank(line)) {
-        block.push(line);
-        continue;
-      }
-      if (!/^[ \t]/.test(line)) break;
-      block.push(line);
+/** Every `uses:` value a job or one of its steps actually resolves — never script text. */
+function usesValues(document) {
+  const values = [];
+  const jobs = document && document.jobs;
+  if (!jobs || typeof jobs !== "object") return values;
+  for (const job of Object.values(jobs)) {
+    if (!job || typeof job !== "object") continue;
+    if (typeof job.uses === "string") values.push(job.uses.trim());
+    if (!Array.isArray(job.steps)) continue;
+    for (const step of job.steps) {
+      if (step && typeof step === "object" && typeof step.uses === "string") values.push(step.uses.trim());
     }
-    return { inline: uncomment(header[1]), block };
+  }
+  return values;
+}
+
+const isRobinWorkflow = (source) => usesValues(parseWorkflow(source)).some((value) => ROBIN_USES.test(value));
+
+/**
+ * The owner and ref this repository already pins, so re-running the installer
+ * never silently moves a fork consumer back to the public action or drops its
+ * pinned SHA. The generated workflow is always the reusable form; only the
+ * owner and ref are carried over.
+ */
+function robinWorkflowPin(source) {
+  for (const value of usesValues(parseWorkflow(source))) {
+    const match = value.match(MODERN_PIN);
+    if (match) return { owner: match[1], ref: match[2] };
   }
   return null;
 }
 
-const namesEvent = (value, event) =>
-  new RegExp(`(^|[[,\\s])${event}(\\s*[\\],]|\\s*$)`).test(value);
+const namesCreated = (types) => {
+  if (types === undefined || types === null) return true;
+  if (Array.isArray(types)) return types.includes("created");
+  return types === "created";
+};
 
 /**
  * Does this workflow answer a `/robin` comment? It must declare an
@@ -67,37 +87,18 @@ const namesEvent = (value, event) =>
  * cannot be started by commenting, so `--rerun` must not try.
  */
 function hasIssueCommentTrigger(source) {
-  const section = triggerSection(source);
-  if (!section) return false;
-  if (section.inline) return namesEvent(section.inline, "issue_comment");
-
-  const lines = section.block;
-  for (let index = 0; index < lines.length; index += 1) {
-    if (/^[ \t]*-[ \t]*issue_comment[ \t]*$/.test(lines[index])) return true;
-    const key = lines[index].match(/^([ \t]*)issue_comment:[ \t]*(.*)$/);
-    if (!key) continue;
-    const indent = key[1].length;
-    const inline = uncomment(key[2]);
-    if (inline && inline !== "{}") return namesEvent(inline, "created");
-    for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
-      if (isBlank(lines[cursor])) continue;
-      if (indentOf(lines[cursor]) <= indent) break;
-      const types = lines[cursor].match(/^[ \t]*types:[ \t]*(.*)$/);
-      if (!types) continue;
-      const inlineTypes = uncomment(types[1]);
-      if (inlineTypes) return namesEvent(inlineTypes, "created");
-      for (let item = cursor + 1; item < lines.length; item += 1) {
-        if (isBlank(lines[item])) continue;
-        if (indentOf(lines[item]) <= indent) break;
-        const entry = lines[item].match(/^[ \t]*-[ \t]*([A-Za-z_]+)[ \t]*$/);
-        if (!entry) break;
-        if (entry[1] === "created") return true;
-      }
-      return false;
-    }
-    return true;
-  }
-  return false;
+  const document = parseWorkflow(source);
+  if (!document) return false;
+  // YAML 1.1 readers fold an unquoted `on` key to boolean true; accept both.
+  const on = document.on !== undefined ? document.on : document[true];
+  if (on === undefined || on === null) return false;
+  if (typeof on === "string") return on === "issue_comment";
+  if (Array.isArray(on)) return on.includes("issue_comment");
+  if (typeof on !== "object") return false;
+  if (!Object.prototype.hasOwnProperty.call(on, "issue_comment")) return false;
+  const config = on.issue_comment;
+  if (!config || typeof config !== "object") return true;
+  return namesCreated(config.types);
 }
 
-module.exports = { robinReference, currentRobinRef, isRobinWorkflow, hasIssueCommentTrigger };
+module.exports = { DEFAULT_OWNER, isRobinWorkflow, hasIssueCommentTrigger, robinWorkflowPin };

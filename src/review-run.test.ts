@@ -75,6 +75,20 @@ describe("terminal review outcomes", () => {
     });
   });
 
+  it("reports no outcome at all for a malformed expected head sha", async () => {
+    const {octokit, get, createReview} = mockOctokit();
+    get.mockResolvedValue({data: {head: {sha: HEAD}, base: {sha: "c".repeat(40)}}});
+
+    // A configuration error is not "the PR advanced": calling it stale-head
+    // would send the consumer looking for a newer head that never existed.
+    await expect(resolveReviewTarget(octokit, "o", "r", 7, "not-a-sha")).rejects.toThrow(
+      "must be a full 40-character lowercase hexadecimal SHA"
+    );
+
+    expect(createReview).not.toHaveBeenCalled();
+    expect(setOutput).not.toHaveBeenCalled();
+  });
+
   it("posts an incomplete receipt at the head in advisory mode without failing the job", async () => {
     const {octokit, createReview} = mockOctokit();
 

@@ -102,10 +102,19 @@ export async function resolveReviewTarget(
     pull_number: prNumber,
   });
 
+  const headSha = pullRequest.head.sha;
+
   try {
-    validateExpectedHeadSha(expectedHeadSha, pullRequest.head.sha);
+    validateExpectedHeadSha(expectedHeadSha, headSha);
   } catch (error) {
-    setTerminalOutputs({outcome: "stale-head", head: pullRequest.head.sha});
+    // `stale-head` means one specific thing: the caller named a real commit and
+    // the PR has moved past it. A malformed `expected-head-sha` is a
+    // configuration error — reporting it as stale-head would send the consumer
+    // hunting for a newer head that was never the problem. Either way the
+    // validator's error propagates and nothing is posted.
+    if (/^[0-9a-f]{40}$/.test(expectedHeadSha) && expectedHeadSha !== headSha) {
+      setTerminalOutputs({outcome: "stale-head", head: headSha});
+    }
     throw error;
   }
 
@@ -113,7 +122,7 @@ export async function resolveReviewTarget(
     owner,
     repo,
     pullNumber: prNumber,
-    headSha: pullRequest.head.sha,
+    headSha,
     baseSha: pullRequest.base.sha,
   };
 }

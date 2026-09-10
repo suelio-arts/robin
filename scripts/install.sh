@@ -27,7 +27,9 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
 cd "$(git rev-parse --show-toplevel)"
 
 is_robin_workflow() {
-  grep -Eiq '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*antongulin/(robin|universal-code-reviewer)(/\.github/workflows/review\.ya?ml)?@[^[:space:]#]+' "$1"
+  # Robin ships from antongulin/robin and the suelio-arts/robin fork; both count.
+  # Keep in parity with bin/robin-workflow-ref.js.
+  grep -Eiq '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*(antongulin|suelio-arts)/(robin|universal-code-reviewer)(/\.github/workflows/review\.ya?ml)?@[^[:space:]#]+' "$1"
 }
 
 is_robin_source_repository() {
@@ -80,7 +82,7 @@ name: Robin
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review]
   issue_comment:
     types: [created]
 

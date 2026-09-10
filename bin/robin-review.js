@@ -40,8 +40,7 @@ try {
 const workflowDir = path.join(root, ".github", "workflows");
 const workflowPath = path.join(workflowDir, "robin.yml");
 const archiveDir = path.join(root, ".github", "robin-workflow-archive");
-const robinReference = /^[ \t]*(?:-[ \t]*)?uses:\s*antongulin\/(?:robin|universal-code-reviewer)(?:\/\.github\/workflows\/review\.ya?ml)?@[^\s#]+/im;
-const currentRobinRef = /^[ \t]*(?:-[ \t]*)?uses:\s*antongulin\/robin\/\.github\/workflows\/review\.ya?ml@([A-Za-z0-9._/-]+)/im;
+const { robinReference, currentRobinRef } = require("./robin-workflow-ref");
 const normalize = (value) => value.replace(/\r\n/g, "\n").trimEnd() + "\n";
 const relative = (target) => path.relative(root, target) || ".";
 
@@ -89,7 +88,7 @@ name: Robin
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review]
   issue_comment:
     types: [created]
 

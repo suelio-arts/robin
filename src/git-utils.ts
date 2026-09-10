@@ -28,7 +28,11 @@ export class GitUtils {
     } catch {
       throw new Error("Robin requires the complete pull request history; configure actions/checkout with fetch-depth: 0");
     }
-    const {stdout} = await exec("git", ["-C", this.workspace, "diff", "--no-ext-diff", "--no-color", `${baseRef}...${headRef}`, "--"], {
+    // `--no-ext-diff` covers external diff drivers; `--no-textconv` covers the
+    // separate textconv mechanism, which a `diff=<driver>` attribute in the
+    // checked-out tree can otherwise reach. Reading the diff must never execute
+    // anything the pull request brought with it.
+    const {stdout} = await exec("git", ["-C", this.workspace, "diff", "--no-ext-diff", "--no-textconv", "--no-color", `${baseRef}...${headRef}`, "--"], {
       encoding: "utf8",
       maxBuffer: 100 * 1024 * 1024,
     });

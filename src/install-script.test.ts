@@ -65,6 +65,31 @@ describe("curl installer", () => {
     );
   });
 
+  it("no longer subscribes the consumer workflow to synchronize", () => {
+    run();
+
+    const canonical = fs.readFileSync(path.join(dir, ".github", "workflows", "robin.yml"), "utf8");
+    expect(canonical).toContain("types: [opened, reopened, ready_for_review]");
+    expect(canonical).not.toContain("synchronize");
+    expect(canonical).toContain("issue_comment");
+  });
+
+  it("recognises the suelio-arts fork as a Robin workflow", () => {
+    const workflows = path.join(dir, ".github", "workflows");
+    fs.mkdirSync(workflows, { recursive: true });
+    fs.writeFileSync(
+      path.join(workflows, "fork-review.yml"),
+      "name: Robin\njobs:\n  review:\n    steps:\n      - uses: suelio-arts/robin@f6ab938\n",
+    );
+
+    run();
+
+    expect(fs.existsSync(path.join(workflows, "fork-review.yml"))).toBe(false);
+    expect(
+      fs.existsSync(path.join(dir, ".github", "robin-workflow-archive", "fork-review.yml.disabled")),
+    ).toBe(true);
+  });
+
   it("is idempotent after migration", () => {
     run({ ROBIN_REF: "v1" });
 

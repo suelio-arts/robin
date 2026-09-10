@@ -49,16 +49,24 @@ From the target repository, run either:
 npx robin-review
 ```
 
-After installation, agents can wait for or rerun Robin on an exact PR head:
+After installation, agents can read, rerun, or locally run Robin on an exact PR head:
 
 ```bash
 npx robin-review pr 123 --repo owner/repo --json
 npx robin-review pr 123 --repo owner/repo --rerun --json
+npx robin-review pr 123 --repo owner/repo --local --workspace . --json
 ```
 
-The command exits `0` only when the current head has a successful Robin check
-and an exact-head `APPROVED` review. Findings exit `2`; missing or failed review
-infrastructure exits `1`. Consumer workflows review every synchronized PR head.
+Robin is advisory, so the command reports coverage and findings and never gates
+a merge. It exits `0` when Robin completed on the exact current head with zero
+findings, `2` when it completed with findings (`blocking` says whether Robin
+requested changes), `3` when there is no complete review of that head
+(`incomplete`, `outdated`, `missing`, `unavailable`, or `running` — `message`
+names the one next action), and `1` on a CLI, `gh`, or usage failure.
+`--rerun` comments `/robin`, but only when the repository has an active Robin
+workflow with an `issue_comment` trigger and no run is already in flight on that
+head. `--local` runs the shipped engine once against a checkout you have already
+prepared at the PR head.
 
 or, without Node.js:
 
@@ -135,7 +143,7 @@ name: Robin
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review]
   issue_comment:
     types: [created]
 

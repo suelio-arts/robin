@@ -60,7 +60,9 @@ export interface ChatCompletionResult {
 
 export type LlmProgressHandler = (detail: string) => void | Promise<void>;
 export type ReasoningEffort = "low" | "medium" | "high";
-export type LocalAgentCaller = "github" | "codex";
+/** Harness spending the subscription quota; forwarded to `rolly agent run --caller`. */
+export type LocalAgentCaller = "github" | "codex" | "claude";
+export const LOCAL_AGENT_CALLERS: readonly LocalAgentCaller[] = ["github", "codex", "claude"];
 export interface LlmMetrics {
   calls: number;
   durationMs: number;

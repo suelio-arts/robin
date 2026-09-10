@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 import * as core from "@actions/core";
 import { createHash } from "node:crypto";
 import { StructuredReview, ReviewFinding } from "./review-parser";
+import { OutcomeCounts, ZERO_COUNTS, appendOutcomeMarker, buildOutcomeMarker, parseOutcomeMarker } from "./outcome";
 
 /** Marker present in every Robin review body; used to recognize Robin's own reviews. */
 export const ROBIN_SIGNATURE = ":bow_and_arrow: Robin";
@@ -13,6 +14,23 @@ const REVIEW_KEY_PATTERN = new RegExp(
 );
 
 export type ReviewEvent = "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
+
+/** Verdict as GitHub reports it on a submitted review, for the action outputs. */
+export type ReviewVerdict = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED";
+
+export function reviewVerdict(event: ReviewEvent): ReviewVerdict {
+  if (event === "APPROVE") return "APPROVED";
+  if (event === "REQUEST_CHANGES") return "CHANGES_REQUESTED";
+  return "COMMENTED";
+}
+
+/** What a terminal post returns so the caller can emit a receipt. */
+export interface PostedReview {
+  id: number;
+  url: string;
+  verdict: ReviewVerdict;
+  counts: OutcomeCounts | null;
+}
 
 /**
  * Content address of everything that determines a verdict.
@@ -95,24 +113,69 @@ export class GitHubReviewer {
     owner: string,
     repo: string,
     pullNumber: number,
-    message: string
-  ): Promise<void> {
+    message: string,
+    headSha: string
+  ): Promise<PostedReview> {
     const { data: review } = await this.octokit.rest.pulls.createReview({
       owner,
       repo,
       pull_number: pullNumber,
       event: "COMMENT",
-      body: [
-        "## " + ROBIN_SIGNATURE,
-        "",
-        "Robin could not complete this review. This head was not reviewed.",
-        "",
-        `\`${message}\``,
-        "",
-        "Re-run Robin after the transient failure is resolved.",
-      ].join("\n"),
+      body: appendOutcomeMarker(
+        [
+          "## " + ROBIN_SIGNATURE,
+          "",
+          "Robin could not complete this review. This head was not reviewed.",
+          "",
+          `\`${message}\``,
+          "",
+          "Re-run Robin after the transient failure is resolved.",
+        ].join("\n"),
+        "incomplete",
+        headSha,
+        ZERO_COUNTS
+      ),
     });
     await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+    return {id: review.id, url: review.html_url, verdict: "COMMENTED", counts: ZERO_COUNTS};
+  }
+
+  /**
+   * Receipt for a head with nothing reviewable (whitespace-only, every path
+   * filtered, or an empty diff).
+   *
+   * The status comment already says this, but a status comment is an issue
+   * comment with no head binding: a consumer polling for coverage of head H
+   * cannot tell "skipped" from "not posted yet" and waits to its timeout. This
+   * review is deliberately body-only and non-blocking, and it does not dismiss
+   * prior blocking reviews — nothing was reviewed, so nothing is superseded.
+   */
+  async postSkippedReview(
+    owner: string,
+    repo: string,
+    pullNumber: number,
+    headSha: string,
+    reason: string
+  ): Promise<PostedReview> {
+    const { data: review } = await this.octokit.rest.pulls.createReview({
+      owner,
+      repo,
+      pull_number: pullNumber,
+      event: "COMMENT",
+      body: appendOutcomeMarker(
+        [
+          "## " + ROBIN_SIGNATURE,
+          "",
+          "Nothing to review at this head.",
+          "",
+          `Reason: ${reason}`,
+        ].join("\n"),
+        "skipped",
+        headSha,
+        ZERO_COUNTS
+      ),
+    });
+    return {id: review.id, url: review.html_url, verdict: "COMMENTED", counts: ZERO_COUNTS};
   }
 
   /** Gatekeeper mode blocks only High findings; lower severities stay advisory. */
@@ -196,15 +259,28 @@ export class GitHubReviewer {
     owner: string,
     repo: string,
     pullNumber: number,
-    cached: CachedVerdict
-  ): Promise<void> {
-    const body = [
-      "> Reused a prior review: this head's diff is byte-identical to one already",
-      "> reviewed on this pull request, so no model call was made. Edit or delete",
-      "> that review's body to force a full re-review.",
-      "",
-      cached.body,
-    ].join("\n");
+    cached: CachedVerdict,
+    headSha: string
+  ): Promise<PostedReview> {
+    // Re-stamp the outcome at THIS head. The reused body still carries the
+    // original review's marker naming an older head; the last marker wins, so
+    // appending keeps the body verbatim and still names the head just covered.
+    // Counts come from the cached marker, never from the verdict. A body from
+    // before markers existed leaves them out — the consumer falls back to the
+    // stat blocks it already parses.
+    const counts = parseOutcomeMarker(cached.body)?.counts ?? null;
+    const body = appendOutcomeMarker(
+      [
+        "> Reused a prior review: this head's diff is byte-identical to one already",
+        "> reviewed on this pull request, so no model call was made. Edit or delete",
+        "> that review's body to force a full re-review.",
+        "",
+        cached.body,
+      ].join("\n"),
+      "reused",
+      headSha,
+      counts
+    );
 
     const { data: review } = await this.octokit.rest.pulls.createReview({
       owner,
@@ -219,6 +295,7 @@ export class GitHubReviewer {
     );
 
     await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+    return {id: review.id, url: review.html_url, verdict: reviewVerdict(cached.event), counts};
   }
 
   async postReview(
@@ -226,9 +303,10 @@ export class GitHubReviewer {
     repo: string,
     pullNumber: number,
     findings: StructuredReview,
-    requestChanges = true,
-    cacheKey?: string
-  ): Promise<void> {
+    requestChanges: boolean,
+    cacheKey: string | undefined,
+    headSha: string
+  ): Promise<PostedReview> {
     try {
       core.info("Posting review to PR #" + pullNumber + "...");
 
@@ -249,12 +327,22 @@ export class GitHubReviewer {
         requestChanges
       );
 
-      // Build the review summary body (high-level). The cache marker must be
-      // stamped on BOTH createReview calls below; missing the fallback would
-      // silently make those reviews unreusable.
-      const stamp = cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "";
+      // Build the review summary body (high-level). The cache and outcome
+      // markers must be stamped on BOTH createReview calls below; missing the
+      // fallback would silently make those reviews unreusable and leave the
+      // head without a receipt.
+      const counts: OutcomeCounts = {
+        high: findings.high.length,
+        medium: findings.medium.length,
+        low: findings.low.length,
+        suggestions: findings.suggestions.length,
+      };
+      const stamp =
+        (cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "") +
+        "\n\n" +
+        buildOutcomeMarker("reviewed", headSha, counts);
       const body = this.buildReviewBody(findings, postedFindings) + stamp;
-      
+
       let review;
       let postedInlineComments = comments.length;
       try {
@@ -292,6 +380,8 @@ export class GitHubReviewer {
       );
 
       await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+
+      return {id: review.id, url: review.html_url, verdict: reviewVerdict(event), counts};
 
     } catch (error) {
       core.error("Failed to post review: " + error);

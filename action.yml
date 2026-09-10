@@ -81,6 +81,26 @@ inputs:
     required: false
     default: ""
 
+outputs:
+  outcome:
+    description: "Coverage of the reviewed head: reviewed, reused, skipped, incomplete, or stale-head (nothing posted)."
+  head:
+    description: "Full head SHA this run covered. For stale-head it is the current head Robin found instead."
+  review-id:
+    description: "Numeric id of the review Robin posted, or empty when nothing was posted."
+  review-url:
+    description: "HTML URL of the review Robin posted, or empty when nothing was posted."
+  verdict:
+    description: "APPROVED, CHANGES_REQUESTED, or COMMENTED. Empty when nothing was posted."
+  high:
+    description: "High severity findings. Empty when unknown; 0 for skipped and incomplete."
+  medium:
+    description: "Medium severity findings. Empty when unknown; 0 for skipped and incomplete."
+  low:
+    description: "Low severity findings. Empty when unknown; 0 for skipped and incomplete."
+  suggestions:
+    description: "Suggestions. Empty when unknown; 0 for skipped and incomplete."
+
 runs:
   using: "node24"
   main: "dist/index.js"

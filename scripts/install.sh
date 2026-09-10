@@ -13,6 +13,7 @@
 set -euo pipefail
 
 REF="${ROBIN_REF:-main}"
+OWNER="antongulin"
 WORKFLOW_PATH=".github/workflows/robin.yml"
 WORKFLOW_DIR=".github/workflows"
 ARCHIVE_DIR=".github/robin-workflow-archive"
@@ -27,7 +28,11 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
 cd "$(git rev-parse --show-toplevel)"
 
 is_robin_workflow() {
-  grep -Eiq '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*antongulin/(robin|universal-code-reviewer)(/\.github/workflows/review\.ya?ml)?@[^[:space:]#]+' "$1"
+  # Robin ships from antongulin/robin and the suelio-arts/robin fork; both count.
+  # This grep cannot tell a real `uses:` from one quoted inside a `run: |` block.
+  # bin/robin-workflow-ref.js parses the YAML and is authoritative for recognition;
+  # a false positive here only archives a file (reversible), never deletes one.
+  grep -Eiq '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*(antongulin|suelio-arts)/(robin|universal-code-reviewer)(/\.github/workflows/review\.ya?ml)?@[^[:space:]#]+' "$1"
 }
 
 is_robin_source_repository() {
@@ -60,10 +65,19 @@ if [ -z "${ROBIN_REF+x}" ]; then
     done < <(find "$WORKFLOW_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print)
   fi
   if [ -n "$ref_source" ]; then
-    # Preserve refs only from modern Robin workflows. Legacy Universal Code Reviewer
-    # refs (including obsolete v0 tags) intentionally migrate to the current default.
-    existing_ref="$(sed -nE 's|^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*antongulin/robin/\.github/workflows/review\.ya?ml@([A-Za-z0-9._/-]+).*|\2|p' "$ref_source" | head -n 1)"
-    if [ -n "$existing_ref" ] && [ "$existing_ref" != "v0" ]; then REF="$existing_ref"; fi
+    # Preserve the owner as well as the ref from modern Robin workflows, so a
+    # repository pinned to the fork is not moved back to the public action.
+    # Legacy Universal Code Reviewer refs (including obsolete v0 tags)
+    # intentionally migrate to the current default.
+    # Both modern shapes count: the reusable workflow and the direct action step
+    # (which is how fork consumers pin a SHA). universal-code-reviewer does not.
+    existing_pin="$(sed -nE 's#^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*(antongulin|suelio-arts)/robin(/\.github/workflows/review\.ya?ml)?@([A-Za-z0-9._/-]+).*#\2 \4#p' "$ref_source" | head -n 1)"
+    existing_owner="${existing_pin%% *}"
+    existing_ref="${existing_pin##* }"
+    if [ -n "$existing_pin" ] && [ -n "$existing_ref" ] && [ "$existing_ref" != "v0" ]; then
+      REF="$existing_ref"
+      OWNER="$existing_owner"
+    fi
   fi
 fi
 
@@ -80,7 +94,7 @@ name: Robin
 
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review]
   issue_comment:
     types: [created]
 
@@ -91,7 +105,7 @@ permissions:
 
 jobs:
   review:
-    uses: antongulin/robin/.github/workflows/review.yml@__REF__
+    uses: __OWNER__/robin/.github/workflows/review.yml@__REF__
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
       LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
@@ -99,7 +113,7 @@ jobs:
 YAML
 tmp_rendered="$(mktemp)"
 trap 'rm -f "$tmp_workflow" "$tmp_rendered"' EXIT
-sed "s|@__REF__|@${REF}|" "$tmp_workflow" > "$tmp_rendered"
+sed -e "s|__OWNER__/robin|${OWNER}/robin|" -e "s|@__REF__|@${REF}|" "$tmp_workflow" > "$tmp_rendered"
 
 archive_workflow() {
   local source_path="$1" base_name destination suffix=1

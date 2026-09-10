@@ -1,4 +1,8 @@
 import { GitHubReviewer, reviewKey, cacheMarker, findCachedVerdict, ROBIN_SIGNATURE } from "./github-reviewer";
+import { parseOutcomeMarker } from "./outcome";
+
+const HEAD = "a".repeat(40);
+const OLD_HEAD = "b".repeat(40);
 
 describe("GitHubReviewer", () => {
   it("resolves review event from high findings and request-changes mode", () => {
@@ -73,13 +77,15 @@ describe("GitHubReviewer", () => {
   });
 
   it("reports an incomplete review without pretending it blocks the PR", async () => {
-    const createReview = jest.fn().mockResolvedValue({ data: { id: 20 } });
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 20, html_url: "u" } });
     const octokit = {
       paginate: jest.fn().mockResolvedValue([]),
       rest: { pulls: { createReview, listReviews: {}, dismissReview: jest.fn() } },
     };
 
-    await new GitHubReviewer(octokit as any).postFailureReview("o", "r", 7, "provider timeout");
+    const posted = await new GitHubReviewer(octokit as any).postFailureReview(
+      "o", "r", 7, "provider timeout", HEAD
+    );
 
     expect(createReview).toHaveBeenCalledWith(expect.objectContaining({
       pull_number: 7,
@@ -87,6 +93,113 @@ describe("GitHubReviewer", () => {
       body: expect.stringContaining("provider timeout"),
     }));
     expect(createReview.mock.calls[0][0].body).toContain("was not reviewed");
+    // The receipt must name the head it failed on; a consumer cannot otherwise
+    // tell "incomplete at H" from "incomplete at some earlier head".
+    expect(parseOutcomeMarker(createReview.mock.calls[0][0].body)).toEqual({
+      outcome: "incomplete",
+      head: HEAD,
+      counts: { high: 0, medium: 0, low: 0, suggestions: 0 },
+    });
+    expect(posted).toEqual({ id: 20, url: "u", verdict: "COMMENTED", counts: { high: 0, medium: 0, low: 0, suggestions: 0 } });
+  });
+
+  it("stamps a skipped receipt for a head with nothing reviewable", async () => {
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 21, html_url: "u" } });
+    const octokit = { rest: { pulls: { createReview } } };
+
+    await new GitHubReviewer(octokit as any).postSkippedReview(
+      "o", "r", 7, HEAD, "only whitespace changed."
+    );
+
+    expect(createReview.mock.calls[0][0].event).toBe("COMMENT");
+    expect(createReview.mock.calls[0][0].body).toContain("only whitespace changed.");
+    expect(parseOutcomeMarker(createReview.mock.calls[0][0].body)).toEqual({
+      outcome: "skipped",
+      head: HEAD,
+      counts: { high: 0, medium: 0, low: 0, suggestions: 0 },
+    });
+  });
+
+  it("stamps the reviewed head and counts on the posted review", async () => {
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 22, html_url: "u" } });
+    const octokit = {
+      paginate: jest.fn().mockResolvedValue([]),
+      rest: { pulls: { createReview, listFiles: {}, listReviews: {}, dismissReview: jest.fn() } },
+    };
+    const findings = {
+      summary: "Summary",
+      high: [{ severity: "high", description: "one" }],
+      medium: [],
+      low: [{ severity: "low", description: "two" }],
+      suggestions: [],
+      rawResponse: "",
+    } as any;
+
+    const posted = await new GitHubReviewer(octokit as any).postReview(
+      "o", "r", 7, findings, false, "f".repeat(64), HEAD
+    );
+
+    const body = createReview.mock.calls[0][0].body;
+    expect(body).toContain(cacheMarker("f".repeat(64), "COMMENT"));
+    expect(parseOutcomeMarker(body)).toEqual({
+      outcome: "reviewed",
+      head: HEAD,
+      counts: { high: 1, medium: 0, low: 1, suggestions: 0 },
+    });
+    expect(posted).toEqual({
+      id: 22,
+      url: "u",
+      verdict: "COMMENTED",
+      counts: { high: 1, medium: 0, low: 1, suggestions: 0 },
+    });
+  });
+
+  it("re-stamps a reused verdict at the new head, copying counts from the cached marker", async () => {
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 23, html_url: "u" } });
+    const octokit = {
+      paginate: jest.fn().mockResolvedValue([]),
+      rest: { pulls: { createReview, listReviews: {}, dismissReview: jest.fn() } },
+    };
+    const cachedBody = [
+      "## " + ROBIN_SIGNATURE,
+      "",
+      ":rotating_light: **2 High**",
+      "",
+      `<!-- robin-outcome: v1 reviewed head=${OLD_HEAD} high=2 medium=1 low=0 suggestions=3 -->`,
+    ].join("\n");
+
+    const posted = await new GitHubReviewer(octokit as any).postCachedReview(
+      "o", "r", 7, { event: "REQUEST_CHANGES", body: cachedBody }, HEAD
+    );
+
+    const body = createReview.mock.calls[0][0].body;
+    expect(body).toContain(cachedBody);
+    expect(parseOutcomeMarker(body)).toEqual({
+      outcome: "reused",
+      head: HEAD,
+      counts: { high: 2, medium: 1, low: 0, suggestions: 3 },
+    });
+    expect(posted.verdict).toBe("CHANGES_REQUESTED");
+  });
+
+  it("omits counts when reusing a body that predates outcome markers", async () => {
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 24, html_url: "u" } });
+    const octokit = {
+      paginate: jest.fn().mockResolvedValue([]),
+      rest: { pulls: { createReview, listReviews: {}, dismissReview: jest.fn() } },
+    };
+
+    await new GitHubReviewer(octokit as any).postCachedReview(
+      "o", "r", 7, { event: "APPROVE", body: "## " + ROBIN_SIGNATURE + "\n\n:white_check_mark: **No issues found**" }, HEAD
+    );
+
+    // Counts must never be invented from the verdict: an absent tail tells the
+    // consumer to fall back to the stat blocks in the body.
+    expect(parseOutcomeMarker(createReview.mock.calls[0][0].body)).toEqual({
+      outcome: "reused",
+      head: HEAD,
+      counts: null,
+    });
   });
 
   it("detects new-file line numbers present in the diff", () => {

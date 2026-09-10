@@ -126,6 +126,23 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `config-file` | `.github/robin.yml` | Repo config path on the base branch |
 | `use-json-response-mode` | empty (defer to repo config, else true) | Request `response_format: json_object` when supported. Pass `"true"` / `"false"` on the reusable workflow |
 
+## Action outputs
+
+Direct action only. Every terminal path sets all nine outputs once a pull request has been resolved, so a caller never has to tell "empty" from "not reached". Each posted review body also carries the same values in an HTML-comment marker bound to the reviewed head, which is how a consumer distinguishes "Robin finished on this exact commit" from "Robin has not posted yet".
+
+| Output | Values | Description |
+| --- | --- | --- |
+| `outcome` | `reviewed`, `reused`, `skipped`, `incomplete`, `stale-head` | Coverage of `head`. `reviewed`/`reused`/`skipped` are complete; `incomplete` means the run failed at that head; `stale-head` means the PR advanced and **nothing was posted** |
+| `head` | 40-hex SHA | The head this run covered. For `stale-head`, the current head Robin found instead |
+| `review-id` | number or empty | Id of the review Robin posted |
+| `review-url` | URL or empty | HTML URL of that review |
+| `verdict` | `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, or empty | As submitted. Never infer finding counts from it |
+| `high` / `medium` / `low` / `suggestions` | number or empty | Finding counts. `0` for `skipped` and `incomplete`; empty when genuinely unknown |
+
+## Local execution
+
+To run the engine yourself against an exact head — a self-hosted subscription model, no Actions minutes — use the CLI: `robin-review pr <n> --local --workspace <dir>`. It prepares a bounded environment, runs the shipped `dist/index.js` once against the checkout you point it at, and returns the same receipt the action outputs carry. Run `robin-review pr --help` for the flags.
+
 ## Usage patterns
 
 ### Advisor mode (never block the PR)

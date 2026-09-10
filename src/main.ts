@@ -19,7 +19,15 @@ import {
 } from "./repo-config";
 import { PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
-import { isPullRequestReviewEvent, validateExpectedHeadSha, workflowDispatchPrNumber } from "./events";
+import { isPullRequestReviewEvent, workflowDispatchPrNumber } from "./events";
+import {
+  ReviewTarget,
+  handleReviewFailure,
+  postSkippedReceipt,
+  resolveAgentCaller,
+  resolveReviewTarget,
+  setPostedOutputs,
+} from "./review-run";
 import { buildFileContext } from "./review-context";
 import { buildPrecisionCandidates, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "./contract-discovery";
@@ -33,7 +41,9 @@ async function run(): Promise<void> {
   let statusCommentId: number | undefined;
   let statusCommand: "review" | "summary" = "review";
   let statusModel = "not configured";
-  let pullNumber: number | undefined;
+  // Assigned only once the head has been validated, so a stale head has nothing
+  // to post to.
+  let target: ReviewTarget | undefined;
   let onJobCancelled: (() => Promise<void>) | undefined;
   let gatekeeper = core.getInput("request-changes") !== "false";
 
@@ -119,10 +129,15 @@ async function run(): Promise<void> {
       core.info("No matching trigger found. Skipping.");
       return;
     }
-    pullNumber = prNumber;
 
-    const { data: pullRequest } = await octokit.rest.pulls.get({ owner, repo, pull_number: prNumber });
-    validateExpectedHeadSha(expectedHeadSha, pullRequest.head.sha);
+    target = await resolveReviewTarget(octokit, owner, repo, prNumber, expectedHeadSha);
+    const headSha = target.headSha;
+    const reviewTarget = target;
+    // The skip conditions below are properties of the diff, so the receipt is
+    // honest either way, but /summary has never posted a review and must not
+    // start: only the review command leaves a coverage receipt.
+    const skipReceipt = (reason: string) =>
+      command === "review" ? postSkippedReceipt(octokit, reviewTarget, reason) : Promise.resolve();
     if (eventName === "issue_comment") {
       await addEyesReaction(octokit, owner, repo, payload.comment?.id);
     }
@@ -194,8 +209,8 @@ async function run(): Promise<void> {
     }
 
     const gitUtils = new GitUtils(octokit as any);
-    const baseRef = pullRequest.base.sha;
-    const headRef = pullRequest.head.sha;
+    const baseRef = target.baseSha;
+    const headRef = headSha;
     const repoConfig = await loadRepoConfig(
       octokit,
       gitUtils,
@@ -222,6 +237,7 @@ async function run(): Promise<void> {
         statusCommentId,
         buildFailedStatusBody("No diff found for this pull request.", statusCommand)
       );
+      await skipReceipt("No diff found for this pull request.");
       return;
     }
 
@@ -240,6 +256,7 @@ async function run(): Promise<void> {
         statusCommentId,
         buildSkippedFilterStatusBody(removedFiles)
       );
+      await skipReceipt(`every changed file was removed by diff filters (${removedFiles.length} file(s)).`);
       return;
     }
 
@@ -253,11 +270,13 @@ async function run(): Promise<void> {
         statusCommentId,
         buildFailedStatusBody("No reviewable diff remained after filtering skipped paths.", statusCommand)
       );
+      await skipReceipt("No reviewable diff remained after filtering skipped paths.");
       return;
     }
     if (isWhitespaceOnlyDiff(reviewDiff)) {
       core.info("Only whitespace changed; no LLM review needed.");
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildSkippedWhitespaceStatusBody());
+      await skipReceipt("only whitespace changed.");
       return;
     }
     const reviewedPaths = changedHeadPaths(reviewDiff);
@@ -316,7 +335,8 @@ async function run(): Promise<void> {
       if (cached) {
         core.info("Diff is byte-identical to an earlier review; reusing its " + cached.event + " verdict.");
         const reviewer = new GitHubReviewer(octokit as any, maxComments);
-        await reviewer.postCachedReview(owner, repo, prNumber, cached);
+        const posted = await reviewer.postCachedReview(owner, repo, prNumber, cached, headSha);
+        setPostedOutputs("reused", headSha, posted);
         await updateStatusComment(
           octokit,
           owner,
@@ -349,7 +369,8 @@ async function run(): Promise<void> {
           buildProgressStatusBody(detail, statusCommand, statusModel)
         );
       },
-      reasoningEffortInput as "low" | "medium" | "high" | undefined
+      reasoningEffortInput as "low" | "medium" | "high" | undefined,
+      resolveAgentCaller(process.env.ROBIN_AGENT_CALLER)
     );
     const useJsonMode = command === "review" && jsonResponseMode;
     
@@ -410,7 +431,8 @@ async function run(): Promise<void> {
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
 
       const reviewer = new GitHubReviewer(octokit as any, maxComments);
-      await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, cacheKey);
+      const posted = await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, cacheKey, headSha);
+      setPostedOutputs("reviewed", headSha, posted);
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("review", findings));
 
       if (findings.high.length > 0 && failOnHigh) {
@@ -430,21 +452,13 @@ async function run(): Promise<void> {
         core.warning(`Could not update Robin status comment: ${statusError}`);
       }
     }
-    if (gatekeeper && octokit && statusOwner && statusRepo && pullNumber && statusCommand === "review") {
-      try {
-        await new GitHubReviewer(octokit as any).postFailureReview(
-          statusOwner,
-          statusRepo,
-          pullNumber,
-          message
-        );
-        core.warning(`Incomplete review posted after execution failure: ${message}`);
-      } catch (reviewError) {
-        core.error(`Could not post incomplete review: ${reviewError}`);
-      }
-    }
-    if (gatekeeper) core.setFailed(message);
-    else core.warning(`Informational Robin review did not complete: ${message}`);
+    await handleReviewFailure({
+      gatekeeper,
+      octokit,
+      target,
+      message,
+      command: statusCommand,
+    });
   } finally {
     onJobCancelled = undefined;
   }

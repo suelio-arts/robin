@@ -28,7 +28,9 @@ context. Fix verified bugs and reject noise with a factual reply.
 - Never merge without explicit authorization. “Create a PR” does not authorize merge.
 - Preserve unrelated local changes and branches. Never stash, discard, commit, or delete
   them merely to complete this protocol.
-- Never prepare or publish a release automatically.
+- When a release or deployment is necessary to make already-authorized work take effect,
+  complete it through the repository's established mechanism. A request limited to a PR,
+  review, or source-only endpoint does not authorize a release.
 
 ## Terminal states
 
@@ -301,7 +303,14 @@ Delete only the branch created for this task. Never delete unrelated local or re
 branches. Preserve pre-existing uncommitted files; if they prevent a safe switch or pull,
 enter BLOCKED and report exactly which cleanup postcondition remains incomplete.
 
-## 9. Final report and optional release offer
+## 9. Release completion and final report
+
+After an authorized merge reaches COMPLETE, determine whether the requested endpoint
+requires a release or deployment. When it does, use the repository's established release
+mechanism and verify the deployed result without asking for redundant permission. Stop
+only for missing authority, credentials, a human-only action, or consequential scope that
+the user did not authorize. When the user requested only a PR, review, merge, or another
+source-only endpoint, do not expand it into a release.
 
 Report:
 
@@ -315,16 +324,12 @@ Report:
 - Current base branch and upstream sync state.
 - Local/remote task-branch deletion state.
 - Unrelated uncommitted files preserved, or `none`.
-
-After an authorized merge reaches COMPLETE, detect whether the repository already has an
-established release mechanism. If it does and the merged change appears releasable, end
-with one optional question: `Do you want me to prepare and publish a release?` Treat that
-as a separate task requiring a new explicit yes. Do not edit changelogs, tags, versions,
-or published release notes as part of this PR protocol.
+- Required release or deployment result, when applicable.
 
 ## Common failure modes
 
 - Waiting once and returning instead of owning the loop to a terminal state.
+- Asking again to release work when release is required by the already-authorized endpoint.
 - Requiring the user to mention Robin even though the installed workflow is detectable.
 - Treating severity as proof or fixing style noise.
 - Pushing before replying and resolving the current review.

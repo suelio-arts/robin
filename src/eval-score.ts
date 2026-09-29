@@ -23,6 +23,12 @@ export type TokenUsage = {
   reasoningOutputTokens: number;
 };
 
+/** API promotion runs call OpenAI directly; subscription runs go through the agent bridge. */
+export const LUNA_EVAL_MODELS = {
+  api: "gpt-5.6-luna",
+  subscription: "gpt-6-luna",
+} as const;
+
 export const LUNA_API_PRICING = {
   source: "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
   inputUsdPerMillion: 0.2,
@@ -41,7 +47,7 @@ export function lunaApiCost(usage: TokenUsage): number {
 
 type ArtifactRun = {
   id: string;
-  model: "gpt-5.6-luna";
+  model: typeof LUNA_EVAL_MODELS[keyof typeof LUNA_EVAL_MODELS];
   effort: "high" | "medium" | "low";
   transport: "api" | "subscription";
   promptSha256: string;
@@ -206,10 +212,12 @@ export function artifactFindings(artifact: EvaluationArtifact): ArtifactFinding[
 
 function validateArtifact(artifact: EvaluationArtifact, artifactSha256: string): void {
   if (artifact.schemaVersion !== 2) throw new Error("Unsupported evaluation artifact schema");
-  if (artifact.run.model !== "gpt-5.6-luna") throw new Error("Artifact model is not the frozen Luna model");
   if (!["high", "medium", "low"].includes(artifact.run.effort)) throw new Error("Artifact effort must be high, medium, or low");
   if (artifact.run.transport !== "api" && artifact.run.transport !== "subscription") {
     throw new Error("Artifact transport must be api or subscription");
+  }
+  if (artifact.run.model !== LUNA_EVAL_MODELS[artifact.run.transport]) {
+    throw new Error("Artifact model is not the frozen Luna model for its transport");
   }
   if (!/^[a-f0-9]{64}$/.test(artifactSha256)) throw new Error("artifactSha256 must be a full SHA-256");
   if (!/^[a-f0-9]{64}$/.test(artifact.run.promptSha256)) throw new Error("promptSha256 must be a full SHA-256");

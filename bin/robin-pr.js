@@ -37,7 +37,7 @@ const COMPLETE_OUTCOMES = new Set(["reviewed", "reused", "skipped"]);
 /** Run conclusions that mean "nothing went wrong", so a missing review is not a failure. */
 const BENIGN_CONCLUSIONS = new Set(["success", "skipped", "neutral"]);
 const ZERO_COUNTS = { high: 0, medium: 0, low: 0, suggestions: 0 };
-const DEFAULT_MODEL = "luna-5-6-low-subscription";
+const DEFAULT_MODEL = "luna-6-low-subscription";
 /** A dispatched workflow has 180 s to produce a run before we call it missing. */
 const RUN_APPEAR_TIMEOUT_MS = 180000;
 /** Extra polls after a run finishes, so a receipt that lags the run is still seen. */

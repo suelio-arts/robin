@@ -46,7 +46,7 @@ describe("LLMClient", () => {
       session: "test-session",
       provider: "codex",
       auth: "subscription",
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       effort: "high",
     }));
     (execFile as unknown as jest.Mock).mockImplementation((_file, _args, _options, callback) => {
@@ -57,7 +57,7 @@ describe("LLMClient", () => {
       const client = new LLMClient(
         "rolly-agent",
         "",
-        "luna-5-6-high-subscription",
+        "luna-6-high-subscription",
         undefined,
         undefined,
         undefined,
@@ -71,7 +71,7 @@ describe("LLMClient", () => {
       expect(response.provenance).toEqual({
         provider: "codex",
         auth: "subscription",
-        model: "gpt-5.6-luna",
+        model: "gpt-6-luna",
         effort: "high",
       });
       expect(response.usage).toEqual({
@@ -90,7 +90,7 @@ describe("LLMClient", () => {
       }));
       expect(execFile).toHaveBeenCalledWith(
         "/Users/rolly/.local/bin/rolly",
-        expect.arrayContaining(["--caller", "codex", "--agent", "luna-5-6-high-subscription"]),
+        expect.arrayContaining(["--caller", "codex", "--agent", "luna-6-high-subscription"]),
         expect.objectContaining({ maxBuffer: 10 * 1024 * 1024 }),
         expect.any(Function)
       );
@@ -101,6 +101,8 @@ describe("LLMClient", () => {
 
   it("keeps non-Luna agents out of Robin's local transport", () => {
     expect(() => new LLMClient("rolly-agent", "", "opus-5-high-subscription"))
+      .toThrow("Unsupported Robin local agent");
+    expect(() => new LLMClient("rolly-agent", "", "luna-5-6-low-subscription"))
       .toThrow("Unsupported Robin local agent");
   });
 

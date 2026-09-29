@@ -219,5 +219,7 @@ describe("MIX evaluation scorer", () => {
     raw.run.callRecords[0].auth = "api";
     (raw.run as {model: string}).model = "gpt-4o";
     expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("frozen Luna model");
+    (raw.run as {model: string}).model = "gpt-6-luna";
+    expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("frozen Luna model");
   });
 });

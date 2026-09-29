@@ -1552,10 +1552,9 @@ const path_1 = __nccwpck_require__(6928);
 const ROLLY_AGENT_URL = "rolly-agent";
 const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
 const ROBIN_LOCAL_AGENTS = new Set([
-    "luna-5-6-high-api",
-    "luna-5-6-high-subscription",
-    "luna-5-6-low-api",
-    "luna-5-6-low-subscription",
+    "luna-6-low-subscription",
+    "luna-6-medium-subscription",
+    "luna-6-high-subscription",
 ]);
 exports.LOCAL_AGENT_COMPLETION_CONTRACT = [
     "Act as a stateless model completion, not an autonomous coding agent.",

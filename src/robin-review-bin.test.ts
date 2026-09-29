@@ -1206,7 +1206,7 @@ describe("robin-review pr --local", () => {
         coverage: "reviewed",
         execution: "local",
         findings: { high: 0, medium: 0, low: 1, suggestions: 0 },
-        engine: expect.objectContaining({ path: enginePath, model: "luna-5-6-low-subscription", caller: expect.stringMatching(/^(codex|claude)$/) }),
+        engine: expect.objectContaining({ path: enginePath, model: "luna-6-low-subscription", caller: expect.stringMatching(/^(codex|claude)$/) }),
       }),
     );
     expect(payload.engine.sha256).toMatch(/^[0-9a-f]{64}$/);
@@ -1295,7 +1295,7 @@ describe("robin-review pr --local", () => {
   it("refuses a non-subscription model and never spawns the engine", () => {
     writeFixture();
 
-    const result = local(["--model", "luna-5-6-low-api"]);
+    const result = local(["--model", "luna-6-low-api"]);
 
     expect(result.status).toBe(1);
     expect(JSON.parse(result.stdout).message).toContain("-subscription");

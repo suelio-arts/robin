@@ -10,7 +10,7 @@ import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "../src/contract-discovery";
 import { LLMClient } from "../src/llm-client";
-import { LUNA_API_PRICING, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
+import { LUNA_API_PRICING, LUNA_EVAL_MODELS, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
 import { ReviewBudget, runDiscovery } from "../src/discovery";
 import { executeEvidenceRequests } from "../src/evidence-loop";
 
@@ -32,14 +32,17 @@ const manifest = JSON.parse(manifestSource) as {
   holdoutNegativeControls: NegativeControl[];
 };
 const EVAL_AGENTS = {
-  "luna-5-6-high-subscription": {effort: "high", transport: "subscription"},
-  "luna-5-6-low-subscription": {effort: "low", transport: "subscription"},
+  "luna-6-high-subscription": {effort: "high", transport: "subscription"},
+  "luna-6-medium-subscription": {effort: "medium", transport: "subscription"},
+  "luna-6-low-subscription": {effort: "low", transport: "subscription"},
+  // OpenAI-direct promotion runs; these labels are not agent-bridge profiles.
   "luna-5-6-high-api": {effort: "high", transport: "api"},
   "luna-5-6-low-api": {effort: "low", transport: "api"},
 } as const;
-const evalAgent = process.env.EVAL_AGENT || "luna-5-6-high-subscription";
+const evalAgent = process.env.EVAL_AGENT || "luna-6-high-subscription";
 if (!(evalAgent in EVAL_AGENTS)) throw new Error(`Unsupported EVAL_AGENT: ${evalAgent}`);
 const evalConfig = EVAL_AGENTS[evalAgent as keyof typeof EVAL_AGENTS];
+const evalModel = LUNA_EVAL_MODELS[evalConfig.transport];
 const MIX_REVIEW_INSTRUCTIONS = [
   "Minimize false negatives on the initial review, but never invent a failure path.",
   "High findings block only for a proven production, security, data-loss, build, migration, or contract failure.",
@@ -56,7 +59,7 @@ if (evalConfig.transport === "api" && !evalApiKey) {
 const client = new LLMClient(
   evalConfig.transport === "api" ? "https://api.openai.com/v1" : "rolly-agent",
   evalApiKey,
-  evalConfig.transport === "api" ? "gpt-5.6-luna" : evalAgent,
+  evalConfig.transport === "api" ? evalModel : evalAgent,
   undefined,
   EVAL_CALL_TIMEOUT_MS,
   1,
@@ -171,10 +174,10 @@ async function review(systemPrompt: string, userContent: string) {
   if (!response.usage) throw new Error("Evaluation requires provider token usage for every model call");
   if (!response.callId) throw new Error("Evaluation requires a native provider session id for every model call");
   const provenance = response.provenance || (evalConfig.transport === "api"
-    ? {provider: "codex", auth: "api", model: "gpt-5.6-luna", effort: evalConfig.effort}
+    ? {provider: "codex", auth: "api", model: evalModel, effort: evalConfig.effort}
     : undefined);
   if (!provenance) throw new Error("Evaluation requires native provider provenance for every model call");
-  const expectedProvenance = {provider: "codex", auth: evalConfig.transport, model: "gpt-5.6-luna", effort: evalConfig.effort};
+  const expectedProvenance = {provider: "codex", auth: evalConfig.transport, model: evalModel, effort: evalConfig.effort};
   if (JSON.stringify(provenance) !== JSON.stringify(expectedProvenance)) {
     throw new Error(`Wrong evaluation provider provenance: ${JSON.stringify(provenance)}`);
   }
@@ -233,7 +236,7 @@ function writeProgress(results: unknown[]): void {
     schemaVersion: 2,
     run: {
       id: process.env.EVAL_RUN_ID || `${evalAgent}-${new Date(runStartedMs).toISOString()}`,
-      model: "gpt-5.6-luna",
+      model: evalModel,
       effort: evalConfig.effort,
       transport: evalConfig.transport,
       promptSha256,

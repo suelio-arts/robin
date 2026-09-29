@@ -1206,7 +1206,7 @@ describe("robin-review pr --local", () => {
         coverage: "reviewed",
         execution: "local",
         findings: { high: 0, medium: 0, low: 1, suggestions: 0 },
-        engine: expect.objectContaining({ path: enginePath, model: "luna-6-low-subscription", caller: expect.stringMatching(/^(codex|claude)$/) }),
+        engine: expect.objectContaining({ path: enginePath, model: "sol-6.1-low-subscription", caller: expect.stringMatching(/^(codex|claude)$/) }),
       }),
     );
     expect(payload.engine.sha256).toMatch(/^[0-9a-f]{64}$/);

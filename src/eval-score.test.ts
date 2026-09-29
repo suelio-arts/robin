@@ -93,7 +93,7 @@ function artifact(id: string, noisy = false): EvaluationArtifact {
         ...manifest.holdoutCases.map(({pr, head}) => [snapshotId(pr, head), 240_000]),
         [negativeSnapshotDurationId(negative.pr, negative.head), 10_000],
       ]),
-      costUsd: productionCalls.reduce((total, call) => total + lunaApiCost(call.usage), 0),
+      costUsd: productionCalls.reduce((total, call) => total + lunaApiCost(call.usage, "gpt-5.6-luna"), 0),
       coderabbitEquivalentUsd: 3.25,
       reviewedFiles: 13,
       reviewedFileIds: manifest.holdoutCases.flatMap(({pr, head, changedFiles = []}) =>
@@ -182,7 +182,7 @@ describe("MIX evaluation scorer", () => {
     raw.run.costUsd = 0;
     expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("pinned Luna pricing");
     raw.run.costUsd = raw.run.callRecords.filter(({production}) => production)
-      .reduce((total, call) => total + lunaApiCost(call.usage), 0);
+      .reduce((total, call) => total + lunaApiCost(call.usage, "gpt-5.6-luna"), 0);
     const wrongLabel = grade(raw, sha);
     wrongLabel.findings[0].matchedLabelIds = [labelId(manifest.holdoutCases[0], 1)];
     expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, wrongLabel)).toThrow("snapshot and file");
@@ -220,6 +220,27 @@ describe("MIX evaluation scorer", () => {
     (raw.run as {model: string}).model = "gpt-4o";
     expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("frozen Luna model");
     (raw.run as {model: string}).model = "gpt-6-luna";
+    expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("Call provenance");
+    raw.run.transport = "subscription";
+    (raw.run as {model: string}).model = "gpt-5.6-luna";
     expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("frozen Luna model");
+  });
+
+  it("prices gpt-6-luna API runs at gpt-6-luna rates", () => {
+    const raw = artifact("luna-6");
+    const sha = "9".repeat(64);
+    (raw.run as {model: string}).model = "gpt-6-luna";
+    for (const call of raw.run.callRecords) call.model = "gpt-6-luna";
+    const productionCalls = raw.run.callRecords.filter(({production}) => production);
+    expect(() => scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha))).toThrow("pinned Luna pricing");
+    raw.run.costUsd = productionCalls.reduce((total, call) => total + lunaApiCost(call.usage, "gpt-6-luna"), 0);
+    expect(scoreEvaluation(manifest, manifestSha256, raw, sha, grade(raw, sha)).complete).toBe(true);
+  });
+
+  it("uses the official per-model Luna rates, including long-context pricing", () => {
+    const usage = {inputTokens: 1_000_000, cachedInputTokens: 200_000, outputTokens: 100_000, reasoningOutputTokens: 50_000};
+    expect(lunaApiCost({...usage, inputTokens: 200_000, cachedInputTokens: 100_000}, "gpt-5.6-luna")).toBeCloseTo(0.02 + 0.002 + 0.12, 9);
+    expect(lunaApiCost({...usage, inputTokens: 200_000, cachedInputTokens: 100_000}, "gpt-6-luna")).toBeCloseTo(0.01 + 0.001 + 0.05, 9);
+    expect(lunaApiCost(usage, "gpt-6-luna")).toBeCloseTo(0.16 + 0.004 + 0.075, 9);
   });
 });

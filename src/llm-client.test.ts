@@ -17,7 +17,7 @@ describe("LLMClient", () => {
     const client = new LLMClient(
       "https://api.openai.com/v1",
       "test-key",
-      "gpt-5.6-luna",
+      "gpt-6-luna",
       undefined,
       undefined,
       undefined,
@@ -99,10 +99,18 @@ describe("LLMClient", () => {
     }
   });
 
-  it("keeps non-Luna agents out of Robin's local transport", () => {
+  it("accepts only Sol 6.1 and Luna 6 subscription profiles on Robin's local transport", () => {
+    for (const effort of ["low", "medium", "high"]) {
+      expect(() => new LLMClient("rolly-agent", "", `sol-6.1-${effort}-subscription`)).not.toThrow();
+      expect(() => new LLMClient("rolly-agent", "", `luna-6-${effort}-subscription`)).not.toThrow();
+    }
     expect(() => new LLMClient("rolly-agent", "", "opus-5-high-subscription"))
       .toThrow("Unsupported Robin local agent");
     expect(() => new LLMClient("rolly-agent", "", "luna-5-6-low-subscription"))
+      .toThrow("Unsupported Robin local agent");
+    expect(() => new LLMClient("rolly-agent", "", "sol-6-low-subscription"))
+      .toThrow("Unsupported Robin local agent");
+    expect(() => new LLMClient("rolly-agent", "", "sol-6.1-xhigh-subscription"))
       .toThrow("Unsupported Robin local agent");
   });
 

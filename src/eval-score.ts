@@ -25,29 +25,47 @@ export type TokenUsage = {
 
 /** API promotion runs call OpenAI directly; subscription runs go through the agent bridge. */
 export const LUNA_EVAL_MODELS = {
-  api: "gpt-5.6-luna",
-  subscription: "gpt-6-luna",
+  api: ["gpt-5.6-luna", "gpt-6-luna"],
+  subscription: ["gpt-6-luna"],
 } as const;
 
-export const LUNA_API_PRICING = {
-  source: "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
-  inputUsdPerMillion: 0.2,
-  cachedInputUsdPerMillion: 0.02,
-  outputUsdPerMillion: 1.2,
-} as const;
+export type LunaEvalModel = typeof LUNA_EVAL_MODELS[keyof typeof LUNA_EVAL_MODELS][number];
 
-export function lunaApiCost(usage: TokenUsage): number {
+/** Official OpenAI standard rates per 1M tokens. gpt-5.6-luna stays for historical artifacts. */
+export const LUNA_API_PRICING: Record<LunaEvalModel, {
+  source: string;
+  inputUsdPerMillion: number;
+  cachedInputUsdPerMillion: number;
+  outputUsdPerMillion: number;
+}> = {
+  "gpt-5.6-luna": {
+    source: "https://developers.openai.com/api/docs/models/gpt-5.6-luna",
+    inputUsdPerMillion: 0.2,
+    cachedInputUsdPerMillion: 0.02,
+    outputUsdPerMillion: 1.2,
+  },
+  "gpt-6-luna": {
+    source: "https://developers.openai.com/api/docs/models/gpt-6-luna",
+    inputUsdPerMillion: 0.1,
+    cachedInputUsdPerMillion: 0.01,
+    outputUsdPerMillion: 0.5,
+  },
+};
+
+export function lunaApiCost(usage: TokenUsage, model: LunaEvalModel): number {
+  const pricing = LUNA_API_PRICING[model];
+  // Both models bill prompts over 272K input tokens at 2x input/cache and 1.5x output.
   const longContext = usage.inputTokens > 272_000;
   return (
-    Math.max(0, usage.inputTokens - usage.cachedInputTokens) * LUNA_API_PRICING.inputUsdPerMillion * (longContext ? 2 : 1)
-    + usage.cachedInputTokens * LUNA_API_PRICING.cachedInputUsdPerMillion * (longContext ? 2 : 1)
-    + usage.outputTokens * LUNA_API_PRICING.outputUsdPerMillion * (longContext ? 1.5 : 1)
+    Math.max(0, usage.inputTokens - usage.cachedInputTokens) * pricing.inputUsdPerMillion * (longContext ? 2 : 1)
+    + usage.cachedInputTokens * pricing.cachedInputUsdPerMillion * (longContext ? 2 : 1)
+    + usage.outputTokens * pricing.outputUsdPerMillion * (longContext ? 1.5 : 1)
   ) / 1_000_000;
 }
 
 type ArtifactRun = {
   id: string;
-  model: typeof LUNA_EVAL_MODELS[keyof typeof LUNA_EVAL_MODELS];
+  model: LunaEvalModel;
   effort: "high" | "medium" | "low";
   transport: "api" | "subscription";
   promptSha256: string;
@@ -216,7 +234,7 @@ function validateArtifact(artifact: EvaluationArtifact, artifactSha256: string):
   if (artifact.run.transport !== "api" && artifact.run.transport !== "subscription") {
     throw new Error("Artifact transport must be api or subscription");
   }
-  if (artifact.run.model !== LUNA_EVAL_MODELS[artifact.run.transport]) {
+  if (!(LUNA_EVAL_MODELS[artifact.run.transport] as readonly string[]).includes(artifact.run.model)) {
     throw new Error("Artifact model is not the frozen Luna model for its transport");
   }
   if (!/^[a-f0-9]{64}$/.test(artifactSha256)) throw new Error("artifactSha256 must be a full SHA-256");
@@ -269,7 +287,7 @@ function validateArtifact(artifact: EvaluationArtifact, artifactSha256: string):
     throw new Error("Production usage does not match native call records");
   }
   const expectedCost = artifact.run.transport === "api"
-    ? productionCalls.reduce((total, call) => total + lunaApiCost(call.usage), 0)
+    ? productionCalls.reduce((total, call) => total + lunaApiCost(call.usage, artifact.run.model), 0)
     : 0;
   if (Math.abs(expectedCost - artifact.run.costUsd) > 1e-9) throw new Error("costUsd does not match pinned Luna pricing and call usage");
   for (const values of Object.values(artifact.run.selection)) {

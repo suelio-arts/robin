@@ -33,15 +33,20 @@ The frozen synthetic generation-5 holdout caught all six seeded regressions
 machine-local and are not part of this portable historical manifest.
 
 Use subscription transport (agent-bridge `luna-6-*-subscription`, model `gpt-6-luna`)
-for prompt development without API spend. Promotion
-requires OpenAI-direct API transport (`gpt-5.6-luna`) so cost is recomputed from native per-call usage at the
-pinned [official Luna rate](https://developers.openai.com/api/docs/models/gpt-5.6-luna)
-($1 input, $0.10 cached input, $6 output per million tokens):
+for prompt development without API spend. Promotion requires OpenAI-direct API
+transport so cost is recomputed from native per-call usage at the pinned official
+rate for the run's model (standard, per million tokens; prompts over 272K input
+tokens bill 2x input/cache and 1.5x output):
+
+| Agent | Model | Input | Cached input | Output |
+| --- | --- | --- | --- | --- |
+| `luna-6-{high,low}-api` | [`gpt-6-luna`](https://developers.openai.com/api/docs/models/gpt-6-luna) | $0.10 | $0.01 | $0.50 |
+| `luna-5-6-{high,low}-api` (history) | [`gpt-5.6-luna`](https://developers.openai.com/api/docs/models/gpt-5.6-luna) | $0.20 | $0.02 | $1.20 |
 
 ```bash
 npm run eval:mix -- /tmp/mix-review-results.json
 EVAL_AGENT=luna-6-low-subscription npm run eval:mix -- /tmp/mix-review-results-low.json
-EVAL_SET=holdout EVAL_AGENT=luna-5-6-high-api npm run eval:mix -- /tmp/mix-holdout-results.json
+EVAL_SET=holdout EVAL_AGENT=luna-6-high-api npm run eval:mix -- /tmp/mix-holdout-results.json
 ```
 
 Every result records the exact model/effort/transport, Robin commit, prompt SHA-256,

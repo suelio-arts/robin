@@ -10,7 +10,7 @@ import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "../src/contract-discovery";
 import { LLMClient } from "../src/llm-client";
-import { LUNA_API_PRICING, LUNA_EVAL_MODELS, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
+import { LUNA_API_PRICING, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
 import { ReviewBudget, runDiscovery } from "../src/discovery";
 import { executeEvidenceRequests } from "../src/evidence-loop";
 
@@ -32,17 +32,19 @@ const manifest = JSON.parse(manifestSource) as {
   holdoutNegativeControls: NegativeControl[];
 };
 const EVAL_AGENTS = {
-  "luna-6-high-subscription": {effort: "high", transport: "subscription"},
-  "luna-6-medium-subscription": {effort: "medium", transport: "subscription"},
-  "luna-6-low-subscription": {effort: "low", transport: "subscription"},
+  "luna-6-high-subscription": {effort: "high", transport: "subscription", model: "gpt-6-luna"},
+  "luna-6-medium-subscription": {effort: "medium", transport: "subscription", model: "gpt-6-luna"},
+  "luna-6-low-subscription": {effort: "low", transport: "subscription", model: "gpt-6-luna"},
   // OpenAI-direct promotion runs; these labels are not agent-bridge profiles.
-  "luna-5-6-high-api": {effort: "high", transport: "api"},
-  "luna-5-6-low-api": {effort: "low", transport: "api"},
+  "luna-6-high-api": {effort: "high", transport: "api", model: "gpt-6-luna"},
+  "luna-6-low-api": {effort: "low", transport: "api", model: "gpt-6-luna"},
+  "luna-5-6-high-api": {effort: "high", transport: "api", model: "gpt-5.6-luna"},
+  "luna-5-6-low-api": {effort: "low", transport: "api", model: "gpt-5.6-luna"},
 } as const;
 const evalAgent = process.env.EVAL_AGENT || "luna-6-high-subscription";
 if (!(evalAgent in EVAL_AGENTS)) throw new Error(`Unsupported EVAL_AGENT: ${evalAgent}`);
 const evalConfig = EVAL_AGENTS[evalAgent as keyof typeof EVAL_AGENTS];
-const evalModel = LUNA_EVAL_MODELS[evalConfig.transport];
+const evalModel = evalConfig.model;
 const MIX_REVIEW_INSTRUCTIONS = [
   "Minimize false negatives on the initial review, but never invent a failure path.",
   "High findings block only for a proven production, security, data-loss, build, migration, or contract failure.",
@@ -218,7 +220,7 @@ function finishSnapshot(id: string): void {
 
 function runCostUsd(selectedCalls: typeof calls): number {
   if (evalConfig.transport === "subscription") return 0;
-  return selectedCalls.reduce((total, {usage}) => total + lunaApiCost(usage), 0);
+  return selectedCalls.reduce((total, {usage}) => total + lunaApiCost(usage, evalModel), 0);
 }
 
 function sumUsage(selectedCalls: typeof calls): TokenUsage {
@@ -256,7 +258,7 @@ function writeProgress(results: unknown[]): void {
       ),
       usage: sumUsage(productionCalls),
       benchmarkUsage: sumUsage(calls),
-      pricing: evalConfig.transport === "api" ? LUNA_API_PRICING : {source: "subscription-unpriced"},
+      pricing: evalConfig.transport === "api" ? LUNA_API_PRICING[evalModel] : {source: "subscription-unpriced"},
       selection: {
         prs: [...selectedPrs].sort((a, b) => a - b),
         heads: [...selectedHeads].sort(),

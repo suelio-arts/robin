@@ -66,7 +66,7 @@ Workflow/script checks covered both Robin checkouts' evaluator/manifest tests, f
 
 ## How to rerun
 
-For the Luna 6 commands below, use a clean isolated Robin evaluator checkout pinned to `164b252` (the inspected current evaluator; resolve and verify the exact commit before use). Historical candidate reproduction is a separate run using that candidate's historical evaluator and supported transports. The retained fixture refs must be fetched into an isolated `robin-benchmark` checkout; verify every manifest base/head exists with `git cat-file -e <sha>^{commit}`. Closed PRs need not be reopened. Use the manifest's exact SHAs, including earlier positive heads that differ from today's corrected PR heads.
+For the Luna 6 commands below, use a clean isolated Robin evaluator checkout pinned to `164b25283591ca6e278e449b206e7947e46fcb03` (the inspected current evaluator; resolve and verify the exact commit before use). Historical candidate reproduction is a separate run using that candidate's historical evaluator and supported transports. The retained fixture refs must be fetched into an isolated `robin-benchmark` checkout; verify every manifest base/head exists with `git cat-file -e <sha>^{commit}`. Closed PRs need not be reopened. Use the manifest's exact SHAs, including earlier positive heads that differ from today's corrected PR heads.
 
 ```bash
 # Run from a clean current Robin checkout; transport/model/effort are explicit.

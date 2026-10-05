@@ -81,7 +81,7 @@ File filters also constrain negative controls. Chunk filters skip negative contr
 Isolated repositories use the same evaluator with explicit inputs:
 
 ```bash
-MIX_REPO=/path/to/repository EVAL_MANIFEST=eval/sandbox-prs.json npm run eval:mix -- /tmp/run.json
+MIX_REPO=/path/to/repository EVAL_MANIFEST=eval/sandbox-prs.json EVAL_SET=holdout npm run eval:mix -- /tmp/run.json
 ```
 
 `sandbox-prs.json` is populated only from exact draft PR heads in the private
@@ -92,3 +92,5 @@ Score a finding only when it matches the PR, file, and root cause. Generic advic
 does not count. Bot agreement is not validation: incorrect bot findings belong in
 the negative controls. Run each candidate prompt at least three times before
 promotion; keep one locked holdout set out of prompt iteration.
+
+Benchmark history and fixture lifecycle: [2026-10-05 consolidation](../docs/benchmarks/2026-10-05-fixture-consolidation.md).

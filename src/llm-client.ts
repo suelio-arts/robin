@@ -1,3 +1,5 @@
+import {beginLlmUsageAttempt, finishLlmUsageAttempt, readLlmTokenUsage,
+  type LlmProviderOptions, type LlmTokenUsage} from "./llm-usage";
 import { OpenAI } from "openai";
 import {
   DEFAULT_LLM_COMPLETION_ATTEMPTS,
@@ -51,13 +53,7 @@ export interface ChatCompletionResult {
     model: string;
     effort: string;
   };
-  usage?: {
-    inputTokens: number;
-    cachedInputTokens: number;
-    outputTokens: number;
-    reasoningOutputTokens: number;
-    durationMs?: number;
-  };
+  usage?: LlmTokenUsage;
 }
 
 export type LlmProgressHandler = (detail: string) => void | Promise<void>;
@@ -85,6 +81,7 @@ export class LLMClient {
   private localAgent: boolean;
   private timeoutMs: number;
   private localAgentCaller: LocalAgentCaller;
+  private providerOptions: LlmProviderOptions;
   private startedAt = Date.now();
   private metrics = {calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0};
 
@@ -97,7 +94,8 @@ export class LLMClient {
     maxAttempts = DEFAULT_LLM_COMPLETION_ATTEMPTS,
     onProgress?: LlmProgressHandler,
     reasoningEffort?: ReasoningEffort,
-    localAgentCaller: LocalAgentCaller = "github"
+    localAgentCaller: LocalAgentCaller = "github",
+    providerOptions: LlmProviderOptions = {}
   ) {
     this.model = model;
     this.localAgent = baseUrl === ROLLY_AGENT_URL;
@@ -108,6 +106,7 @@ export class LLMClient {
     this.onProgress = onProgress;
     this.reasoningEffort = reasoningEffort;
     this.localAgentCaller = localAgentCaller;
+    this.providerOptions = providerOptions;
     this.maxOutputTokens =
       maxOutputTokens && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
         ? maxOutputTokens
@@ -330,27 +329,18 @@ export class LLMClient {
   private async blockingChatCompletion(
     request: OpenAI.Chat.Completions.ChatCompletionCreateParams
   ): Promise<ChatCompletionResult> {
-    const response = await this.client.chat.completions.create({
-      ...request,
-      stream: false,
-    });
-    const usage = response.usage as undefined | {
-      prompt_tokens: number;
-      completion_tokens: number;
-      prompt_tokens_details?: {cached_tokens?: number};
-      completion_tokens_details?: {reasoning_tokens?: number};
-    };
-    return {
-      content: this.extractMessageContent(response),
-      model: response.model || this.model,
-      callId: response.id,
-      usage: usage ? {
-        inputTokens: usage.prompt_tokens || 0,
-        cachedInputTokens: usage.prompt_tokens_details?.cached_tokens || 0,
-        outputTokens: usage.completion_tokens || 0,
-        reasoningOutputTokens: usage.completion_tokens_details?.reasoning_tokens || 0,
-      } : undefined,
-    };
+    const attempt = beginLlmUsageAttempt(this.providerOptions, this.model);
+    let response: OpenAI.Chat.Completions.ChatCompletion;
+    try {
+      response = await this.client.chat.completions.create({...request, stream: false});
+    } catch (error) {
+      finishLlmUsageAttempt(attempt, rejectedProviderRequest(error) ? "rejected" : "failed", this.model);
+      throw error;
+    }
+    const usage = readLlmTokenUsage(response.usage);
+    finishLlmUsageAttempt(attempt, "completed", response.model || this.model, response.id, usage);
+    return {content: this.extractMessageContent(response), model: response.model || this.model,
+      callId: response.id, usage};
   }
 
   /** Stream so the first SSE chunk (model id) proves OpenRouter routed; abort if none arrives. */
@@ -372,15 +362,19 @@ export class LLMClient {
       }
     };
 
+    const attempt = beginLlmUsageAttempt(this.providerOptions, this.model);
+    let resolvedModel = this.model;
+    let callId: string | undefined;
+    let usage: LlmTokenUsage | undefined;
+    let requestAccepted = false;
     try {
       const stream = await this.client.chat.completions.create(
-        { ...request, stream: true },
+        { ...request, stream: true, ...(this.providerOptions.usageJsonl ? {stream_options: {include_usage: true}} : {}) },
         { signal: controller.signal }
       );
 
+      requestAccepted = true;
       const parts: string[] = [];
-      let resolvedModel = this.model;
-      let callId: string | undefined;
 
       for await (const chunk of stream) {
         if (!gotFirstChunk) {
@@ -404,10 +398,14 @@ export class LLMClient {
           resolvedModel = chunk.model;
         }
         if (chunk.id) callId = chunk.id;
+        const reportedUsage = readLlmTokenUsage((chunk as typeof chunk & {usage?: unknown}).usage);
+        if (reportedUsage) usage = reportedUsage;
       }
 
-      return { content: parts.join(""), model: resolvedModel, callId };
+      finishLlmUsageAttempt(attempt, "completed", resolvedModel, callId, usage);
+      return { content: parts.join(""), model: resolvedModel, callId, usage };
     } catch (error) {
+      finishLlmUsageAttempt(attempt, !requestAccepted && rejectedProviderRequest(error) ? "rejected" : "failed", resolvedModel, callId, usage);
       clearStallTimer();
       if (!gotFirstChunk) {
         throw openRouterStallError(firstChunkMs);
@@ -423,6 +421,8 @@ export class LLMClient {
   ): OpenAI.Chat.Completions.ChatCompletionCreateParams {
     const request: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
       model: this.model,
+      ...(this.providerOptions.user ? {user: this.providerOptions.user} : {}),
+      ...(this.providerOptions.metadata ? {metadata: this.providerOptions.metadata} : {}),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent },
@@ -476,4 +476,9 @@ export class LLMClient {
     );
     return "";
   }
+}
+
+/** A definite client/rate-limit rejection supersedes the pre-dispatch marker. */
+function rejectedProviderRequest(error: unknown): boolean {
+  return error instanceof OpenAI.APIError && typeof error.status === "number" && [400, 401, 403, 404, 409, 422, 429].includes(error.status);
 }

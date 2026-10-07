@@ -1541,6 +1541,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.LLMClient = exports.LOCAL_AGENT_CALLERS = exports.LOCAL_AGENT_COMPLETION_CONTRACT = void 0;
+const llm_usage_1 = __nccwpck_require__(9292);
 const openai_1 = __nccwpck_require__(2583);
 const config_1 = __nccwpck_require__(4008);
 const llm_retry_1 = __nccwpck_require__(4069);
@@ -1581,9 +1582,10 @@ class LLMClient {
     localAgent;
     timeoutMs;
     localAgentCaller;
+    providerOptions;
     startedAt = Date.now();
     metrics = { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 };
-    constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort, localAgentCaller = "github") {
+    constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort, localAgentCaller = "github", providerOptions = {}) {
         this.model = model;
         this.localAgent = baseUrl === ROLLY_AGENT_URL;
         if (this.localAgent && !ROBIN_LOCAL_AGENTS.has(model)) {
@@ -1593,6 +1595,7 @@ class LLMClient {
         this.onProgress = onProgress;
         this.reasoningEffort = reasoningEffort;
         this.localAgentCaller = localAgentCaller;
+        this.providerOptions = providerOptions;
         this.maxOutputTokens =
             maxOutputTokens && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
                 ? maxOutputTokens
@@ -1770,22 +1773,19 @@ class LLMClient {
         }
     }
     async blockingChatCompletion(request) {
-        const response = await this.client.chat.completions.create({
-            ...request,
-            stream: false,
-        });
-        const usage = response.usage;
-        return {
-            content: this.extractMessageContent(response),
-            model: response.model || this.model,
-            callId: response.id,
-            usage: usage ? {
-                inputTokens: usage.prompt_tokens || 0,
-                cachedInputTokens: usage.prompt_tokens_details?.cached_tokens || 0,
-                outputTokens: usage.completion_tokens || 0,
-                reasoningOutputTokens: usage.completion_tokens_details?.reasoning_tokens || 0,
-            } : undefined,
-        };
+        const attempt = (0, llm_usage_1.beginLlmUsageAttempt)(this.providerOptions, this.model);
+        let response;
+        try {
+            response = await this.client.chat.completions.create({ ...request, stream: false });
+        }
+        catch (error) {
+            (0, llm_usage_1.finishLlmUsageAttempt)(attempt, rejectedProviderRequest(error) ? "rejected" : "failed", this.model);
+            throw error;
+        }
+        const usage = (0, llm_usage_1.readLlmTokenUsage)(response.usage);
+        (0, llm_usage_1.finishLlmUsageAttempt)(attempt, "completed", response.model || this.model, response.id, usage);
+        return { content: this.extractMessageContent(response), model: response.model || this.model,
+            callId: response.id, usage };
     }
     /** Stream so the first SSE chunk (model id) proves OpenRouter routed; abort if none arrives. */
     async streamChatCompletion(request) {
@@ -1802,11 +1802,15 @@ class LLMClient {
                 stallTimer = undefined;
             }
         };
+        const attempt = (0, llm_usage_1.beginLlmUsageAttempt)(this.providerOptions, this.model);
+        let resolvedModel = this.model;
+        let callId;
+        let usage;
+        let requestAccepted = false;
         try {
-            const stream = await this.client.chat.completions.create({ ...request, stream: true }, { signal: controller.signal });
+            const stream = await this.client.chat.completions.create({ ...request, stream: true, ...(this.providerOptions.usageJsonl ? { stream_options: { include_usage: true } } : {}) }, { signal: controller.signal });
+            requestAccepted = true;
             const parts = [];
-            let resolvedModel = this.model;
-            let callId;
             for await (const chunk of stream) {
                 if (!gotFirstChunk) {
                     gotFirstChunk = true;
@@ -1830,10 +1834,15 @@ class LLMClient {
                 }
                 if (chunk.id)
                     callId = chunk.id;
+                const reportedUsage = (0, llm_usage_1.readLlmTokenUsage)(chunk.usage);
+                if (reportedUsage)
+                    usage = reportedUsage;
             }
-            return { content: parts.join(""), model: resolvedModel, callId };
+            (0, llm_usage_1.finishLlmUsageAttempt)(attempt, "completed", resolvedModel, callId, usage);
+            return { content: parts.join(""), model: resolvedModel, callId, usage };
         }
         catch (error) {
+            (0, llm_usage_1.finishLlmUsageAttempt)(attempt, !requestAccepted && rejectedProviderRequest(error) ? "rejected" : "failed", resolvedModel, callId, usage);
             clearStallTimer();
             if (!gotFirstChunk) {
                 throw (0, llm_retry_1.openRouterStallError)(firstChunkMs);
@@ -1844,6 +1853,8 @@ class LLMClient {
     buildRequest(systemPrompt, userContent, jsonResponseMode) {
         const request = {
             model: this.model,
+            ...(this.providerOptions.user ? { user: this.providerOptions.user } : {}),
+            ...(this.providerOptions.metadata ? { metadata: this.providerOptions.metadata } : {}),
             messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userContent },
@@ -1887,6 +1898,10 @@ class LLMClient {
     }
 }
 exports.LLMClient = LLMClient;
+/** A definite client/rate-limit rejection supersedes the pre-dispatch marker. */
+function rejectedProviderRequest(error) {
+    return error instanceof openai_1.OpenAI.APIError && typeof error.status === "number" && [400, 401, 403, 404, 409, 422, 429].includes(error.status);
+}
 //# sourceMappingURL=llm-client.js.map
 
 /***/ }),
@@ -1980,6 +1995,93 @@ function openRouterStallError(firstChunkMs) {
 
 /***/ }),
 
+/***/ 9292:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseLlmProviderOptions = parseLlmProviderOptions;
+exports.readLlmTokenUsage = readLlmTokenUsage;
+exports.beginLlmUsageAttempt = beginLlmUsageAttempt;
+exports.finishLlmUsageAttempt = finishLlmUsageAttempt;
+const crypto_1 = __nccwpck_require__(6982);
+const fs_1 = __nccwpck_require__(9896);
+const path_1 = __nccwpck_require__(6928);
+function parseLlmProviderOptions(user, metadataJson, usageJsonl) {
+    let metadata;
+    if (metadataJson) {
+        try {
+            metadata = JSON.parse(metadataJson);
+        }
+        catch {
+            throw new Error("llm-metadata must be a JSON object of strings");
+        }
+        if (!metadata || typeof metadata !== "object" || Array.isArray(metadata) ||
+            Object.entries(metadata).some(([key, value]) => key.length > 64 || typeof value !== "string" || value.length > 512) ||
+            Object.keys(metadata).length > 16) {
+            throw new Error("llm-metadata must contain at most 16 string values (keys <=64, values <=512 characters)");
+        }
+    }
+    return { ...(user ? { user } : {}), ...(metadata ? { metadata: metadata } : {}),
+        ...(usageJsonl ? { usageJsonl: (0, path_1.resolve)(usageJsonl) } : {}) };
+}
+/** Preserve absence of cache-write usage instead of claiming a zero write. */
+function readLlmTokenUsage(value) {
+    if (!value || typeof value !== "object")
+        return undefined;
+    const raw = value;
+    const input = raw.prompt_tokens;
+    const output = raw.completion_tokens;
+    const cached = raw.prompt_tokens_details?.cached_tokens ?? 0;
+    const write = raw.prompt_tokens_details?.cache_write_tokens;
+    const write1h = raw.prompt_tokens_details?.cache_write_1h_tokens;
+    const reasoning = raw.completion_tokens_details?.reasoning_tokens ?? 0;
+    const count = (n) => typeof n === "number" && Number.isSafeInteger(n) && n >= 0;
+    if (!count(input) || !count(output) || !count(cached) || !count(reasoning) || cached > input ||
+        (write !== undefined && (!count(write) || write + cached > input)) ||
+        (write1h !== undefined && (!count(write1h) || !count(write) || write1h > write)))
+        return undefined;
+    return { inputTokens: input, cachedInputTokens: cached, outputTokens: output, reasoningOutputTokens: reasoning,
+        ...(write === undefined ? {} : { cacheWriteInputTokens: write }),
+        ...(write1h === undefined ? {} : { cacheWrite1hInputTokens: write1h }) };
+}
+function appendReceipt(attempt) {
+    (0, fs_1.mkdirSync)((0, path_1.dirname)(attempt.file), { recursive: true, mode: 0o700 });
+    const fd = (0, fs_1.openSync)(attempt.file, "a", 0o600);
+    try {
+        (0, fs_1.writeSync)(fd, `${JSON.stringify(attempt.receipt)}\n`);
+        (0, fs_1.fsyncSync)(fd);
+    }
+    finally {
+        (0, fs_1.closeSync)(fd);
+    }
+}
+/** Persist before dispatch so interrupted processes leave a visible attempt. */
+function beginLlmUsageAttempt(options, model) {
+    if (!options.usageJsonl)
+        return undefined;
+    const attempt = { file: options.usageJsonl, receipt: {
+            id: (0, crypto_1.randomUUID)(), occurredAtMs: Date.now(), auth: "api", model, status: "started", uncertainty: "transport",
+            ...(options.user ? { user: options.user } : {}), ...(options.metadata ? { metadata: options.metadata } : {}),
+        } };
+    appendReceipt(attempt);
+    return attempt;
+}
+/** Consumers use the last line per stable attempt id, retaining every retry. */
+function finishLlmUsageAttempt(attempt, status, model, providerRequestId, usage) {
+    if (!attempt)
+        return;
+    const { uncertainty: _uncertainty, ...identity } = attempt.receipt;
+    const receipt = { ...identity, status, model,
+        ...(providerRequestId ? { providerRequestId } : {}), ...(usage ? { usage } : {}),
+        ...(status === "rejected" || usage ? {} : { uncertainty: status === "completed" ? "missing_usage" : "transport" }) };
+    appendReceipt({ ...attempt, receipt });
+}
+//# sourceMappingURL=llm-usage.js.map
+
+/***/ }),
+
 /***/ 7160:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -2020,6 +2122,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.formatPriorFindings = formatPriorFindings;
+const llm_usage_1 = __nccwpck_require__(9292);
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const llm_client_1 = __nccwpck_require__(3316);
@@ -2129,6 +2232,9 @@ async function run() {
         const apiKey = core.getInput("llm-api-key") || "ollama";
         const baseUrl = core.getInput("llm-base-url") || "";
         const model = core.getInput("model") || "";
+        const providerOptions = (0, llm_usage_1.parseLlmProviderOptions)(core.getInput("llm-user"), core.getInput("llm-metadata"), core.getInput("llm-usage-jsonl"));
+        if (providerOptions.usageJsonl)
+            core.setOutput("llm-usage-jsonl", providerOptions.usageJsonl);
         const reasoningEffortInput = core.getInput("reasoning-effort") || "";
         if (reasoningEffortInput && !["low", "medium", "high"].includes(reasoningEffortInput)) {
             throw new Error(`Invalid reasoning-effort: ${reasoningEffortInput}`);
@@ -2269,7 +2375,7 @@ async function run() {
         }
         const llm = new llm_client_1.LLMClient(baseUrl, apiKey, model, maxOutputTokens, llmTimeoutMs, undefined, async (detail) => {
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildProgressStatusBody(detail, statusCommand, statusModel));
-        }, reasoningEffortInput, (0, review_run_1.resolveAgentCaller)(process.env.ROBIN_AGENT_CALLER));
+        }, reasoningEffortInput, (0, review_run_1.resolveAgentCaller)(process.env.ROBIN_AGENT_CALLER), providerOptions);
         const useJsonMode = command === "review" && jsonResponseMode;
         if (command === "summary") {
             const reviewText = (await runSummary(llm, summaryDiff)).content;

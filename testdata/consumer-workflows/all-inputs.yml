@@ -22,6 +22,9 @@ jobs:
       pr-number: ""
       expected-head-sha: ""
       fail-on-high: false
+      llm-user: "fixture-review"
+      llm-metadata: '{"feature":"review"}'
+      llm-usage-jsonl: "receipts.jsonl"
       reasoning-effort: low
       # String input preserves omission as empty so repository config can win.
       request-changes: ${{ 'false' }}

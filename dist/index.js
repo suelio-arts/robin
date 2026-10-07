@@ -1854,7 +1854,9 @@ class LLMClient {
         const request = {
             model: this.model,
             ...(this.providerOptions.user ? { user: this.providerOptions.user } : {}),
-            ...(this.providerOptions.metadata ? { metadata: this.providerOptions.metadata } : {}),
+            // Chat Completions metadata requires stored output. Keep review content
+            // unstored; generic metadata remains in the local per-attempt receipts.
+            store: false,
             messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userContent },

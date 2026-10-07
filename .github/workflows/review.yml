@@ -24,7 +24,7 @@ on:
         type: string
         default: ""
       llm-metadata:
-        description: "Optional JSON object of provider metadata strings."
+        description: "Optional JSON object of local receipt metadata strings; unstored Chat Completions omits wire metadata."
         required: false
         type: string
         default: ""

@@ -112,7 +112,7 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `llm-base-url` / `LLM_BASE_URL` | — | OpenAI-compatible base URL (required) |
 | `model` / `LLM_MODEL` | — | Model name (required) |
 | `llm-user` | empty | Optional generic OpenAI-compatible attribution user |
-| `llm-metadata` | empty | Optional JSON object of string provider metadata (at most 16 keys) |
+| `llm-metadata` | empty | Optional JSON object of string local receipt metadata (at most 16 keys); Chat Completions uses `llm-user` and `store=false`, without wire metadata |
 | `llm-usage-jsonl` | empty | Optional local path for durable metadata-only receipts per API attempt |
 | `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
 | `fail-on-high` | `false` | Fail the check if high-severity issues are found |

@@ -31,12 +31,15 @@ const response = (content = "{}") => ({id: "provider_fixture", model: "gpt-6-lun
   usage: {prompt_tokens: 1000, completion_tokens: 20, prompt_tokens_details: {cached_tokens: 400, cache_write_tokens: 200},
     completion_tokens_details: {reasoning_tokens: 5}}});
 
-test("actual SDK request carries generic metadata and persists split usage before text extraction", async () => {
+test("actual SDK request keeps output unstored, tags the user and persists split usage before text extraction", async () => {
   mockCreate.mockImplementation(async request => {
     expect(request.user).toBe(options.user);
-    expect(request.metadata).toEqual(options.metadata);
+    expect(request.store).toBe(false);
+    expect(request).not.toHaveProperty("metadata");
     const before = JSON.parse(readFileSync(usageJsonl, "utf8"));
     expect(before.status).toBe("started");
+    expect(before.metadata).toEqual(options.metadata);
+    expect(before.user).toBe(options.user);
     expect(before.uncertainty).toBe("transport");
     return response();
   });
@@ -79,6 +82,9 @@ test("missing usage remains uncertain while definite HTTP rejection supersedes i
 test("interrupted streams preserve reported usage and request identity", async () => {
   mockCreate.mockImplementation(async request => {
     expect(request.stream_options).toEqual({include_usage: true});
+    expect(request.store).toBe(false);
+    expect(request.user).toBe(options.user);
+    expect(request).not.toHaveProperty("metadata");
     return (async function* () {
       yield {id: "stream_fixture", model: "actual-route", choices: [{delta: {content: "partial"}}]};
       yield {id: "stream_fixture", model: "actual-route", choices: [], usage: response().usage};
@@ -140,7 +146,8 @@ test("evaluation environment configuration reaches SDK attribution and durable r
   expect(mockCreate).toHaveBeenCalledTimes(2);
   for (const [request] of mockCreate.mock.calls) {
     expect(request.user).toBe(options.user);
-    expect(request.metadata).toEqual(options.metadata);
+    expect(request.store).toBe(false);
+    expect(request).not.toHaveProperty("metadata");
   }
   const completed = (await receipts()).filter(line => line.status === "completed");
   expect(completed).toHaveLength(2);
@@ -152,4 +159,22 @@ test("evaluation options are additive and reject invalid metadata before API dis
   expect(evalLlmProviderOptions({OPENAI_API_KEY: "fixture-key"})).toEqual({});
   expect(() => evalLlmProviderOptions({EVAL_LLM_METADATA: '{"private-fixture":42}'})).toThrow("string");
   expect(mockCreate).not.toHaveBeenCalled();
+});
+
+
+test("provider storage/metadata constraint accepts attributed requests on every retry", async () => {
+  mockCreate.mockImplementation(async request => {
+    if (request.metadata && request.store !== true) {
+      throw new OpenAI.APIError(400, undefined, "metadata parameter only allowed when store enabled", undefined);
+    }
+    expect(request.store).toBe(false);
+    expect(request.user).toBe(options.user);
+    return response(mockCreate.mock.calls.length === 1 ? "" : "{}");
+  });
+  await expect(client("gpt-6-luna", 2).chatCompletion("system", "user")).resolves.toMatchObject({content: "{}"});
+  expect(mockCreate).toHaveBeenCalledTimes(2);
+  const completed = (await receipts()).filter(line => line.status === "completed");
+  expect(completed).toHaveLength(2);
+  expect(new Set(completed.map(line => line.id)).size).toBe(2);
+  expect(completed.every(line => line.metadata.feature === "review" && line.user === options.user)).toBe(true);
 });

@@ -111,6 +111,9 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `llm-api-key` / `LLM_API_KEY` | `ollama` | Provider API key |
 | `llm-base-url` / `LLM_BASE_URL` | — | OpenAI-compatible base URL (required) |
 | `model` / `LLM_MODEL` | — | Model name (required) |
+| `llm-user` | empty | Optional generic OpenAI-compatible attribution user |
+| `llm-metadata` | empty | Optional JSON object of string provider metadata (at most 16 keys) |
+| `llm-usage-jsonl` | empty | Optional local path for durable metadata-only receipts per API attempt |
 | `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
 | `fail-on-high` | `false` | Fail the check if high-severity issues are found |
 | `request-changes` | direct action: repo config → `true`; reusable workflow: `false` | `true` submits REQUEST_CHANGES on high findings and APPROVE only when there are no findings; `false` posts a non-blocking COMMENT. Reusable-workflow callers must pass `true` for enforcement. |
@@ -353,3 +356,25 @@ No daily quota from this action. Real limits:
 - Provider presets
 - Large PR chunking by file
 - GitHub App install flow
+
+
+### API attempt usage export
+
+Set `llm-usage-jsonl` to export usage without prompts, response text or credentials.
+The action output of the same name contains its resolved path. Each SDK attempt
+appends a synchronous durable `started` receipt before dispatch and then a final
+receipt before response text parsing. Retries have separate stable `id` values.
+Consumers use the last line for each id: `completed` or `failed` receipts include
+reported usage when available; unresolved attempts retain `transport` or
+`missing_usage` uncertainty. A definite HTTP 400/401/403/404/409/422/429 rejection ends with `rejected`
+and must be excluded from billable totals. A killed process leaves its started
+receipt visible. `providerRequestId` remains distinct from the stable attempt id.
+
+Receipts contain `id`, `occurredAtMs`, `auth: "api"`, actual resolved `model`,
+`status`, optional generic `user`/`metadata`, and `usage` or `uncertainty`.
+Usage reports total `inputTokens` (cache reads/writes are subsets),
+`cachedInputTokens`, `outputTokens`, `reasoningOutputTokens`, and optional
+`cacheWriteInputTokens`/`cacheWrite1hInputTokens` only when actually reported.
+This export does not price tokens. It applies to API requests; subscription
+local-agent behavior remains unchanged. With all three inputs omitted, provider
+request payloads and usage-file behavior remain unchanged.

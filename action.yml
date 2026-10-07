@@ -28,6 +28,18 @@ inputs:
   model:
     description: "Provider model name (for example gpt-6-luna on the OpenAI API), or a subscription profile such as sol-6.1-low-subscription or luna-6-low-subscription with rolly-agent."
     required: true
+  llm-user:
+    description: "Optional OpenAI-compatible user identifier for provider usage attribution."
+    required: false
+    default: ""
+  llm-metadata:
+    description: "Optional JSON object of string metadata sent to OpenAI-compatible providers."
+    required: false
+    default: ""
+  llm-usage-jsonl:
+    description: "Optional local JSONL path for durable metadata-only receipts for every API attempt, including retries."
+    required: false
+    default: ""
   reasoning-effort:
     description: "Optional reasoning effort for compatible models: low, medium, or high."
     required: false
@@ -82,6 +94,8 @@ inputs:
     default: ""
 
 outputs:
+  llm-usage-jsonl:
+    description: "Resolved usage receipt path. Last line per attempt id supersedes prior progress; rejected attempts are not billable."
   outcome:
     description: "Coverage of the reviewed head: reviewed, reused, skipped, incomplete, or stale-head (nothing posted)."
   head:

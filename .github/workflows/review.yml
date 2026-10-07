@@ -18,6 +18,21 @@ on:
         required: false
         type: boolean
         default: false
+      llm-user:
+        description: "Optional OpenAI-compatible attribution user."
+        required: false
+        type: string
+        default: ""
+      llm-metadata:
+        description: "Optional JSON object of provider metadata strings."
+        required: false
+        type: string
+        default: ""
+      llm-usage-jsonl:
+        description: "Optional metadata-only API attempt receipt path."
+        required: false
+        type: string
+        default: ""
       reasoning-effort:
         description: "Optional reasoning effort for compatible models: low, medium, or high."
         required: false
@@ -134,6 +149,9 @@ jobs:
           llm-api-key: ${{ secrets.LLM_API_KEY }}
           llm-base-url: ${{ secrets.LLM_BASE_URL }}
           model: ${{ secrets.LLM_MODEL }}
+          llm-user: ${{ inputs.llm-user }}
+          llm-metadata: ${{ inputs.llm-metadata }}
+          llm-usage-jsonl: ${{ inputs.llm-usage-jsonl }}
           reasoning-effort: ${{ inputs.reasoning-effort }}
           fail-on-high: ${{ inputs.fail-on-high }}
           request-changes: ${{ inputs.request-changes }}

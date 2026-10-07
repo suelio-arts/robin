@@ -1,3 +1,4 @@
+import {parseLlmProviderOptions} from "./llm-usage";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
@@ -149,6 +150,8 @@ async function run(): Promise<void> {
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
     const model = core.getInput("model") || "";
+    const providerOptions = parseLlmProviderOptions(core.getInput("llm-user"), core.getInput("llm-metadata"), core.getInput("llm-usage-jsonl"));
+    if (providerOptions.usageJsonl) core.setOutput("llm-usage-jsonl", providerOptions.usageJsonl);
     const reasoningEffortInput = core.getInput("reasoning-effort") || "";
     if (reasoningEffortInput && !["low", "medium", "high"].includes(reasoningEffortInput)) {
       throw new Error(`Invalid reasoning-effort: ${reasoningEffortInput}`);
@@ -370,7 +373,8 @@ async function run(): Promise<void> {
         );
       },
       reasoningEffortInput as "low" | "medium" | "high" | undefined,
-      resolveAgentCaller(process.env.ROBIN_AGENT_CALLER)
+      resolveAgentCaller(process.env.ROBIN_AGENT_CALLER),
+      providerOptions
     );
     const useJsonMode = command === "review" && jsonResponseMode;
     

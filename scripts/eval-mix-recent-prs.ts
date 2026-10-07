@@ -10,6 +10,7 @@ import { ReviewParser, StructuredReview } from "../src/review-parser";
 import { buildFileContext } from "../src/review-context";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "../src/contract-discovery";
 import { LLMClient } from "../src/llm-client";
+import { evalLlmProviderOptions } from "../src/eval-llm-options";
 import { LUNA_API_PRICING, TokenUsage, lunaApiCost, negativeSnapshotDurationId, snapshotId } from "../src/eval-score";
 import { ReviewBudget, runDiscovery } from "../src/discovery";
 import { executeEvidenceRequests } from "../src/evidence-loop";
@@ -67,7 +68,8 @@ const client = new LLMClient(
   1,
   undefined,
   evalConfig.effort,
-  "codex"
+  "codex",
+  evalLlmProviderOptions(process.env)
 );
 const runStartedMs = Date.now();
 let activeSnapshotStartedMs: number | undefined;

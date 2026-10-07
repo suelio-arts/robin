@@ -13,6 +13,7 @@ jest.mock("./llm-retry", () => ({...jest.requireActual("./llm-retry"), delayMs: 
 import { OpenAI } from "openai";
 import { LLMClient } from "./llm-client";
 import { parseLlmProviderOptions } from "./llm-usage";
+import { evalLlmProviderOptions } from "./eval-llm-options";
 
 const options = {user: "generic:test:review", metadata: {feature: "review", environment: "test"}};
 let root: string;
@@ -124,4 +125,31 @@ test("HTTP 408 remains ambiguous rather than disappearing as an unbilled rejecti
   mockCreate.mockRejectedValueOnce(new OpenAI.APIError(408, undefined, "fixture timeout", undefined));
   await expect(client().chatCompletion("system", "user")).rejects.toThrow();
   expect((await receipts()).at(-1)).toMatchObject({status: "failed", uncertainty: "transport"});
+});
+
+test("evaluation environment configuration reaches SDK attribution and durable retry receipts", async () => {
+  const providerOptions = evalLlmProviderOptions({
+    EVAL_LLM_USER: options.user,
+    EVAL_LLM_METADATA: JSON.stringify(options.metadata),
+    EVAL_LLM_USAGE_JSONL: usageJsonl,
+  });
+  mockCreate.mockResolvedValueOnce(response("")).mockResolvedValueOnce(response("{}"));
+  const instance = new LLMClient("https://api.openai.com/v1", "fixture-key", "gpt-6-luna",
+    undefined, 90000, 2, undefined, "high", "codex", providerOptions);
+  await instance.chatCompletion("system", "user");
+  expect(mockCreate).toHaveBeenCalledTimes(2);
+  for (const [request] of mockCreate.mock.calls) {
+    expect(request.user).toBe(options.user);
+    expect(request.metadata).toEqual(options.metadata);
+  }
+  const completed = (await receipts()).filter(line => line.status === "completed");
+  expect(completed).toHaveLength(2);
+  expect(new Set(completed.map(line => line.id)).size).toBe(2);
+  expect(completed.every(line => line.usage.cacheWriteInputTokens === 200)).toBe(true);
+});
+
+test("evaluation options are additive and reject invalid metadata before API dispatch", () => {
+  expect(evalLlmProviderOptions({OPENAI_API_KEY: "fixture-key"})).toEqual({});
+  expect(() => evalLlmProviderOptions({EVAL_LLM_METADATA: '{"private-fixture":42}'})).toThrow("string");
+  expect(mockCreate).not.toHaveBeenCalled();
 });

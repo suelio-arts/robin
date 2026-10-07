@@ -49,6 +49,13 @@ EVAL_AGENT=luna-6-low-subscription npm run eval:mix -- /tmp/mix-review-results-l
 EVAL_SET=holdout EVAL_AGENT=luna-6-high-api npm run eval:mix -- /tmp/mix-holdout-results.json
 ```
 
+Direct-API runs optionally accept `EVAL_LLM_USER` and `EVAL_LLM_METADATA` (a JSON
+object of strings) for provider attribution. Set `EVAL_LLM_USAGE_JSONL` to export
+durable metadata-only receipts for every SDK attempt, including charged retries
+and interrupted requests. The JSONL export uses the same format as the action's
+`llm-usage-jsonl`; attribution and export remain opt-in, and subscription runs do
+not emit API receipts. No prompts or credentials enter this export.
+
 Every result records the exact model/effort/transport, Robin commit, prompt SHA-256,
 manifest SHA-256, native session IDs, per-PR wall time, call count, token usage,
 dollar cost, and the equivalent CodeRabbit

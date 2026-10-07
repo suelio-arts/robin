@@ -33,7 +33,7 @@ inputs:
     required: false
     default: ""
   llm-metadata:
-    description: "Optional JSON object of string metadata sent to OpenAI-compatible providers."
+    description: "Optional JSON object of string attribution metadata retained in local usage receipts. Chat Completions sends the user tag with store=false, without metadata."
     required: false
     default: ""
   llm-usage-jsonl:

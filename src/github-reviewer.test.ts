@@ -12,6 +12,47 @@ describe("GitHubReviewer", () => {
     expect(GitHubReviewer.resolveReviewEvent(false, false)).toBe("COMMENT");
   });
 
+  it.each(["reviewed", "fallback", "reused", "skipped", "incomplete"])(
+    "binds %s receipts to the reviewed commit when the PR advances before posting",
+    async (outcome) => {
+      const advancedHead = "c".repeat(40);
+      const postedReviews: Array<{commit_id: string; body: string}> = [];
+      const createReview = jest.fn().mockImplementation(async (request) => {
+        if (outcome === "fallback" && request.comments?.length) {
+          throw {status: 422, response: {data: {errors: [{field: "comments.line", code: "invalid"}]}}};
+        }
+        const review = {id: 30, html_url: "u", commit_id: request.commit_id || advancedHead, body: request.body};
+        postedReviews.push(review);
+        return {data: review};
+      });
+      const files = [{filename: "src/example.ts", patch: "@@ -1 +1 @@\n-before\n+after"}];
+      const octokit = {
+        paginate: jest.fn().mockResolvedValue(files),
+        rest: {pulls: {createReview, listFiles: {}, listReviews: {}, dismissReview: jest.fn()}},
+      };
+      const reviewer = new GitHubReviewer(octokit as any);
+      const findings = {
+        summary: "Finding", high: [], medium: [], suggestions: [], rawResponse: "",
+        low: [{severity: "low", file: "src/example.ts", line: 1, description: "Finding"}],
+      } as any;
+      if (outcome === "reviewed" || outcome === "fallback") {
+        await reviewer.postReview("o", "r", 7, findings, false, undefined, HEAD);
+      } else if (outcome === "reused") {
+        await reviewer.postCachedReview("o", "r", 7, {
+          event: "COMMENT", body: "## " + ROBIN_SIGNATURE,
+        }, HEAD);
+      } else if (outcome === "skipped") {
+        await reviewer.postSkippedReview("o", "r", 7, HEAD, "whitespace only");
+      } else {
+        await reviewer.postFailureReview("o", "r", 7, "timeout", HEAD);
+      }
+      expect(postedReviews).toHaveLength(1);
+      expect(postedReviews[0].commit_id).toBe(HEAD);
+      expect(parseOutcomeMarker(postedReviews[0].body)?.head).toBe(HEAD);
+      if (outcome === "fallback") expect(createReview).toHaveBeenCalledTimes(2);
+    }
+  );
+
   it("identifies stale Robin CHANGES_REQUESTED reviews to dismiss", () => {
     const robinBody = "## :bow_and_arrow: Robin\n\nfindings…";
     const bot = { type: "Bot" };

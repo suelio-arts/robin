@@ -1103,6 +1103,7 @@ class GitHubReviewer {
             repo,
             pull_number: pullNumber,
             event: "COMMENT",
+            commit_id: headSha,
             body: (0, outcome_1.appendOutcomeMarker)([
                 "## " + exports.ROBIN_SIGNATURE,
                 "",
@@ -1132,6 +1133,7 @@ class GitHubReviewer {
             repo,
             pull_number: pullNumber,
             event: "COMMENT",
+            commit_id: headSha,
             body: (0, outcome_1.appendOutcomeMarker)([
                 "## " + exports.ROBIN_SIGNATURE,
                 "",
@@ -1230,6 +1232,7 @@ class GitHubReviewer {
             pull_number: pullNumber,
             body,
             event: cached.event,
+            commit_id: headSha,
         });
         core.info("Reused cached " + cached.event + " verdict as review #" + review.id + " (0 model calls)");
         await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
@@ -1272,6 +1275,7 @@ class GitHubReviewer {
                     pull_number: pullNumber,
                     body,
                     event,
+                    commit_id: headSha,
                     comments,
                 });
                 review = response.data;
@@ -1288,6 +1292,7 @@ class GitHubReviewer {
                     // The failed review is not created, so include every finding in the fallback body.
                     body: this.buildReviewBody(findings, new Set()) + stamp,
                     event,
+                    commit_id: headSha,
                 });
                 review = response.data;
                 postedInlineComments = 0;

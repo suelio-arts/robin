@@ -121,6 +121,7 @@ export class GitHubReviewer {
       repo,
       pull_number: pullNumber,
       event: "COMMENT",
+      commit_id: headSha,
       body: appendOutcomeMarker(
         [
           "## " + ROBIN_SIGNATURE,
@@ -162,6 +163,7 @@ export class GitHubReviewer {
       repo,
       pull_number: pullNumber,
       event: "COMMENT",
+      commit_id: headSha,
       body: appendOutcomeMarker(
         [
           "## " + ROBIN_SIGNATURE,
@@ -288,6 +290,7 @@ export class GitHubReviewer {
       pull_number: pullNumber,
       body,
       event: cached.event,
+      commit_id: headSha,
     });
 
     core.info(
@@ -352,6 +355,7 @@ export class GitHubReviewer {
           pull_number: pullNumber,
           body,
           event,
+          commit_id: headSha,
           comments,
         });
         review = response.data;
@@ -370,6 +374,7 @@ export class GitHubReviewer {
           // The failed review is not created, so include every finding in the fallback body.
           body: this.buildReviewBody(findings, new Set()) + stamp,
           event,
+          commit_id: headSha,
         });
         review = response.data;
         postedInlineComments = 0;

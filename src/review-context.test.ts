@@ -1,6 +1,51 @@
 import { buildFileContext } from "./review-context";
 
 describe("buildFileContext", () => {
+  it.each([1, 2, 3])("does not expand a convention file when only %i characters remain", async (remaining) => {
+    const path = "docs/schema-migration-plan.md";
+    const files: Record<string, string> = {
+      "head:src/first.ts": "x".repeat(20000),
+      "base:src/first.ts": "x".repeat(20000),
+      "head:src/second.ts": "x".repeat(10000 - remaining),
+      [`head:${path}`]: "BEGIN" + "y".repeat(70000) + "END",
+    };
+    const context = await buildFileContext({
+      getFileContent: async (_owner, _repo, file, ref) => files[`${ref}:${file}`] || "",
+      getTreePaths: async () => [path],
+      searchPaths: async () => [],
+    }, "o", "r", [
+      "diff --git a/src/first.ts b/src/first.ts",
+      "+++ b/src/first.ts",
+      "+placeholder();",
+      "diff --git a/src/second.ts b/src/second.ts",
+      "+++ b/src/second.ts",
+      "+placeholder();",
+    ].join("\n"), "base", "head");
+
+    const value = context.split(`HEAD CONVENTION FILE: ${path}\n`)[1];
+    expect(value).toBeDefined();
+    expect(value.length).toBeLessThanOrEqual(remaining);
+    expect(context).not.toContain("END");
+  });
+
+  it("includes the omission marker inside the excerpt budget while preserving head and tail", async () => {
+    const context = await buildFileContext({
+      getFileContent: async (_owner, _repo, _path, ref) => ref === "head"
+        ? "HEAD" + "x".repeat(20992) + "TAIL" : "",
+      getTreePaths: async () => [],
+      searchPaths: async () => [],
+    }, "o", "r", [
+      "diff --git a/src/large.ts b/src/large.ts",
+      "+++ b/src/large.ts",
+      "+placeholder();",
+    ].join("\n"), "base", "head");
+    const value = context.split("HEAD FILE: src/large.ts\n")[1];
+    expect(value.length).toBeLessThanOrEqual(20000);
+    expect(value).toMatch(/^HEAD/);
+    expect(value).toContain("[... middle omitted ...]");
+    expect(value).toMatch(/TAIL$/);
+  });
+
   it("adds identifier neighborhoods from direct relative imports at the PR head", async () => {
     const files: Record<string, string> = {
       "head:src/route.ts": 'import { Walk } from "./types";\nconst first = walk.orderedElementIds?.[0] ?? walk.nodes[0].elementId;',

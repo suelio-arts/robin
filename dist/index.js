@@ -3282,9 +3282,17 @@ const FILE_LIMIT = 20000;
 const RELATED_LIMIT = 12000;
 const RELATED_REQUEST_LIMIT = 24;
 function excerpt(content, limit) {
+    if (limit <= 0)
+        return "";
     if (content.length <= limit)
         return content;
-    return `${content.slice(0, Math.floor(limit * 0.75))}\n[... middle omitted ...]\n${content.slice(-Math.floor(limit * 0.25))}`;
+    const marker = "\n[... middle omitted ...]\n";
+    if (limit <= marker.length)
+        return content.slice(0, limit);
+    const available = limit - marker.length;
+    const tailLength = Math.floor(available * 0.25);
+    const tail = tailLength > 0 ? content.slice(-tailLength) : "";
+    return `${content.slice(0, available - tailLength)}${marker}${tail}`;
 }
 async function buildFileContext(git, owner, repo, chunk, base, head) {
     let remaining = CONTEXT_LIMIT;

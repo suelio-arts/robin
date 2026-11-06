@@ -947,6 +947,27 @@ class GitUtils {
         return this.searches.get(key);
     }
     async fetchFileContent(owner, repo, path, ref) {
+        // Only immutable object IDs are eligible: a same-named local branch need
+        // not belong to the repository/ref requested through the API.
+        if (/^[0-9a-f]{40}$/i.test(ref)) {
+            try {
+                const { stdout: entry } = await exec("git", ["-C", this.workspace, "ls-tree", "-z", ref, "--", `:(literal)${path}`], {
+                    encoding: "utf8", maxBuffer: 1024 * 1024,
+                });
+                const match = /^(100644|100755) blob ([0-9a-f]{40})\t([^\0]*)\0$/.exec(entry);
+                // GitHub follows symlinks. Read only regular blobs locally, leaving
+                // symlinks, submodules and missing objects on the existing API path.
+                if (match && match[3] === path) {
+                    const { stdout } = await exec("git", ["-C", this.workspace, "cat-file", "blob", match[2]], {
+                        encoding: "utf8", maxBuffer: 1024 * 1024,
+                    });
+                    return stdout;
+                }
+            }
+            catch {
+                // An API-only ref or oversized blob retains the previous behavior.
+            }
+        }
         try {
             const { data } = await this.octokit.rest.repos.getContent({ owner, repo, path, ref });
             return "content" in data ? Buffer.from(data.content, "base64").toString("utf-8") : "";
@@ -970,6 +991,20 @@ class GitUtils {
         }
     }
     async fetchTreePaths(owner, repo, ref) {
+        if (/^[0-9a-f]{40}$/i.test(ref)) {
+            try {
+                const { stdout } = await exec("git", ["-C", this.workspace, "ls-tree", "-r", "-z", "--full-tree", ref], {
+                    encoding: "utf8", maxBuffer: 10 * 1024 * 1024,
+                });
+                return stdout.split("\0").filter(Boolean).flatMap((entry) => {
+                    const match = /^\d+ blob [0-9a-f]{40}\t([\s\S]*)$/.exec(entry);
+                    return match ? [match[1]] : [];
+                });
+            }
+            catch {
+                // A shallow/API-only checkout still uses the existing remote reader.
+            }
+        }
         const { data } = await this.octokit.rest.git.getTree({ owner, repo, tree_sha: ref, recursive: "true" });
         if (data.truncated)
             core.warning(`Tree listing for ${owner}/${repo}@${ref} was truncated`);

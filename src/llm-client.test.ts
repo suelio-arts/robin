@@ -13,14 +13,14 @@ describe("LLMClient", () => {
     const result = join(root, "result.txt");
     const events = join(root, "events.jsonl");
     await writeFile(result, "{}");
-    await writeFile(events, `${JSON.stringify({type: "result", usage: {input_tokens: 10, cache_read_input_tokens: 90, output_tokens: 5}})}\n`);
+    await writeFile(events, `${JSON.stringify({type: "result", usage: {input_tokens: 10, cache_read_input_tokens: 90, cache_creation_input_tokens: 20, output_tokens: 5}})}\n`);
     await writeFile(`${result}.meta.json`, JSON.stringify({events, session: "s", provider: "claude", auth: "subscription", model: "m", effort: "medium", duration_seconds: 1}));
     (execFile as unknown as jest.Mock).mockReset();
     (execFile as unknown as jest.Mock).mockImplementation((_file, _args, _options, callback) => callback(null, JSON.stringify({ result }), ""));
     try {
       const client = new LLMClient("rolly-agent", "", "opus-5-5-medium-subscription");
       await client.chatCompletion("system", "user", true);
-      expect(client.getMetrics()).toEqual(expect.objectContaining({calls: 1, inputTokens: 100, cachedInputTokens: 90, outputTokens: 5}));
+      expect(client.getMetrics()).toEqual(expect.objectContaining({calls: 1, inputTokens: 120, cachedInputTokens: 90, outputTokens: 5}));
     } finally {
       await rm(root, { recursive: true, force: true });
     }

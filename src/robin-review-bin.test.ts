@@ -1302,6 +1302,16 @@ describe("robin-review pr --local", () => {
     expect(fs.existsSync(dumpPath)).toBe(false);
   });
 
+  it("refuses a non-subscription council seat", () => {
+    writeFixture();
+
+    const result = local(["--council-model", "opus-5-5-medium-api"]);
+
+    expect(result.status).toBe(1);
+    expect(JSON.parse(result.stdout).message).toContain("-subscription");
+    expect(fs.existsSync(dumpPath)).toBe(false);
+  });
+
   it("does not execute while a Robin workflow run is active on the head", () => {
     writeFixture({
       workflows: [{ id: WORKFLOW_ID, path: ROBIN_PATH, state: "active" }],

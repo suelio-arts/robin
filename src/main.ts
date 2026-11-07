@@ -30,7 +30,7 @@ import {
   setPostedOutputs,
 } from "./review-run";
 import { buildFileContext } from "./review-context";
-import { buildPrecisionCandidates, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
+import { buildPrecisionCandidates, mergeCouncilVerdicts, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
 import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "./contract-discovery";
 import { ReviewBudget, runDiscovery } from "./discovery";
 import { executeEvidenceRequests } from "./evidence-loop";
@@ -150,6 +150,7 @@ async function run(): Promise<void> {
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
     const model = core.getInput("model") || "";
+    const councilModel = core.getInput("council-model") || "";
     const providerOptions = parseLlmProviderOptions(core.getInput("llm-user"), core.getInput("llm-metadata"), core.getInput("llm-usage-jsonl"));
     if (providerOptions.usageJsonl) core.setOutput("llm-usage-jsonl", providerOptions.usageJsonl);
     const reasoningEffortInput = core.getInput("reasoning-effort") || "";
@@ -356,10 +357,10 @@ async function run(): Promise<void> {
       }
     }
 
-    const llm = new LLMClient(
+    const createLlm = (seat: string, effort: typeof reasoningEffortInput) => new LLMClient(
       baseUrl,
       apiKey,
-      model,
+      seat,
       maxOutputTokens,
       llmTimeoutMs,
       undefined,
@@ -372,10 +373,14 @@ async function run(): Promise<void> {
           buildProgressStatusBody(detail, statusCommand, statusModel)
         );
       },
-      reasoningEffortInput as "low" | "medium" | "high" | undefined,
+      effort as "low" | "medium" | "high" | undefined,
       resolveAgentCaller(process.env.ROBIN_AGENT_CALLER),
       providerOptions
     );
+    const llm = createLlm(model, reasoningEffortInput);
+    const council: CouncilSeat | undefined = councilModel && command === "review"
+      ? {llm: createLlm(councilModel, ""), model: councilModel, discoveryFallbacks: 0, gateVoted: false, splitVerdicts: 0}
+      : undefined;
     const useJsonMode = command === "review" && jsonResponseMode;
     
     if (command === "summary") {
@@ -410,7 +415,8 @@ async function run(): Promise<void> {
           return discoverChunk(
             llm, chunk, context, reviewInstructions, useJsonMode,
             (requests) => executeEvidenceRequests(gitUtils, owner, repo, headRef, requests),
-            reviewBudget
+            reviewBudget,
+            council
           );
         }));
         candidateReviews.push(...reviews.map(({review}) => review));
@@ -424,12 +430,14 @@ async function run(): Promise<void> {
         reviewDiff,
         contractEvidence,
         priorRobinFindings,
-        reviewInstructions
+        reviewInstructions,
+        council
       );
       const metrics = llm.getMetrics();
       findings.summary += [
         "",
         `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${reviewBudget.usedFollowups} evidence follow-ups`,
+        ...(council ? [councilReceipt(model, council)] : []),
       ].join("\n");
 
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
@@ -850,17 +858,43 @@ async function discoverChunk(
   reviewInstructions: string,
   jsonResponseMode: boolean,
   loadEvidence: Parameters<typeof runDiscovery>[1],
-  budget: ReviewBudget
+  budget: ReviewBudget,
+  council?: CouncilSeat
 ): Promise<{review: StructuredReview; evidenceRequests: number; followedUp: boolean}> {
-  const complete = async (instructions: string) => {
-    const response = await runReview(llm, diff, reviewInstructions, jsonResponseMode, context, instructions);
+  const completeWith = (seat: LLMClient) => async (instructions: string) => {
+    const response = await runReview(seat, diff, reviewInstructions, jsonResponseMode, context, instructions);
     const parsed = ReviewParser.parseDetailed(response.content);
     if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
     return ReviewParser.parse((await runReview(
-      llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`
+      seat, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`
     )).content);
   };
-  return runDiscovery(complete, loadEvidence, budget);
+  const complete = completeWith(llm);
+  // A lost council seat must not cost the pass: the primary seat runs it instead.
+  const councilComplete = council && (async (instructions: string) => {
+    try {
+      return await completeWith(council.llm)(instructions);
+    } catch (error) {
+      council.discoveryFallbacks += 1;
+      core.warning(`Council seat ${council.model} failed discovery; primary seat ran the pass: ${error}`);
+      return complete(instructions);
+    }
+  });
+  return runDiscovery(complete, loadEvidence, budget, councilComplete);
+}
+
+type CouncilSeat = {
+  llm: LLMClient;
+  model: string;
+  discoveryFallbacks: number;
+  gateVoted: boolean;
+  splitVerdicts: number;
+};
+
+function councilReceipt(model: string, council: CouncilSeat): string {
+  const degraded = council.discoveryFallbacks > 0 || !council.gateVoted;
+  return `Robin council: ${model} + ${council.model} · ${council.splitVerdicts} split verdicts`
+    + (degraded ? ` · DEGRADED: ${council.discoveryFallbacks} discovery fallbacks, final vote ${council.gateVoted ? "held" : "single-seat"}` : "");
 }
 
 async function runFinalGate(
@@ -869,11 +903,13 @@ async function runFinalGate(
   diff: string,
   contractEvidence: string,
   priorRobinFindings: string,
-  reviewInstructions: string
+  reviewInstructions: string,
+  council?: CouncilSeat
 ): Promise<StructuredReview> {
   const candidates = buildPrecisionCandidates(reviews);
   const summary = "";
   if (candidates.length === 0) {
+    if (council) council.gateVoted = true;
     return {summary, high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
   }
   const precisionPrompt = [reviewInstructions, PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n");
@@ -884,6 +920,16 @@ async function runFinalGate(
     priorRobinFindings && `PRIOR ROBIN FINDINGS (keep only if still present):\n${priorRobinFindings}`,
     `CANDIDATE DIFF EVIDENCE:\n${buildCandidateDiffEvidence(diff, candidates.map(({finding}) => finding))}`,
   ].filter(Boolean).join("\n\n");
+  // A council seat that cannot vote leaves the primary verdict standing.
+  const councilVote = council && (async () => {
+    try {
+      const vote = await council.llm.chatCompletion(precisionPrompt, precisionInput, true);
+      return selectApprovedCandidates(candidates, vote.content, summary);
+    } catch (error) {
+      core.warning(`Council seat ${council.model} could not vote: ${error}`);
+      return undefined;
+    }
+  })();
   let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
   let precise: StructuredReview;
   try {
@@ -896,6 +942,13 @@ async function runFinalGate(
       core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
       precise = retainAllCandidates(candidates, summary, verdict.content);
     }
+  }
+  const vote = await councilVote;
+  if (council && vote) {
+    const merged = mergeCouncilVerdicts(precise, vote);
+    precise = merged.review;
+    council.splitVerdicts = merged.splitVerdicts;
+    council.gateVoted = true;
   }
 
   deduplicateFindings(precise);

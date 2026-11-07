@@ -648,10 +648,12 @@ class ReviewBudget {
     }
 }
 exports.ReviewBudget = ReviewBudget;
-async function runDiscovery(complete, loadEvidence, budget) {
-    // Serial order is deliberate: the adversarial call reuses the broad call's stable prompt cache prefix.
-    const broad = await complete(review_prompts_1.DISCOVERY_INSTRUCTIONS);
-    const adversarial = await complete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS);
+async function runDiscovery(complete, loadEvidence, budget, councilComplete) {
+    // Alone, serial keeps one seat's concurrency at the batch size. A council seat runs
+    // the adversarial pass in parallel: each provider still sees one call per chunk.
+    const [broad, adversarial] = councilComplete
+        ? await Promise.all([complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), councilComplete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)])
+        : [await complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), await complete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)];
     const initial = combine([broad, adversarial]);
     const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
     if (requests.length === 0) {
@@ -1599,7 +1601,13 @@ const ROBIN_LOCAL_AGENTS = new Set([
     "luna-6-low-subscription",
     "luna-6-medium-subscription",
     "luna-6-high-subscription",
+    "opus-5-5-medium-subscription",
+    "opus-5-5-high-subscription",
+    "sonnet-5-5-medium-subscription",
+    "sonnet-5-5-high-subscription",
 ]);
+// agent-bridge admits Claude on the GitHub-caller boundary only with no tools.
+const TOOL_FREE_LOCAL_AGENT = /^(opus|sonnet)-/;
 exports.LOCAL_AGENT_COMPLETION_CONTRACT = [
     "Act as a stateless model completion, not an autonomous coding agent.",
     "Do not call tools, run commands, read files, browse, or inspect any repository.",
@@ -1755,6 +1763,7 @@ class LLMClient {
                 "--workdir", workdir,
                 "--prompt", prompt,
                 "--timeout", String(timeoutSeconds),
+                ...(TOOL_FREE_LOCAL_AGENT.test(this.model) ? ["--tool-policy", "none"] : []),
             ], { timeout: this.timeoutMs, maxBuffer: 10 * 1024 * 1024 });
             const resultPath = JSON.parse(stdout).result;
             if (typeof resultPath !== "string" || !resultPath)
@@ -2274,6 +2283,7 @@ async function run() {
         const apiKey = core.getInput("llm-api-key") || "ollama";
         const baseUrl = core.getInput("llm-base-url") || "";
         const model = core.getInput("model") || "";
+        const councilModel = core.getInput("council-model") || "";
         const providerOptions = (0, llm_usage_1.parseLlmProviderOptions)(core.getInput("llm-user"), core.getInput("llm-metadata"), core.getInput("llm-usage-jsonl"));
         if (providerOptions.usageJsonl)
             core.setOutput("llm-usage-jsonl", providerOptions.usageJsonl);
@@ -2415,9 +2425,13 @@ async function run() {
                 return;
             }
         }
-        const llm = new llm_client_1.LLMClient(baseUrl, apiKey, model, maxOutputTokens, llmTimeoutMs, undefined, async (detail) => {
+        const createLlm = (seat, effort) => new llm_client_1.LLMClient(baseUrl, apiKey, seat, maxOutputTokens, llmTimeoutMs, undefined, async (detail) => {
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildProgressStatusBody(detail, statusCommand, statusModel));
-        }, reasoningEffortInput, (0, review_run_1.resolveAgentCaller)(process.env.ROBIN_AGENT_CALLER), providerOptions);
+        }, effort, (0, review_run_1.resolveAgentCaller)(process.env.ROBIN_AGENT_CALLER), providerOptions);
+        const llm = createLlm(model, reasoningEffortInput);
+        const council = councilModel && command === "review"
+            ? { llm: createLlm(councilModel, ""), model: councilModel, discoveryFallbacks: 0, gateVoted: false, splitVerdicts: 0 }
+            : undefined;
         const useJsonMode = command === "review" && jsonResponseMode;
         if (command === "summary") {
             const reviewText = (await runSummary(llm, summaryDiff)).content;
@@ -2441,18 +2455,19 @@ async function run() {
                 const reviews = await Promise.all(batch.map(async (chunk, offset) => {
                     core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
                     const context = await (0, review_context_1.buildFileContext)(gitUtils, owner, repo, chunk, baseRef, headRef);
-                    return discoverChunk(llm, chunk, context, reviewInstructions, useJsonMode, (requests) => (0, evidence_loop_1.executeEvidenceRequests)(gitUtils, owner, repo, headRef, requests), reviewBudget);
+                    return discoverChunk(llm, chunk, context, reviewInstructions, useJsonMode, (requests) => (0, evidence_loop_1.executeEvidenceRequests)(gitUtils, owner, repo, headRef, requests), reviewBudget, council);
                 }));
                 candidateReviews.push(...reviews.map(({ review }) => review));
                 evidenceRequests += reviews.reduce((total, review) => total + review.evidenceRequests, 0);
             }
             const priorRobinFindings = await loadPriorRobinFindings(octokit, owner, repo, prNumber);
             const contractEvidence = await searchContracts((0, contract_discovery_1.extractChangedContractQueries)(reviewDiff), true);
-            const findings = await runFinalGate(llm, candidateReviews, reviewDiff, contractEvidence, priorRobinFindings, reviewInstructions);
+            const findings = await runFinalGate(llm, candidateReviews, reviewDiff, contractEvidence, priorRobinFindings, reviewInstructions, council);
             const metrics = llm.getMetrics();
             findings.summary += [
                 "",
                 `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${reviewBudget.usedFollowups} evidence follow-ups`,
+                ...(council ? [councilReceipt(model, council)] : []),
             ].join("\n");
             core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
             const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
@@ -2784,20 +2799,39 @@ async function runReview(llm, diff, reviewInstructions, jsonResponseMode, contex
     core.info("Getting full code review...");
     return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
 }
-async function discoverChunk(llm, diff, context, reviewInstructions, jsonResponseMode, loadEvidence, budget) {
-    const complete = async (instructions) => {
-        const response = await runReview(llm, diff, reviewInstructions, jsonResponseMode, context, instructions);
+async function discoverChunk(llm, diff, context, reviewInstructions, jsonResponseMode, loadEvidence, budget, council) {
+    const completeWith = (seat) => async (instructions) => {
+        const response = await runReview(seat, diff, reviewInstructions, jsonResponseMode, context, instructions);
         const parsed = review_parser_1.ReviewParser.parseDetailed(response.content);
         if (!(0, review_retry_1.shouldRetryStructuredReview)(parsed.findings, parsed.usedJson))
             return parsed.findings;
-        return review_parser_1.ReviewParser.parse((await runReview(llm, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
+        return review_parser_1.ReviewParser.parse((await runReview(seat, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
     };
-    return (0, discovery_1.runDiscovery)(complete, loadEvidence, budget);
+    const complete = completeWith(llm);
+    // A lost council seat must not cost the pass: the primary seat runs it instead.
+    const councilComplete = council && (async (instructions) => {
+        try {
+            return await completeWith(council.llm)(instructions);
+        }
+        catch (error) {
+            council.discoveryFallbacks += 1;
+            core.warning(`Council seat ${council.model} failed discovery; primary seat ran the pass: ${error}`);
+            return complete(instructions);
+        }
+    });
+    return (0, discovery_1.runDiscovery)(complete, loadEvidence, budget, councilComplete);
 }
-async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFindings, reviewInstructions) {
+function councilReceipt(model, council) {
+    const degraded = council.discoveryFallbacks > 0 || !council.gateVoted;
+    return `Robin council: ${model} + ${council.model} · ${council.splitVerdicts} split verdicts`
+        + (degraded ? ` · DEGRADED: ${council.discoveryFallbacks} discovery fallbacks, final vote ${council.gateVoted ? "held" : "single-seat"}` : "");
+}
+async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFindings, reviewInstructions, council) {
     const candidates = (0, precision_gate_1.buildPrecisionCandidates)(reviews);
     const summary = "";
     if (candidates.length === 0) {
+        if (council)
+            council.gateVoted = true;
         return { summary, high: [], medium: [], low: [], suggestions: [], rawResponse: "" };
     }
     const precisionPrompt = [reviewInstructions, review_prompts_1.PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n");
@@ -2808,6 +2842,17 @@ async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFind
         priorRobinFindings && `PRIOR ROBIN FINDINGS (keep only if still present):\n${priorRobinFindings}`,
         `CANDIDATE DIFF EVIDENCE:\n${buildCandidateDiffEvidence(diff, candidates.map(({ finding }) => finding))}`,
     ].filter(Boolean).join("\n\n");
+    // A council seat that cannot vote leaves the primary verdict standing.
+    const councilVote = council && (async () => {
+        try {
+            const vote = await council.llm.chatCompletion(precisionPrompt, precisionInput, true);
+            return (0, precision_gate_1.selectApprovedCandidates)(candidates, vote.content, summary);
+        }
+        catch (error) {
+            core.warning(`Council seat ${council.model} could not vote: ${error}`);
+            return undefined;
+        }
+    })();
     let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
     let precise;
     try {
@@ -2822,6 +2867,13 @@ async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFind
             core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
             precise = (0, precision_gate_1.retainAllCandidates)(candidates, summary, verdict.content);
         }
+    }
+    const vote = await councilVote;
+    if (council && vote) {
+        const merged = (0, precision_gate_1.mergeCouncilVerdicts)(precise, vote);
+        precise = merged.review;
+        council.splitVerdicts = merged.splitVerdicts;
+        council.gateVoted = true;
     }
     deduplicateFindings(precise);
     return precise;
@@ -3028,6 +3080,7 @@ function parseOutcomeMarker(body) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.buildPrecisionCandidates = buildPrecisionCandidates;
 exports.selectApprovedCandidates = selectApprovedCandidates;
+exports.mergeCouncilVerdicts = mergeCouncilVerdicts;
 exports.retainAllCandidates = retainAllCandidates;
 const SEVERITIES = ["high", "medium", "low", "suggestions"];
 function buildPrecisionCandidates(reviews) {
@@ -3092,6 +3145,28 @@ function selectApprovedCandidates(candidates, response, summary = "") {
         }
     }
     return result;
+}
+/**
+ * Two model families vote. A proven High survives one approval, because a missed
+ * High costs more than a false one. Anything lower needs both, which keeps agent
+ * authors from chasing one model's noise.
+ */
+function mergeCouncilVerdicts(primary, council) {
+    const review = { ...primary, high: [], medium: [], low: [], suggestions: [] };
+    let splitVerdicts = 0;
+    for (const severity of SEVERITIES) {
+        const theirs = new Set(council[severity]);
+        const ours = new Set(primary[severity]);
+        const either = [...primary[severity], ...council[severity].filter((finding) => !ours.has(finding))];
+        for (const finding of either) {
+            const agreed = ours.has(finding) && theirs.has(finding);
+            if (!agreed)
+                splitVerdicts += 1;
+            if (agreed || severity === "high")
+                review[severity].push(finding);
+        }
+    }
+    return { review, splitVerdicts };
 }
 function retainAllCandidates(candidates, summary = "", rawResponse = "") {
     const result = {

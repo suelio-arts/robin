@@ -102,6 +102,7 @@ function parseArgs(argv) {
     else if (arg === "--local") options.local = true;
     else if (arg === "--workspace") options.workspace = argv[++index];
     else if (arg === "--model") options.model = argv[++index];
+    else if (arg === "--council-model") options.councilModel = argv[++index];
     else if (arg === "--engine") options.engine = argv[++index];
     else if (arg === "--help" || arg === "-h") options.help = true;
     else if (!options.pr) options.pr = arg;
@@ -558,6 +559,9 @@ function runLocal(session, options, workflows) {
   if (!options.model.endsWith("-subscription")) {
     fail(`--model must be a subscription profile ending in -subscription (got ${options.model}). Robin's local mode never falls back to an API key.`, options.json);
   }
+  if (options.councilModel && !options.councilModel.endsWith("-subscription")) {
+    fail(`--council-model must be a subscription profile ending in -subscription (got ${options.councilModel}).`, options.json);
+  }
   if (!options.workspace) fail("--local requires --workspace <dir> pointing at a checkout of the PR head.", options.json);
   const enginePath = path.resolve(options.engine || path.join(__dirname, "..", "dist", "index.js"));
   if (!fs.existsSync(enginePath)) {
@@ -630,6 +634,7 @@ function runLocal(session, options, workflows) {
       "INPUT_EXPECTED-HEAD-SHA": session.head,
       "INPUT_LLM-BASE-URL": "rolly-agent",
       INPUT_MODEL: options.model,
+      "INPUT_COUNCIL-MODEL": options.councilModel || "",
       "INPUT_REQUEST-CHANGES": "false",
       "INPUT_FAIL-ON-HIGH": "false",
       "INPUT_REVIEW-ON-SYNCHRONIZE": "false",

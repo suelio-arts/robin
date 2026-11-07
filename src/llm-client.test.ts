@@ -8,6 +8,26 @@ jest.mock("child_process", () => ({ execFile: jest.fn() }));
 import { LLMClient, LOCAL_AGENT_COMPLETION_CONTRACT } from "./llm-client";
 
 describe("LLMClient", () => {
+  it.each([
+    ["opus-5-5-medium-subscription", true],
+    ["sol-6.1-low-subscription", false],
+  ])("runs %s tool-free only when it is a Claude seat", async (model, toolFree) => {
+    const root = await mkdtemp(join(tmpdir(), "robin-council-"));
+    const result = join(root, "result.txt");
+    await writeFile(result, "{}");
+    const mock = execFile as unknown as jest.Mock;
+    mock.mockReset();
+    mock.mockImplementation((_file, _args, _options, callback) => callback(null, JSON.stringify({ result }), ""));
+    try {
+      await new LLMClient("rolly-agent", "", model).chatCompletion("system", "user", true);
+      const args = mock.mock.calls[0][1] as string[];
+      expect(args.includes("--tool-policy")).toBe(toolFree);
+      if (toolFree) expect(args[args.indexOf("--tool-policy") + 1]).toBe("none");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("confines local agents to the supplied completion evidence", () => {
     expect(LOCAL_AGENT_COMPLETION_CONTRACT).toContain("Do not call tools");
     expect(LOCAL_AGENT_COMPLETION_CONTRACT).toContain("only the evidence supplied");
@@ -104,6 +124,8 @@ describe("LLMClient", () => {
       expect(() => new LLMClient("rolly-agent", "", `sol-6.1-${effort}-subscription`)).not.toThrow();
       expect(() => new LLMClient("rolly-agent", "", `luna-6-${effort}-subscription`)).not.toThrow();
     }
+    expect(() => new LLMClient("rolly-agent", "", "opus-5-5-medium-subscription")).not.toThrow();
+    expect(() => new LLMClient("rolly-agent", "", "sonnet-5-5-medium-subscription")).not.toThrow();
     expect(() => new LLMClient("rolly-agent", "", "opus-5-high-subscription"))
       .toThrow("Unsupported Robin local agent");
     expect(() => new LLMClient("rolly-agent", "", "luna-5-6-low-subscription"))

@@ -30,7 +30,13 @@ const ROBIN_LOCAL_AGENTS = new Set([
   "luna-6-low-subscription",
   "luna-6-medium-subscription",
   "luna-6-high-subscription",
+  "opus-5-5-medium-subscription",
+  "opus-5-5-high-subscription",
+  "sonnet-5-5-medium-subscription",
+  "sonnet-5-5-high-subscription",
 ]);
+// agent-bridge admits Claude on the GitHub-caller boundary only with no tools.
+const TOOL_FREE_LOCAL_AGENT = /^(opus|sonnet)-/;
 export const LOCAL_AGENT_COMPLETION_CONTRACT = [
   "Act as a stateless model completion, not an autonomous coding agent.",
   "Do not call tools, run commands, read files, browse, or inspect any repository.",
@@ -260,6 +266,7 @@ export class LLMClient {
         "--workdir", workdir,
         "--prompt", prompt,
         "--timeout", String(timeoutSeconds),
+        ...(TOOL_FREE_LOCAL_AGENT.test(this.model) ? ["--tool-policy", "none"] : []),
       ], { timeout: this.timeoutMs, maxBuffer: 10 * 1024 * 1024 });
       const resultPath = JSON.parse(stdout).result;
       if (typeof resultPath !== "string" || !resultPath) throw new Error("Rolly agent returned no result path");

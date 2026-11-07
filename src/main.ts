@@ -893,7 +893,7 @@ type CouncilSeat = {
 
 function councilReceipt(model: string, council: CouncilSeat): string {
   const degraded = council.discoveryFallbacks > 0 || !council.gateVoted;
-  return `Robin council: ${model} + ${council.model} · ${council.splitVerdicts} split verdicts`
+  return `Robin council: ${model} + ${council.model} (${council.llm.getMetrics().calls} calls) · ${council.splitVerdicts} split verdicts`
     + (degraded ? ` · DEGRADED: ${council.discoveryFallbacks} discovery fallbacks, final vote ${council.gateVoted ? "held" : "single-seat"}` : "");
 }
 

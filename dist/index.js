@@ -1789,11 +1789,12 @@ class LLMClient {
                 if (!line.trim())
                     continue;
                 const event = JSON.parse(line);
-                if (event.type !== "turn.completed" || !event.usage)
+                // Codex streams turn.completed; Claude ends with one result event.
+                if ((event.type !== "turn.completed" && event.type !== "result") || !event.usage)
                     continue;
                 const counters = [
-                    event.usage.input_tokens,
-                    event.usage.cached_input_tokens,
+                    (event.usage.input_tokens ?? 0) + (event.usage.cache_read_input_tokens ?? 0),
+                    event.usage.cached_input_tokens ?? event.usage.cache_read_input_tokens,
                     event.usage.output_tokens,
                     event.usage.reasoning_output_tokens,
                 ].map((value) => value ?? 0);
@@ -2823,7 +2824,7 @@ async function discoverChunk(llm, diff, context, reviewInstructions, jsonRespons
 }
 function councilReceipt(model, council) {
     const degraded = council.discoveryFallbacks > 0 || !council.gateVoted;
-    return `Robin council: ${model} + ${council.model} · ${council.splitVerdicts} split verdicts`
+    return `Robin council: ${model} + ${council.model} (${council.llm.getMetrics().calls} calls) · ${council.splitVerdicts} split verdicts`
         + (degraded ? ` · DEGRADED: ${council.discoveryFallbacks} discovery fallbacks, final vote ${council.gateVoted ? "held" : "single-seat"}` : "");
 }
 async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFindings, reviewInstructions, council) {

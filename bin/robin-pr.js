@@ -102,7 +102,7 @@ function parseArgs(argv) {
     else if (arg === "--local") options.local = true;
     else if (arg === "--workspace") options.workspace = argv[++index];
     else if (arg === "--model") options.model = argv[++index];
-    else if (arg === "--council-model") options.councilModel = argv[++index];
+    else if (arg === "--council-model") options.councilModel = argv[++index] ?? "";
     else if (arg === "--engine") options.engine = argv[++index];
     else if (arg === "--help" || arg === "-h") options.help = true;
     else if (!options.pr) options.pr = arg;
@@ -559,7 +559,7 @@ function runLocal(session, options, workflows) {
   if (!options.model.endsWith("-subscription")) {
     fail(`--model must be a subscription profile ending in -subscription (got ${options.model}). Robin's local mode never falls back to an API key.`, options.json);
   }
-  if (options.councilModel && !options.councilModel.endsWith("-subscription")) {
+  if (options.councilModel !== undefined && !options.councilModel.endsWith("-subscription")) {
     fail(`--council-model must be a subscription profile ending in -subscription (got ${options.councilModel}).`, options.json);
   }
   if (!options.workspace) fail("--local requires --workspace <dir> pointing at a checkout of the PR head.", options.json);

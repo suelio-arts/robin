@@ -299,14 +299,16 @@ export class LLMClient {
           usage?: {
             input_tokens?: number;
             cached_input_tokens?: number;
+            cache_read_input_tokens?: number;
             output_tokens?: number;
             reasoning_output_tokens?: number;
           };
         };
-        if (event.type !== "turn.completed" || !event.usage) continue;
+        // Codex streams turn.completed; Claude ends with one result event.
+        if ((event.type !== "turn.completed" && event.type !== "result") || !event.usage) continue;
         const counters = [
-          event.usage.input_tokens,
-          event.usage.cached_input_tokens,
+          (event.usage.input_tokens ?? 0) + (event.usage.cache_read_input_tokens ?? 0),
+          event.usage.cached_input_tokens ?? event.usage.cache_read_input_tokens,
           event.usage.output_tokens,
           event.usage.reasoning_output_tokens,
         ].map((value) => value ?? 0);

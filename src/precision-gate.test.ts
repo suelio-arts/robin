@@ -1,4 +1,5 @@
-import { buildPrecisionCandidates, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
+import { ReviewFinding } from "./review-parser";
+import { buildPrecisionCandidates, mergeCouncilVerdicts, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
 import { StructuredReview } from "./review-parser";
 
 const review = (description: string, line = 1): StructuredReview => ({
@@ -43,3 +44,28 @@ describe("precision gate", () => {
     expect(retainAllCandidates(candidates, "fallback").high).toHaveLength(2);
   });
 });
+
+describe("mergeCouncilVerdicts", () => {
+  const finding = (description: string): ReviewFinding => ({
+    file: "a.ts", line: 1, severity: "high", category: "bug", description, recommendation: "fix",
+  });
+  const review = (high: string[], medium: string[]) => ({
+    summary: "s", high: high.map((d) => all[d]), medium: medium.map((d) => all[d]),
+    low: [], suggestions: [], evidenceRequests: [], rawResponse: "",
+  });
+  const all: Record<string, ReviewFinding> = {
+    h1: finding("h1"), h2: finding("h2"), h3: finding("h3"), m1: finding("m1"), m2: finding("m2"),
+  };
+
+  it("keeps a High either seat proves and lower findings only when both agree", () => {
+    const {review: merged, splitVerdicts} = mergeCouncilVerdicts(
+      review(["h1", "h2"], ["m1", "m2"]),
+      review(["h1", "h3"], ["m1"]),
+    );
+    expect(merged.high).toEqual([all.h1, all.h2, all.h3]);
+    expect(merged.medium).toEqual([all.m1]);
+    expect(merged.summary).toBe("s");
+    expect(splitVerdicts).toBe(3);
+  });
+});
+

@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: ""
+      council-model:
+        description: "Optional second model family, on the same base URL, for the adversarial pass and a second vote on every finding."
+        required: false
+        type: string
+        default: ""
       reasoning-effort:
         description: "Optional reasoning effort for compatible models: low, medium, or high."
         required: false
@@ -152,6 +157,7 @@ jobs:
           llm-user: ${{ inputs.llm-user }}
           llm-metadata: ${{ inputs.llm-metadata }}
           llm-usage-jsonl: ${{ inputs.llm-usage-jsonl }}
+          council-model: ${{ inputs.council-model }}
           reasoning-effort: ${{ inputs.reasoning-effort }}
           fail-on-high: ${{ inputs.fail-on-high }}
           request-changes: ${{ inputs.request-changes }}

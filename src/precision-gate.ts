@@ -77,6 +77,30 @@ export function selectApprovedCandidates(
   return result;
 }
 
+/**
+ * Two model families vote. A proven High survives one approval, because a missed
+ * High costs more than a false one. Anything lower needs both, which keeps agent
+ * authors from chasing one model's noise.
+ */
+export function mergeCouncilVerdicts(
+  primary: StructuredReview,
+  council: StructuredReview
+): {review: StructuredReview; splitVerdicts: number} {
+  const review: StructuredReview = {...primary, high: [], medium: [], low: [], suggestions: []};
+  let splitVerdicts = 0;
+  for (const severity of SEVERITIES) {
+    const theirs = new Set(council[severity]);
+    const ours = new Set(primary[severity]);
+    const either = [...primary[severity], ...council[severity].filter((finding) => !ours.has(finding))];
+    for (const finding of either) {
+      const agreed = ours.has(finding) && theirs.has(finding);
+      if (!agreed) splitVerdicts += 1;
+      if (agreed || severity === "high") review[severity].push(finding);
+    }
+  }
+  return {review, splitVerdicts};
+}
+
 export function retainAllCandidates(
   candidates: PrecisionCandidate[],
   summary = "",

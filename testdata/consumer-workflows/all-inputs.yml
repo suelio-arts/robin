@@ -25,6 +25,7 @@ jobs:
       llm-user: "fixture-review"
       llm-metadata: '{"feature":"review"}'
       llm-usage-jsonl: "receipts.jsonl"
+      council-model: opus-5-5-medium-subscription
       reasoning-effort: low
       # String input preserves omission as empty so repository config can win.
       request-changes: ${{ 'false' }}

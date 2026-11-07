@@ -22,11 +22,14 @@ export class ReviewBudget {
 export async function runDiscovery(
   complete: (instructions: string) => Promise<StructuredReview>,
   loadEvidence: (requests: EvidenceRequest[]) => Promise<string>,
-  budget: ReviewBudget
+  budget: ReviewBudget,
+  councilComplete?: (instructions: string) => Promise<StructuredReview>
 ): Promise<{review: StructuredReview; evidenceRequests: number; followedUp: boolean}> {
-  // Serial order is deliberate: the adversarial call reuses the broad call's stable prompt cache prefix.
-  const broad = await complete(DISCOVERY_INSTRUCTIONS);
-  const adversarial = await complete(ADVERSARIAL_INSTRUCTIONS);
+  // Alone, serial keeps one seat's concurrency at the batch size. A council seat runs
+  // the adversarial pass in parallel: each provider still sees one call per chunk.
+  const [broad, adversarial] = councilComplete
+    ? await Promise.all([complete(DISCOVERY_INSTRUCTIONS), councilComplete(ADVERSARIAL_INSTRUCTIONS)])
+    : [await complete(DISCOVERY_INSTRUCTIONS), await complete(ADVERSARIAL_INSTRUCTIONS)];
   const initial = combine([broad, adversarial]);
   const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
   if (requests.length === 0) {

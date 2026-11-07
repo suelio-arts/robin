@@ -21,6 +21,22 @@ describe("runDiscovery", () => {
     expect(result.followedUp).toBe(true);
   });
 
+  it("sends the adversarial pass to the council seat in parallel", async () => {
+    const order: string[] = [];
+    let releaseBroad: () => void = () => undefined;
+    const broadGate = new Promise<void>((resolve) => { releaseBroad = resolve; });
+    await runDiscovery(async (instructions) => {
+      order.push(`primary:${instructions.slice(0, 20)}`);
+      await broadGate;
+      return empty("broad");
+    }, async () => "", new ReviewBudget(1, Date.now() + 1_000), async (instructions) => {
+      order.push(`council:${instructions.includes("adversarial failure analyst")}`);
+      releaseBroad();
+      return empty("adversarial");
+    });
+    expect(order).toEqual([expect.stringContaining("primary:"), "council:true"]);
+  });
+
   it("does not start a follow-up after the budget deadline", async () => {
     let calls = 0;
     const result = await runDiscovery(async () => {

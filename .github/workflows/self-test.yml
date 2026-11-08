@@ -46,6 +46,9 @@ jobs:
         # testdata/consumer-workflows fixtures that pass every reusable input.
         run: ./actionlint -shellcheck= -pyflakes= .github/workflows/*.yml testdata/consumer-workflows/*.yml
        
+      - name: Test shared trigger
+        run: node --test trigger/robin-review-trigger.test.mjs
+
       - name: Test
         run: npm test
        

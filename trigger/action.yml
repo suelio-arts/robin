@@ -1,0 +1,39 @@
+name: Robin trigger
+description: Admit an exact same-repository PR head and dispatch the trusted main workflow.
+inputs:
+  github-token:
+    description: Repository token (actions write for dispatch, pull-requests read).
+    required: true
+  pr-number:
+    description: Earlier admitted PR number for review-stage revalidation.
+    required: false
+  expected-head-sha:
+    description: Earlier admitted exact head for review-stage revalidation.
+    required: false
+outputs:
+  eligible:
+    description: Whether this dispatch should review the exact head.
+    value: ${{ steps.target.outputs.eligible }}
+  pr:
+    description: Pull request number.
+    value: ${{ steps.target.outputs.pr }}
+  head:
+    description: Exact reviewed head SHA.
+    value: ${{ steps.target.outputs.head }}
+runs:
+  using: composite
+  steps:
+    - id: target
+      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+      env:
+        ROBIN_TRIGGER_PATH: ${{ github.action_path }}
+        REVIEW_PR: ${{ inputs.pr-number }}
+        REVIEW_HEAD: ${{ inputs.expected-head-sha }}
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const {pathToFileURL} = require('node:url');
+          const {prepareReview} = await import(pathToFileURL(`${process.env.ROBIN_TRIGGER_PATH}/robin-review-trigger.mjs`));
+          const result = await prepareReview({github, context, prNumber: process.env.REVIEW_PR || undefined, expectedHead: process.env.REVIEW_HEAD || undefined});
+          for (const [key, value] of Object.entries(result)) core.setOutput(key, String(value));
+          core.info(`Robin trigger: ${result.reason}`);

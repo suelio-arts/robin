@@ -33,7 +33,7 @@ Add Robin to this repository.
 - Do NOT use @v0 or any v0 tag
 - Never check out or execute pull-request code from `pull_request_target`; use
   it only with Robin's pinned API-only review action
-Read AGENTS.md in the robin repo for full rules.
+Read docs/AGENT-CONSUMER-SETUP.md in the robin repo for full rules.
 ```
 
 ## Quick install

@@ -285,6 +285,17 @@ offer it as a separate next step. Source: [skills/robin/SKILL.md](skills/robin/S
 | Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
 | Ollama (your server) | `http://YOUR_SERVER:11434/v1` | `llama3.2` |
 
+The trusted Rolly transport also supports `gemini-4-carbon-medium-subscription`
+alongside `sol-6.1-medium-subscription`. Carbon uses Rolly's existing T3
+Antigravity OAuth subscription and the qualified ACP 1.4.5 runtime. Its fresh
+profile shares only that host's OAuth login, enables only the native `finish`
+operation, and contains no repository settings, hooks, skills or MCP servers.
+Client operations and model tool calls fail the completion. Each call has a
+bounded deadline and closes its native session and process group on exit;
+it creates no T3 thread. Missing login, model access or runtime fails without
+an API or alternative-model fallback. Carbon token usage is unavailable from
+this transport; completed calls are counted without inventing token counts.
+
 GitHub’s servers cannot reach `localhost` on your laptop. For Ollama at home, use a public server, a tunnel, or a [self-hosted runner](docs/ADVANCED.md#save-github-actions-minutes).
 
 ## Optional: config and custom rules

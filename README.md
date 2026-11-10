@@ -360,3 +360,7 @@ npm run build
 Runtime code lives in `dist/index.js`; run `npm run build` before releasing. A full build removes intermediate files under `dist/` after bundling so only `index.js` remains locally (same file CI checks against).
 
 If you ran `tsc` alone and see extra files under `dist/`, run `npm run clean`.
+
+Local subscription council seats support `opus-5-5-low-subscription`,
+`opus-5-5-medium-subscription`, and `opus-5-5-high-subscription` through Rolly.
+The selected profile forwards its model and effort to agent-bridge with no tools.

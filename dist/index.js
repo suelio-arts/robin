@@ -1601,6 +1601,7 @@ const ROBIN_LOCAL_AGENTS = new Set([
     "luna-6-low-subscription",
     "luna-6-medium-subscription",
     "luna-6-high-subscription",
+    "opus-5-5-low-subscription",
     "opus-5-5-medium-subscription",
     "opus-5-5-high-subscription",
     "sonnet-5-5-medium-subscription",

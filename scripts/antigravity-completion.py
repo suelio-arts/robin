@@ -7,7 +7,7 @@ import signal
 import sys
 import time
 
-from subscription_rpc import RpcClient, CompletionError
+from subscription_rpc import RpcClient, CompletionError, SubscriptionLimitError
 
 RELEASE = "886fff7767d08994ca39eb02c3d01a7532c7325a94aa33aaf52d52068733284f"
 HOME = Path("/Users/rolly")
@@ -18,6 +18,7 @@ EFFORT = "medium"
 
 
 class Client(RpcClient):
+    provider = "antigravity"
     def __init__(self, *args):
         super().__init__(*args)
         self.text = []
@@ -106,6 +107,9 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, cancel)
     try:
         main()
+    except SubscriptionLimitError as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)
     except (CompletionError, OSError, ValueError, KeyError) as error:
         print(f"Robin Antigravity completion failed: {error}", file=sys.stderr)
         sys.exit(1)

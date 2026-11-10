@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import select
 import signal
 import subprocess
@@ -11,7 +12,24 @@ class CompletionError(Exception):
     pass
 
 
+class SubscriptionLimitError(CompletionError):
+    def __init__(self, provider, kind):
+        super().__init__(f"ROBIN_SUBSCRIPTION_LIMIT:{provider}:{kind}")
+
+
+def reject_provider_error(provider, error, message="Subscription provider rejected the request"):
+    # Inspect provider error frames, but emit only a fixed category. Provider
+    # messages can contain login URLs, account details or arbitrary prompt data.
+    text = json.dumps(error).lower()
+    if re.search(r"usagelimitexceeded|quota|usage[ _-]limit|resource_exhausted|credits_depleted", text):
+        raise SubscriptionLimitError(provider, "quota")
+    if re.search(r"ratelimitexceeded|rate[ _-]?limit|too many requests|\b429\b", text):
+        raise SubscriptionLimitError(provider, "rate-limit")
+    raise CompletionError(message)
+
+
 class RpcClient:
+    provider = "subscription"
     def __init__(self, command, env, cwd, timeout):
         self.process = subprocess.Popen(command, cwd=cwd, env=env,
                                         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -70,7 +88,7 @@ class RpcClient:
             message = self.next_message()
             if "method" not in message and message.get("id") == request_id:
                 if "error" in message:
-                    raise CompletionError(f"Subscription RPC {method} rejected (code {message['error'].get('code')})")
+                    reject_provider_error(self.provider, message["error"])
                 return message["result"]
             self.update(message)
 

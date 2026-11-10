@@ -1592,6 +1592,7 @@ const child_process_1 = __nccwpck_require__(5317);
 const promises_1 = __nccwpck_require__(1943);
 const os_1 = __nccwpck_require__(857);
 const path_1 = __nccwpck_require__(6928);
+const subscription_limit_1 = __nccwpck_require__(3478);
 const ROLLY_AGENT_URL = "rolly-agent";
 const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
 const NATIVE_COMPLETIONS = {
@@ -1623,7 +1624,9 @@ exports.LOCAL_AGENT_COMPLETION_CONTRACT = [
 ].join(" ");
 function runFile(file, args, options) {
     return new Promise((resolve, reject) => {
-        (0, child_process_1.execFile)(file, args, options, (error, stdout) => error ? reject(error) : resolve(String(stdout)));
+        (0, child_process_1.execFile)(file, args, options, (error, stdout, stderr) => error
+            ? reject((0, subscription_limit_1.subscriptionLimitFromStderr)(String(stderr)) || error)
+            : resolve(String(stdout)));
     });
 }
 exports.LOCAL_AGENT_CALLERS = ["github", "codex", "claude"];
@@ -2200,6 +2203,7 @@ const llm_usage_1 = __nccwpck_require__(9292);
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const llm_client_1 = __nccwpck_require__(3316);
+const subscription_limit_1 = __nccwpck_require__(3478);
 const git_utils_1 = __nccwpck_require__(8529);
 const review_parser_1 = __nccwpck_require__(2141);
 const review_retry_1 = __nccwpck_require__(450);
@@ -2837,6 +2841,8 @@ async function discoverChunk(llm, diff, context, reviewInstructions, jsonRespons
             return await completeWith(council.llm)(instructions);
         }
         catch (error) {
+            if (error instanceof subscription_limit_1.SubscriptionLimitError)
+                throw error;
             council.discoveryFallbacks += 1;
             core.warning(`Council seat ${council.model} failed discovery; primary seat ran the pass: ${error}`);
             return complete(instructions);
@@ -2872,11 +2878,18 @@ async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFind
             return (0, precision_gate_1.selectApprovedCandidates)(candidates, vote.content, summary);
         }
         catch (error) {
+            if (error instanceof subscription_limit_1.SubscriptionLimitError)
+                throw error;
             core.warning(`Council seat ${council.model} could not vote: ${error}`);
             return undefined;
         }
     })();
-    let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
+    // Attach both rejection handlers immediately: a quota refusal from one seat
+    // must not become an unhandled rejection while the other is still working.
+    const [firstVerdict, vote] = await Promise.all([
+        llm.chatCompletion(precisionPrompt, precisionInput, true), councilVote,
+    ]);
+    let verdict = firstVerdict;
     let precise;
     try {
         precise = (0, precision_gate_1.selectApprovedCandidates)(candidates, verdict.content, summary);
@@ -2887,11 +2900,12 @@ async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFind
             precise = (0, precision_gate_1.selectApprovedCandidates)(candidates, verdict.content, summary);
         }
         catch (error) {
+            if (error instanceof subscription_limit_1.SubscriptionLimitError)
+                throw error;
             core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
             precise = (0, precision_gate_1.retainAllCandidates)(candidates, summary, verdict.content);
         }
     }
-    const vote = await councilVote;
     if (council && vote) {
         const merged = (0, precision_gate_1.mergeCouncilVerdicts)(precise, vote);
         precise = merged.review;
@@ -4210,6 +4224,31 @@ async function postSkippedReceipt(octokit, target, reason) {
     }
 }
 //# sourceMappingURL=review-run.js.map
+
+/***/ }),
+
+/***/ 3478:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SubscriptionLimitError = void 0;
+exports.subscriptionLimitFromStderr = subscriptionLimitFromStderr;
+/** Safe, actionable failure category from the trusted native completion helper. */
+class SubscriptionLimitError extends Error {
+    constructor(provider, kind) {
+        super(`${provider} subscription ${kind === "quota" ? "quota exhausted" : "rate limit reached"}. ` +
+            "Review incomplete; re-request with /robin after the allowance is restored. No API fallback was attempted.");
+        this.name = "SubscriptionLimitError";
+    }
+}
+exports.SubscriptionLimitError = SubscriptionLimitError;
+function subscriptionLimitFromStderr(stderr) {
+    const match = /^ROBIN_SUBSCRIPTION_LIMIT:(codex|antigravity):(quota|rate-limit)$/m.exec(stderr);
+    return match ? new SubscriptionLimitError(match[1], match[2]) : undefined;
+}
+//# sourceMappingURL=subscription-limit.js.map
 
 /***/ }),
 

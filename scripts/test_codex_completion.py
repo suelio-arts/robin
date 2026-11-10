@@ -24,7 +24,10 @@ for line in sys.stdin:
   assert sys.argv[1:]==["app-server","--strict-config","-c","approval_policy=\"never\"","--disable","shell_tool"]
  if method=="config/read":result={"safe":mode!="unsafe"}
  if method=="account/read":result={"account":{"type":"apiKey" if mode=="api" else "chatgpt"}}
+ if method=="account/rateLimits/read":
+  result={"ordinaryUsageAllowed":None if mode=="unknown-quota" else mode!="exhausted", "rateLimits":{"credits":{"hasCredits":True,"balance":"886.3"}}}
  if method=="thread/start":
+  Path(__file__).with_name("thread-started").touch()
   assert Path(__file__).with_name("preflight").exists()
   assert params["model"]=="gpt-6.1-sol" and params["ephemeral"] is True
   assert params["approvalPolicy"]=="never" and params["config"]["model_reasoning_effort"]=="medium"
@@ -32,6 +35,9 @@ for line in sys.stdin:
  if method=="turn/start":
   assert params["model"]=="gpt-6.1-sol" and params["effort"]=="medium"
   assert params["input"]==[{"type":"text","text":"review evidence"}]
+  if mode in ("quota-error","rate-error"):
+   emit({"method":"error","params":{"error":{"codexErrorInfo":"usageLimitExceeded" if mode=="quota-error" else "rateLimitExceeded","message":"private-provider-detail"},"willRetry":False}})
+   continue
   if mode=="client-tool":
    emit({"jsonrpc":"2.0","id":900,"method":"item/commandExecution/requestApproval","params":{}})
    continue
@@ -87,6 +93,24 @@ class CodexCompletionTests(unittest.TestCase):
     def test_model_substitution_fails(self):
         with self.assertRaisesRegex(completion.CompletionError, "did not select"):
             self.run_completion("wrong-model")
+
+    def test_exhausted_included_allowance_never_starts_thread_despite_paid_credits(self):
+        with self.assertRaisesRegex(completion.SubscriptionLimitError, "codex:quota"):
+            self.run_completion("exhausted")
+        self.assertFalse((self.root / "thread-started").exists())
+
+    def test_unknown_included_allowance_fails_closed(self):
+        with self.assertRaisesRegex(completion.CompletionError, "allowance could not be verified"):
+            self.run_completion("unknown-quota")
+        self.assertFalse((self.root / "thread-started").exists())
+
+    def test_native_usage_limit_is_reported_without_provider_details(self):
+        with self.assertRaisesRegex(completion.SubscriptionLimitError, "^ROBIN_SUBSCRIPTION_LIMIT:codex:quota$"):
+            self.run_completion("quota-error")
+
+    def test_native_rate_limit_is_reported_without_provider_details(self):
+        with self.assertRaisesRegex(completion.SubscriptionLimitError, "^ROBIN_SUBSCRIPTION_LIMIT:codex:rate-limit$"):
+            self.run_completion("rate-error")
 
     def test_native_boundary_must_pass_before_thread_start(self):
         for mode in ("api", "unsafe"):

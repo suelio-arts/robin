@@ -2,6 +2,7 @@ import {parseLlmProviderOptions} from "./llm-usage";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
+import { SubscriptionLimitError } from "./subscription-limit";
 import { GitUtils } from "./git-utils";
 import { ReviewFinding, ReviewParser, StructuredReview } from "./review-parser";
 import { shouldRetryStructuredReview } from "./review-retry";
@@ -875,6 +876,7 @@ async function discoverChunk(
     try {
       return await completeWith(council.llm)(instructions);
     } catch (error) {
+      if (error instanceof SubscriptionLimitError) throw error;
       council.discoveryFallbacks += 1;
       core.warning(`Council seat ${council.model} failed discovery; primary seat ran the pass: ${error}`);
       return complete(instructions);
@@ -926,11 +928,17 @@ async function runFinalGate(
       const vote = await council.llm.chatCompletion(precisionPrompt, precisionInput, true);
       return selectApprovedCandidates(candidates, vote.content, summary);
     } catch (error) {
+      if (error instanceof SubscriptionLimitError) throw error;
       core.warning(`Council seat ${council.model} could not vote: ${error}`);
       return undefined;
     }
   })();
-  let verdict = await llm.chatCompletion(precisionPrompt, precisionInput, true);
+  // Attach both rejection handlers immediately: a quota refusal from one seat
+  // must not become an unhandled rejection while the other is still working.
+  const [firstVerdict, vote] = await Promise.all([
+    llm.chatCompletion(precisionPrompt, precisionInput, true), councilVote,
+  ]);
+  let verdict = firstVerdict;
   let precise: StructuredReview;
   try {
     precise = selectApprovedCandidates(candidates, verdict.content, summary);
@@ -939,11 +947,11 @@ async function runFinalGate(
       verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
       precise = selectApprovedCandidates(candidates, verdict.content, summary);
     } catch (error) {
+      if (error instanceof SubscriptionLimitError) throw error;
       core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
       precise = retainAllCandidates(candidates, summary, verdict.content);
     }
   }
-  const vote = await councilVote;
   if (council && vote) {
     const merged = mergeCouncilVerdicts(precise, vote);
     precise = merged.review;

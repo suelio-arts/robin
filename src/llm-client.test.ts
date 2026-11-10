@@ -27,7 +27,9 @@ describe("LLMClient", () => {
   });
 
   it.each([
+    ["opus-5-5-low-subscription", true],
     ["opus-5-5-medium-subscription", true],
+    ["opus-5-5-high-subscription", true],
     ["sol-6.1-low-subscription", false],
   ])("runs %s tool-free only when it is a Claude seat", async (model, toolFree) => {
     const root = await mkdtemp(join(tmpdir(), "robin-council-"));
@@ -39,6 +41,7 @@ describe("LLMClient", () => {
     try {
       await new LLMClient("rolly-agent", "", model).chatCompletion("system", "user", true);
       const args = mock.mock.calls[0][1] as string[];
+      expect(args[args.indexOf("--agent") + 1]).toBe(model);
       expect(args.includes("--tool-policy")).toBe(toolFree);
       if (toolFree) expect(args[args.indexOf("--tool-policy") + 1]).toBe("none");
     } finally {
@@ -142,7 +145,9 @@ describe("LLMClient", () => {
       expect(() => new LLMClient("rolly-agent", "", `sol-6.1-${effort}-subscription`)).not.toThrow();
       expect(() => new LLMClient("rolly-agent", "", `luna-6-${effort}-subscription`)).not.toThrow();
     }
-    expect(() => new LLMClient("rolly-agent", "", "opus-5-5-medium-subscription")).not.toThrow();
+    for (const effort of ["low", "medium", "high"]) {
+      expect(() => new LLMClient("rolly-agent", "", `opus-5-5-${effort}-subscription`)).not.toThrow();
+    }
     expect(() => new LLMClient("rolly-agent", "", "sonnet-5-5-medium-subscription")).not.toThrow();
     expect(() => new LLMClient("rolly-agent", "", "opus-5-high-subscription"))
       .toThrow("Unsupported Robin local agent");

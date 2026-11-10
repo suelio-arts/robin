@@ -8,9 +8,12 @@ jest.mock("child_process", () => ({ execFile: jest.fn() }));
 import { LLMClient, LOCAL_AGENT_COMPLETION_CONTRACT } from "./llm-client";
 
 describe("LLMClient", () => {
-  it("runs Carbon with the isolated Antigravity subscription helper and counts its call without invented usage", async () => {
-    const result = {content: "clean", model: "gemini-4-carbon-medium-subscription", callId: "carbon-session",
-      provenance: {provider: "antigravity", auth: "subscription", model: "gemini-4-carbon", effort: "medium"}};
+  it.each([
+    ["gemini-4-carbon-medium-subscription", "antigravity", "gemini-4-carbon", "antigravity-completion.py"],
+    ["sol-6.1-medium-subscription", "codex", "gpt-6.1-sol", "codex-completion.py"],
+  ])("runs %s through its bounded native helper without invented usage", async (model, provider, nativeModel, script) => {
+    const result = {content: "clean", model, callId: "native-session",
+      provenance: {provider, auth: "subscription", model: nativeModel, effort: "medium"}};
     const mock = execFile as unknown as jest.Mock;
     mock.mockReset();
     mock.mockImplementation((_file, _args, _options, callback) => callback(null, JSON.stringify(result), ""));
@@ -18,7 +21,7 @@ describe("LLMClient", () => {
     expect(await client.chatCompletion("system", "untrusted PR evidence")).toEqual(result);
     expect(mock).toHaveBeenCalledTimes(1);
     expect(mock.mock.calls[0][0]).toBe("/usr/bin/python3");
-    expect(mock.mock.calls[0][1][0]).toMatch(/scripts\/antigravity-completion\.py$/);
+    expect(mock.mock.calls[0][1][0]).toBe(join(__dirname, "../scripts", script));
     expect(mock.mock.calls[0][2].env).toEqual({HOME: "/Users/rolly", PATH: "/usr/bin:/bin"});
     expect(client.getMetrics().calls).toBe(1);
     expect(() => new LLMClient("rolly-agent", "", "gemini-4-carbon-high-subscription")).toThrow("Unsupported Robin local agent");
@@ -30,7 +33,7 @@ describe("LLMClient", () => {
     mock.mockImplementation((_file, _args, _options, callback) => callback(null, JSON.stringify({content: "clean", model: "gemini-4-carbon-medium-subscription",
       callId: "s", provenance: {provider: "antigravity", auth: "api", model: "gemini-4-carbon", effort: "medium"}}), ""));
     await expect(new LLMClient("rolly-agent", "", "gemini-4-carbon-medium-subscription").chatCompletion("system", "user"))
-      .rejects.toThrow("invalid Carbon subscription receipt");
+      .rejects.toThrow("Invalid native subscription completion receipt");
     expect(mock).toHaveBeenCalledTimes(1);
   });
 

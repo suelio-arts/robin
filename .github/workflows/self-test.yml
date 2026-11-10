@@ -49,8 +49,8 @@ jobs:
       - name: Test shared trigger
         run: node --test trigger/robin-review-trigger.test.mjs
 
-      - name: Test Antigravity completion boundary
-        run: python3 -B -m unittest discover -s scripts -p 'test_antigravity_completion.py' -v
+      - name: Test native subscription completion boundaries
+        run: python3 -B -m unittest discover -s scripts -p 'test_*completion.py' -v
 
       - name: Test
         run: npm test

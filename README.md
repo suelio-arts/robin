@@ -296,6 +296,13 @@ it creates no T3 thread. Missing login, model access or runtime fails without
 an API or alternative-model fallback. Carbon token usage is unavailable from
 this transport; completed calls are counted without inventing token counts.
 
+Sol medium uses Codex's native app-server transport, as T3 does, instead of
+`codex exec`. Before starting an ephemeral completion it verifies the installed
+Agent Bridge's read-only boundary and ChatGPT authentication through native
+configuration/account RPCs. It inherits no API credentials and rejects tool
+items, failed turns, empty responses and model substitutions. Sol low/high and
+the existing Claude paths are unchanged.
+
 GitHub’s servers cannot reach `localhost` on your laptop. For Ollama at home, use a public server, a tunnel, or a [self-hosted runner](docs/ADVANCED.md#save-github-actions-minutes).
 
 ## Optional: config and custom rules

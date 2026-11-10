@@ -42,7 +42,12 @@ for line in sys.stdin:
   update={"sessionUpdate":"tool_call","title":"read_file"} if mode=="tool" else {"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"clean"}}
   print(json.dumps({"jsonrpc":"2.0","method":"session/update","params":{"update":update}}),flush=True)
   result={"stopReason":"cancelled" if mode=="cancelled" else "end_turn"}
- if method=="session/close":Path(__file__).with_name("closed").touch()
+ if method=="session/close":
+  Path(__file__).with_name("closed").touch()
+  if mode=="bad-close":
+   Path(__file__).with_name("server-pid").write_text(str(os.getpid()))
+   print(json.dumps({"jsonrpc":"2.0","id":d["id"]}),flush=True)
+   continue
  print(json.dumps({"jsonrpc":"2.0","id":d["id"],"result":result}),flush=True)
 '''
 
@@ -134,6 +139,12 @@ class CompletionTests(unittest.TestCase):
         self.token.chmod(0o644)
         with self.assertRaisesRegex(completion.CompletionError, "not private"):
             self.run_completion()
+
+    def test_malformed_close_reply_cannot_skip_process_termination(self):
+        self.assertEqual(self.run_completion("bad-close")["content"], "clean")
+        pid = int((self.install / "server-pid").read_text())
+        state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True).stdout.strip()
+        self.assertTrue(not state or state.startswith("Z"), state)
 
 
 if __name__ == "__main__":

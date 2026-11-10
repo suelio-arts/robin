@@ -2,13 +2,12 @@
 """One bounded, tool-free Carbon completion using Rolly's existing T3 login."""
 
 import json
-import os
 from pathlib import Path
-import select
 import signal
-import subprocess
 import sys
 import time
+
+from subscription_rpc import RpcClient, CompletionError
 
 RELEASE = "886fff7767d08994ca39eb02c3d01a7532c7325a94aa33aaf52d52068733284f"
 HOME = Path("/Users/rolly")
@@ -18,41 +17,14 @@ MODEL = "gemini-4-carbon"
 EFFORT = "medium"
 
 
-class CompletionError(Exception):
-    pass
-
-
-class Client:
-    def __init__(self, command, env, cwd, timeout):
-        self.process = subprocess.Popen(command, cwd=cwd, env=env,
-                                        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                        stderr=subprocess.DEVNULL, start_new_session=True, bufsize=0)
-        os.set_blocking(self.process.stdin.fileno(), False)
-        self.deadline = time.monotonic() + timeout
-        self.buffer = b""
-        self.sequence = 0
+class Client(RpcClient):
+    def __init__(self, *args):
+        super().__init__(*args)
         self.text = []
         self.output_bytes = 0
 
-    def send(self, message):
-        pending = memoryview((json.dumps(message) + "\n").encode())
-        while pending:
-            remaining = self.deadline - time.monotonic()
-            if remaining <= 0:
-                raise CompletionError("Antigravity write timed out")
-            if select.select([], [self.process.stdin], [], min(remaining, 1))[1]:
-                try:
-                    written = os.write(self.process.stdin.fileno(), pending[:65536])
-                    pending = pending[written:]
-                except BlockingIOError:
-                    continue
-
     def update(self, message):
-        if "method" in message and "id" in message:
-            # The completion has no client tools or interactive permission flow.
-            self.send({"jsonrpc": "2.0", "id": message["id"],
-                       "error": {"code": -32601, "message": "Robin permits no client tools"}})
-            raise CompletionError("Antigravity requested a client operation")
+        super().update(message)
         if message.get("method") != "session/update":
             return
         update = message["params"]["update"]
@@ -64,72 +36,6 @@ class Client:
             if self.output_bytes > 10 * 1024 * 1024:
                 raise CompletionError("Antigravity exceeded the response limit")
             self.text.append(update["content"]["text"])
-
-    def rpc(self, method, params):
-        self.sequence += 1
-        request_id = self.sequence
-        self.send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
-        while time.monotonic() < self.deadline:
-            while b"\n" in self.buffer:
-                if time.monotonic() >= self.deadline:
-                    raise CompletionError(f"Antigravity {method} timed out")
-                line, self.buffer = self.buffer.split(b"\n", 1)
-                try:
-                    message = json.loads(line)
-                except ValueError:
-                    # The native OAuth client can emit a non-JSON sign-in notice.
-                    continue
-                if "method" not in message and message.get("id") == request_id:
-                    if "error" in message:
-                        # Provider data and login URLs must not reach Actions logs.
-                        raise CompletionError(f"Antigravity {method} rejected (code {message['error'].get('code')})")
-                    return message["result"]
-                self.update(message)
-            remaining = self.deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            if select.select([self.process.stdout], [], [], min(remaining, 1))[0]:
-                chunk = os.read(self.process.stdout.fileno(), 65536)
-                if not chunk:
-                    raise CompletionError("Antigravity exited before completing the request")
-                self.buffer += chunk
-                if len(self.buffer) > 10 * 1024 * 1024:
-                    raise CompletionError("Antigravity exceeded the response limit")
-        raise CompletionError(f"Antigravity {method} timed out")
-
-    def close(self, session):
-        try:
-            if session and time.monotonic() < self.deadline and self.process.poll() is None:
-                self.deadline = min(self.deadline, time.monotonic() + 2)
-                try:
-                    self.rpc("session/close", {"sessionId": session})
-                except (CompletionError, OSError):
-                    pass
-            # Kill the owned process group, including the native harness.
-            try:
-                os.killpg(self.process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                if self.process.poll() is None:
-                    raise
-            try:
-                self.process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                pass
-            # The parent can exit on SIGTERM while a native descendant ignores
-            # it. Escalate for the group even when the parent already exited.
-            try:
-                os.killpg(self.process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                if self.process.poll() is None:
-                    raise
-            self.process.wait(timeout=1)
-        finally:
-            self.process.stdin.close()
-            self.process.stdout.close()
 
 
 def complete(prompt, root, timeout, install=INSTALL, token=TOKEN):

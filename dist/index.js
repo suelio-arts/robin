@@ -1594,9 +1594,15 @@ const os_1 = __nccwpck_require__(857);
 const path_1 = __nccwpck_require__(6928);
 const ROLLY_AGENT_URL = "rolly-agent";
 const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
+const NATIVE_COMPLETIONS = {
+    "gemini-4-carbon-medium-subscription": { script: "antigravity-completion.py", provider: "antigravity", model: "gemini-4-carbon" },
+    "sol-6.1-medium-subscription": { script: "codex-completion.py", provider: "codex", model: "gpt-6.1-sol" },
+};
+function isNativeCompletion(model) {
+    return Object.prototype.hasOwnProperty.call(NATIVE_COMPLETIONS, model);
+}
 const ROBIN_LOCAL_AGENTS = new Set([
     "sol-6.1-low-subscription",
-    "sol-6.1-medium-subscription",
     "sol-6.1-high-subscription",
     "luna-6-low-subscription",
     "luna-6-medium-subscription",
@@ -1606,7 +1612,7 @@ const ROBIN_LOCAL_AGENTS = new Set([
     "opus-5-5-high-subscription",
     "sonnet-5-5-medium-subscription",
     "sonnet-5-5-high-subscription",
-    "gemini-4-carbon-medium-subscription",
+    ...Object.keys(NATIVE_COMPLETIONS),
 ]);
 // agent-bridge admits Claude on the GitHub-caller boundary only with no tools.
 const TOOL_FREE_LOCAL_AGENT = /^(opus|sonnet)-/;
@@ -1756,16 +1762,17 @@ class LLMClient {
                 userContent,
             ].join("\n\n"), { mode: 0o600 });
             const timeoutSeconds = Math.max(1, Math.floor(this.timeoutMs / 1000));
-            if (this.model === "gemini-4-carbon-medium-subscription") {
+            if (isNativeCompletion(this.model)) {
+                const profile = NATIVE_COMPLETIONS[this.model];
                 const stdout = await runFile("/usr/bin/python3", [
-                    (0, path_1.join)(__dirname, "../scripts/antigravity-completion.py"), prompt, String(timeoutSeconds),
+                    (0, path_1.join)(__dirname, "../scripts", profile.script), prompt, String(timeoutSeconds),
                 ], { timeout: this.timeoutMs + 6000, maxBuffer: 10 * 1024 * 1024,
                     env: { HOME: "/Users/rolly", PATH: "/usr/bin:/bin" } });
                 const result = JSON.parse(stdout);
                 if (!result.content?.trim() || result.model !== this.model ||
-                    result.provenance?.provider !== "antigravity" || result.provenance.auth !== "subscription" ||
-                    result.provenance.model !== "gemini-4-carbon" || result.provenance.effort !== "medium" || !result.callId) {
-                    throw new Error("Antigravity returned an invalid Carbon subscription receipt");
+                    result.provenance?.provider !== profile.provider || result.provenance.auth !== "subscription" ||
+                    result.provenance.model !== profile.model || result.provenance.effort !== "medium" || !result.callId) {
+                    throw new Error("Invalid native subscription completion receipt");
                 }
                 return result;
             }

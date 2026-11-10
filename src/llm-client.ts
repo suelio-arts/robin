@@ -35,6 +35,7 @@ const ROBIN_LOCAL_AGENTS = new Set([
   "opus-5-5-high-subscription",
   "sonnet-5-5-medium-subscription",
   "sonnet-5-5-high-subscription",
+  "gemini-4-carbon-medium-subscription",
 ]);
 // agent-bridge admits Claude on the GitHub-caller boundary only with no tools.
 const TOOL_FREE_LOCAL_AGENT = /^(opus|sonnet)-/;
@@ -44,7 +45,7 @@ export const LOCAL_AGENT_COMPLETION_CONTRACT = [
   "Use only the evidence supplied in this prompt and return the requested response immediately.",
 ].join(" ");
 
-function runFile(file: string, args: string[], options: { timeout: number; maxBuffer: number }): Promise<string> {
+function runFile(file: string, args: string[], options: { timeout: number; maxBuffer: number; env?: NodeJS.ProcessEnv }): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(file, args, options, (error, stdout) => error ? reject(error) : resolve(String(stdout)));
   });
@@ -231,8 +232,8 @@ export class LLMClient {
   }
 
   private recordMetrics(result: ChatCompletionResult): void {
-    if (!result.usage) return;
     this.metrics.calls += 1;
+    if (!result.usage) return;
     this.metrics.inputTokens += result.usage.inputTokens;
     this.metrics.cachedInputTokens += result.usage.cachedInputTokens;
     this.metrics.outputTokens += result.usage.outputTokens;
@@ -258,6 +259,19 @@ export class LLMClient {
         userContent,
       ].join("\n\n"), { mode: 0o600 });
       const timeoutSeconds = Math.max(1, Math.floor(this.timeoutMs / 1000));
+      if (this.model === "gemini-4-carbon-medium-subscription") {
+        const stdout = await runFile("/usr/bin/python3", [
+          join(__dirname, "../scripts/antigravity-completion.py"), prompt, String(timeoutSeconds),
+        ], {timeout: this.timeoutMs + 6000, maxBuffer: 10 * 1024 * 1024,
+          env: {HOME: "/Users/rolly", PATH: "/usr/bin:/bin"}});
+        const result = JSON.parse(stdout) as ChatCompletionResult;
+        if (!result.content?.trim() || result.model !== this.model ||
+            result.provenance?.provider !== "antigravity" || result.provenance.auth !== "subscription" ||
+            result.provenance.model !== "gemini-4-carbon" || result.provenance.effort !== "medium" || !result.callId) {
+          throw new Error("Antigravity returned an invalid Carbon subscription receipt");
+        }
+        return result;
+      }
       const stdout = await runFile(ROLLY_BIN, [
         "agent", "run",
         "--agent", this.model,

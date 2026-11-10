@@ -303,6 +303,13 @@ configuration/account RPCs. It inherits no API credentials and rejects tool
 items, failed turns, empty responses and model substitutions. Sol low/high and
 the existing Claude paths are unchanged.
 
+Before every new Sol completion, Robin reads the native backend's included-usage
+permission. Exhausted or unavailable allowance stops before creating a thread,
+even when purchased credits are available; Robin changes no account settings.
+Quota and rate-limit errors from either native seat produce an explicit
+incomplete review with `/robin` retry guidance. They never become a cached clean
+or degraded verdict, so the same head can be re-requested after recovery.
+
 GitHub’s servers cannot reach `localhost` on your laptop. For Ollama at home, use a public server, a tunnel, or a [self-hosted runner](docs/ADVANCED.md#save-github-actions-minutes).
 
 ## Optional: config and custom rules

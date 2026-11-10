@@ -135,6 +135,18 @@ test('a dispatch stops at the round cap, counting only reviewed heads', async ()
     assert.equal(capped.reason, 'round-cap');
 });
 
+test('quota failures remain re-requestable on the same head without using review rounds', async () => {
+    const current = fixture('workflow_dispatch');
+    current.state.reviews = Array.from({length: MAX_REVIEW_ROUNDS + 1}, () => ({
+        ...receipt('incomplete'), body: `codex subscription quota exhausted. Retry /robin after recovery.\n${receipt('incomplete').body}`,
+    }));
+    assert.equal(completedRounds(current.state.reviews), 0);
+    assert.equal((await prepareReview(current)).reason, 'review-required');
+    const comment = fixture('issue_comment');
+    comment.state.reviews = current.state.reviews;
+    assert.equal((await prepareReview(comment)).reason, 'dispatched');
+});
+
 
 test('repository context parameterizes all API calls and rejects cross-repository PRs', async () => {
     for (const name of ['mix-place-graph', 'walk-generation-lab', 'mix-app-research', 'mix-canon', 'rolly-brain', 'mix-dev', 'robin-benchmark']) {

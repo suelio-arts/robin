@@ -89,19 +89,24 @@ describe("terminal review outcomes", () => {
     expect(setOutput).not.toHaveBeenCalled();
   });
 
-  it("posts an incomplete receipt at the head in advisory mode without failing the job", async () => {
+  it.each([
+    "provider timeout",
+    "codex subscription quota exhausted. Re-request with /robin after recovery.",
+    "antigravity subscription rate limit reached. Re-request with /robin after recovery.",
+  ])("posts an explicit incomplete receipt for %s without failing the advisory job", async (message) => {
     const {octokit, createReview} = mockOctokit();
 
     await handleReviewFailure({
       gatekeeper: false,
       octokit,
       target,
-      message: "provider timeout",
+      message,
       command: "review",
     });
 
     expect(createReview).toHaveBeenCalledTimes(1);
     const body = createReview.mock.calls[0][0].body;
+    expect(body).toContain(message);
     expect(createReview.mock.calls[0][0].event).toBe("COMMENT");
     expect(parseOutcomeMarker(body)).toEqual({
       outcome: "incomplete",

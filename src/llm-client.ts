@@ -21,6 +21,7 @@ import { execFile } from "child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
+import { subscriptionLimitFromStderr } from "./subscription-limit";
 const ROLLY_AGENT_URL = "rolly-agent";
 const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
 const NATIVE_COMPLETIONS = {
@@ -53,7 +54,9 @@ export const LOCAL_AGENT_COMPLETION_CONTRACT = [
 
 function runFile(file: string, args: string[], options: { timeout: number; maxBuffer: number; env?: NodeJS.ProcessEnv }): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(file, args, options, (error, stdout) => error ? reject(error) : resolve(String(stdout)));
+    execFile(file, args, options, (error, stdout, stderr) => error
+      ? reject(subscriptionLimitFromStderr(String(stderr)) || error)
+      : resolve(String(stdout)));
   });
 }
 

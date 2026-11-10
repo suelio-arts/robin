@@ -6,8 +6,22 @@ import { join } from "path";
 jest.mock("child_process", () => ({ execFile: jest.fn() }));
 
 import { LLMClient, LOCAL_AGENT_COMPLETION_CONTRACT } from "./llm-client";
+import { SubscriptionLimitError } from "./subscription-limit";
 
 describe("LLMClient", () => {
+  it.each([
+    ["sol-6.1-medium-subscription", "codex", "quota", "quota exhausted"],
+    ["gemini-4-carbon-medium-subscription", "antigravity", "rate-limit", "rate limit reached"],
+  ])("reports %s limits explicitly with no automatic retry", async (model, provider, kind, detail) => {
+    const mock = execFile as unknown as jest.Mock;
+    mock.mockReset();
+    mock.mockImplementation((_file, _args, _options, callback) => callback(new Error("failed"), "", `ROBIN_SUBSCRIPTION_LIMIT:${provider}:${kind}\n`));
+    const result = new LLMClient("rolly-agent", "", model).chatCompletion("system", "user");
+    await expect(result).rejects.toBeInstanceOf(SubscriptionLimitError);
+    await expect(result).rejects.toThrow(`${provider} subscription ${detail}`);
+    await expect(result).rejects.toThrow("re-request with /robin");
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
   it.each([
     ["gemini-4-carbon-medium-subscription", "antigravity", "gemini-4-carbon", "antigravity-completion.py"],
     ["sol-6.1-medium-subscription", "codex", "gpt-6.1-sol", "codex-completion.py"],

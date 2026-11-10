@@ -9,7 +9,7 @@ import signal
 import sys
 import time
 
-from subscription_rpc import RpcClient, CompletionError
+from subscription_rpc import RpcClient, CompletionError, SubscriptionLimitError, reject_provider_error
 
 MODEL = "gpt-6.1-sol"
 PROFILE = "sol-6.1-medium-subscription"
@@ -26,6 +26,7 @@ def load_bridge():
 
 
 class Client(RpcClient):
+    provider = "codex"
     def __init__(self, *args):
         super().__init__(*args)
         self.messages = []
@@ -37,7 +38,7 @@ class Client(RpcClient):
         method = message.get("method")
         params = message.get("params", {})
         if method == "error":
-            raise CompletionError("Codex rejected the subscription completion")
+            reject_provider_error(self.provider, params.get("error"))
         if method in ("item/started", "item/completed"):
             item = params.get("item", {})
             if item.get("type") not in ("userMessage", "agentMessage", "reasoning", "contextCompaction"):
@@ -53,7 +54,7 @@ class Client(RpcClient):
                 self.usage = {key: total[key] for key in keys}
         if method == "turn/completed":
             if params.get("turn", {}).get("status") != "completed":
-                raise CompletionError("Codex did not complete its turn")
+                reject_provider_error(self.provider, params.get("turn", {}).get("error"), "Codex did not complete its turn")
             self.completed = True
 
 
@@ -80,6 +81,14 @@ def complete(prompt, root, timeout, codex=CODEX, bridge=None):
         # Reuse the installed bridge's native proof: ChatGPT auth, no retained
         # MCP, minimal filesystem read scope and no network/writes/tool features.
         boundary.verify_native_review_preflight(config, account)
+        limits = client.rpc("account/rateLimits/read", {})
+        # This backend flag means included usage, unlike available purchased
+        # credits or rounded percentages. Never infer recovery from a clock.
+        allowed = limits.get("ordinaryUsageAllowed")
+        if allowed is False:
+            raise SubscriptionLimitError("codex", "quota")
+        if allowed is not True:
+            raise CompletionError("Codex included subscription allowance could not be verified")
         thread = client.rpc("thread/start", {"model": MODEL, "cwd": str(workdir),
             "approvalPolicy": "never", "ephemeral": True, "config": {"model_reasoning_effort": "medium"}})
         if thread.get("model") != MODEL:
@@ -111,6 +120,9 @@ if __name__ == "__main__":
     try:
         prompt_file = Path(sys.argv[1]).resolve(strict=True)
         print(json.dumps(complete(prompt_file.read_text(), prompt_file.parent, int(sys.argv[2]))))
+    except SubscriptionLimitError as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)
     except Exception:
         # Native RPC/provider errors may contain arbitrary input; never echo them.
         print("Robin Codex subscription completion failed", file=sys.stderr)

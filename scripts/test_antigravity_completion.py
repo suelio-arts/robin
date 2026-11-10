@@ -32,6 +32,10 @@ for line in sys.stdin:
  if method=="session/set_config_option":
   result={"configOptions":[{"id":params["configId"],"currentValue":"wrong" if mode=="wrong-model" else params["value"]}]}
  if method=="session/prompt":
+  if mode in ("quota","rate-limit"):
+   error={"code":-32603,"message":"private-account: quota exceeded"} if mode=="quota" else {"code":429,"message":"private-account"}
+   print(json.dumps({"jsonrpc":"2.0","id":d["id"],"error":error}),flush=True)
+   continue
   if mode=="timeout":
    child=subprocess.Popen([sys.executable,"-c","import time; time.sleep(300)"])
    Path(__file__).with_name("child-pid").write_text(str(child.pid))
@@ -97,6 +101,14 @@ class CompletionTests(unittest.TestCase):
     def test_cancelled_prompt_is_not_a_successful_review(self):
         with self.assertRaisesRegex(completion.CompletionError, "did not finish"):
             self.run_completion("cancelled")
+
+    def test_quota_failure_is_categorized_without_echoing_provider_details(self):
+        with self.assertRaisesRegex(completion.SubscriptionLimitError, "^ROBIN_SUBSCRIPTION_LIMIT:antigravity:quota$"):
+            self.run_completion("quota")
+
+    def test_rate_limit_failure_is_categorized_without_echoing_provider_details(self):
+        with self.assertRaisesRegex(completion.SubscriptionLimitError, "^ROBIN_SUBSCRIPTION_LIMIT:antigravity:rate-limit$"):
+            self.run_completion("rate-limit")
 
     def test_timeout_terminates_native_process_group(self):
         with self.assertRaisesRegex(completion.CompletionError, "timed out"):

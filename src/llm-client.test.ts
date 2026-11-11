@@ -41,13 +41,30 @@ describe("LLMClient", () => {
     expect(() => new LLMClient("rolly-agent", "", "gemini-4-carbon-high-subscription")).toThrow("Unsupported Robin local agent");
   });
 
+  it("runs the DeepSeek fallback seat on the Deploy API with an API-billed receipt", async () => {
+    const result = {content: "clean", model: "deepseek-v4.1-flash-deploy", callId: "deploy-call",
+      provenance: {provider: "deploy", auth: "api", model: "deepseek-ai/deepseek-v4.1-flash-1017", effort: "high"},
+      usage: {inputTokens: 10, cachedInputTokens: 0, outputTokens: 3, reasoningOutputTokens: 2}};
+    const mock = execFile as unknown as jest.Mock;
+    mock.mockReset();
+    mock.mockImplementation((_file, _args, _options, callback) => callback(null, JSON.stringify(result), ""));
+    const client = new LLMClient("rolly-agent", "", result.model);
+    expect(await client.chatCompletion("system", "untrusted PR evidence")).toEqual(result);
+    expect(mock.mock.calls[0][1][0]).toBe(join(__dirname, "../scripts", "deploy-completion.py"));
+    expect(mock.mock.calls[0][2].env).toEqual({HOME: "/Users/rolly", PATH: "/usr/bin:/bin"});
+    expect(client.getMetrics()).toEqual(expect.objectContaining({calls: 1, inputTokens: 10, outputTokens: 3}));
+    mock.mockImplementation((_file, _args, _options, callback) => callback(null, JSON.stringify({...result,
+      provenance: {...result.provenance, auth: "subscription"}}), ""));
+    await expect(client.chatCompletion("system", "user")).rejects.toThrow("Invalid native completion receipt");
+  });
+
   it("rejects Carbon receipts from another model or auth route without falling back", async () => {
     const mock = execFile as unknown as jest.Mock;
     mock.mockReset();
     mock.mockImplementation((_file, _args, _options, callback) => callback(null, JSON.stringify({content: "clean", model: "gemini-4-carbon-medium-subscription",
       callId: "s", provenance: {provider: "antigravity", auth: "api", model: "gemini-4-carbon", effort: "medium"}}), ""));
     await expect(new LLMClient("rolly-agent", "", "gemini-4-carbon-medium-subscription").chatCompletion("system", "user"))
-      .rejects.toThrow("Invalid native subscription completion receipt");
+      .rejects.toThrow("Invalid native completion receipt");
     expect(mock).toHaveBeenCalledTimes(1);
   });
 

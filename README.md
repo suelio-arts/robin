@@ -389,3 +389,7 @@ If you ran `tsc` alone and see extra files under `dist/`, run `npm run clean`.
 Local subscription council seats support `opus-5-5-low-subscription`,
 `opus-5-5-medium-subscription`, and `opus-5-5-high-subscription` through Rolly.
 The selected profile forwards its model and effort to agent-bridge with no tools.
+
+`council-fallback-model: deepseek-v4.1-flash-deploy` replaces a council seat that
+hits its subscription quota or rate limit with DeepSeek V4.1 Flash on Rolly's
+Deploy API key (the same provider OpenCode uses there), called tool-free.

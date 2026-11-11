@@ -23,6 +23,15 @@ class CompletionError(Exception):
     pass
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib forwards Authorization across redirects; refuse them so the key stays with the API."""
+    def redirect_request(self, *_):
+        return None
+
+
+OPENER = urllib.request.build_opener(NoRedirect)
+
+
 def complete(prompt, timeout, key=KEY, url=URL):
     if not 1 <= timeout <= 600:
         raise CompletionError("Completion timeout must be between 1 and 600 seconds")
@@ -34,7 +43,7 @@ def complete(prompt, timeout, key=KEY, url=URL):
         "Authorization": f"Bearer {key.read_text().strip()}", "Content-Type": "application/json"})
     started = time.monotonic()
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with OPENER.open(request, timeout=timeout) as response:
             result = json.load(response)
     except urllib.error.HTTPError as error:
         raise CompletionError(f"Deploy API returned HTTP {error.code}") from None

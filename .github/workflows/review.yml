@@ -38,6 +38,11 @@ on:
         required: false
         type: string
         default: ""
+      council-fallback-model:
+        description: "Optional seat that replaces council-model for the rest of the review when the council seat hits a subscription quota or rate limit."
+        required: false
+        type: string
+        default: ""
       reasoning-effort:
         description: "Optional reasoning effort for compatible models: low, medium, or high."
         required: false
@@ -158,6 +163,7 @@ jobs:
           llm-metadata: ${{ inputs.llm-metadata }}
           llm-usage-jsonl: ${{ inputs.llm-usage-jsonl }}
           council-model: ${{ inputs.council-model }}
+          council-fallback-model: ${{ inputs.council-fallback-model }}
           reasoning-effort: ${{ inputs.reasoning-effort }}
           fail-on-high: ${{ inputs.fail-on-high }}
           request-changes: ${{ inputs.request-changes }}

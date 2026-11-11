@@ -20,6 +20,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         Handler.seen.append((self.headers["Authorization"], json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
         self.send_response(Handler.status)
+        if Handler.status == 307:
+            self.send_header("Location", "/elsewhere")
         self.end_headers()
         self.wfile.write(json.dumps(Handler.reply).encode())
 
@@ -79,6 +81,12 @@ class DeployCompletionTest(unittest.TestCase):
         with self.assertRaises(completion.CompletionError) as raised:
             self.run_completion()
         self.assertEqual(str(raised.exception), "Deploy API returned HTTP 402")
+
+    def test_refuses_redirects_so_the_key_is_not_forwarded(self):
+        Handler.status = 307
+        with self.assertRaisesRegex(completion.CompletionError, "HTTP 307"):
+            self.run_completion()
+        self.assertEqual(len(Handler.seen), 1)
 
     def test_requires_a_private_key_file(self):
         os.chmod(self.key, 0o644)

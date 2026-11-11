@@ -26,6 +26,7 @@ jobs:
       llm-metadata: '{"feature":"review"}'
       llm-usage-jsonl: "receipts.jsonl"
       council-model: opus-5-5-medium-subscription
+      council-fallback-model: deepseek-v4.1-flash-deploy
       reasoning-effort: low
       # String input preserves omission as empty so repository config can win.
       request-changes: ${{ 'false' }}

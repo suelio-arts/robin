@@ -3,6 +3,7 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
 import { SubscriptionLimitError } from "./subscription-limit";
+import { type CouncilSeat, councilReceipt, createCouncilSeat, onCouncilSeat } from "./council";
 import { GitUtils } from "./git-utils";
 import { ReviewFinding, ReviewParser, StructuredReview } from "./review-parser";
 import { shouldRetryStructuredReview } from "./review-retry";
@@ -152,6 +153,8 @@ async function run(): Promise<void> {
     const baseUrl = core.getInput("llm-base-url") || "";
     const model = core.getInput("model") || "";
     const councilModel = core.getInput("council-model") || "";
+    const councilFallbackModel = core.getInput("council-fallback-model") || "";
+    if (councilFallbackModel && !councilModel) throw new Error("council-fallback-model requires council-model");
     const providerOptions = parseLlmProviderOptions(core.getInput("llm-user"), core.getInput("llm-metadata"), core.getInput("llm-usage-jsonl"));
     if (providerOptions.usageJsonl) core.setOutput("llm-usage-jsonl", providerOptions.usageJsonl);
     const reasoningEffortInput = core.getInput("reasoning-effort") || "";
@@ -379,8 +382,9 @@ async function run(): Promise<void> {
       providerOptions
     );
     const llm = createLlm(model, reasoningEffortInput);
-    const council: CouncilSeat | undefined = councilModel && command === "review"
-      ? {llm: createLlm(councilModel, ""), model: councilModel, discoveryFallbacks: 0, gateVoted: false, splitVerdicts: 0}
+    const council = councilModel && command === "review"
+      ? createCouncilSeat({llm: createLlm(councilModel, ""), model: councilModel},
+        councilFallbackModel ? {llm: createLlm(councilFallbackModel, ""), model: councilFallbackModel} : undefined)
       : undefined;
     const useJsonMode = command === "review" && jsonResponseMode;
     
@@ -874,7 +878,7 @@ async function discoverChunk(
   // A lost council seat must not cost the pass: the primary seat runs it instead.
   const councilComplete = council && (async (instructions: string) => {
     try {
-      return await completeWith(council.llm)(instructions);
+      return await onCouncilSeat(council, (seat) => completeWith(seat)(instructions));
     } catch (error) {
       if (error instanceof SubscriptionLimitError) throw error;
       council.discoveryFallbacks += 1;
@@ -883,20 +887,6 @@ async function discoverChunk(
     }
   });
   return runDiscovery(complete, loadEvidence, budget, councilComplete);
-}
-
-type CouncilSeat = {
-  llm: LLMClient;
-  model: string;
-  discoveryFallbacks: number;
-  gateVoted: boolean;
-  splitVerdicts: number;
-};
-
-function councilReceipt(model: string, council: CouncilSeat): string {
-  const degraded = council.discoveryFallbacks > 0 || !council.gateVoted;
-  return `Robin council: ${model} + ${council.model} (${council.llm.getMetrics().calls} calls) · ${council.splitVerdicts} split verdicts`
-    + (degraded ? ` · DEGRADED: ${council.discoveryFallbacks} discovery fallbacks, final vote ${council.gateVoted ? "held" : "single-seat"}` : "");
 }
 
 async function runFinalGate(
@@ -925,7 +915,7 @@ async function runFinalGate(
   // A council seat that cannot vote leaves the primary verdict standing.
   const councilVote = council && (async () => {
     try {
-      const vote = await council.llm.chatCompletion(precisionPrompt, precisionInput, true);
+      const vote = await onCouncilSeat(council, (seat) => seat.chatCompletion(precisionPrompt, precisionInput, true));
       return selectApprovedCandidates(candidates, vote.content, summary);
     } catch (error) {
       if (error instanceof SubscriptionLimitError) throw error;

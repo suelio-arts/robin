@@ -115,6 +115,7 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `llm-metadata` | empty | Optional JSON object of string local receipt metadata (at most 16 keys); Chat Completions uses `llm-user` and `store=false`, without wire metadata |
 | `llm-usage-jsonl` | empty | Optional local path for durable metadata-only receipts per API attempt |
 | `council-model` | empty | Optional second model family, on the same base URL, for the adversarial pass and a second vote on every finding. A High survives one approval; anything lower needs both |
+| `council-fallback-model` | empty | Optional seat that takes over `council-model` for the rest of the review when the council seat hits a subscription quota or rate limit. `deepseek-v4.1-flash-deploy` runs DeepSeek V4.1 Flash (effort high) on Rolly's Deploy API key: the one API-billed seat. The receipt marks `SUBSTITUTED` |
 | `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
 | `fail-on-high` | `false` | Fail the check if high-severity issues are found |
 | `request-changes` | direct action: repo config → `true`; reusable workflow: `false` | `true` submits REQUEST_CHANGES on high findings and APPROVE only when there are no findings; `false` posts a non-blocking COMMENT. Reusable-workflow callers must pass `true` for enforcement. |

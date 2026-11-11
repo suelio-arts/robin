@@ -25,8 +25,10 @@ import { subscriptionLimitFromStderr } from "./subscription-limit";
 const ROLLY_AGENT_URL = "rolly-agent";
 const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
 const NATIVE_COMPLETIONS = {
-  "gemini-4-carbon-medium-subscription": {script: "antigravity-completion.py", provider: "antigravity", model: "gemini-4-carbon"},
-  "sol-6.1-medium-subscription": {script: "codex-completion.py", provider: "codex", model: "gpt-6.1-sol"},
+  "gemini-4-carbon-medium-subscription": {script: "antigravity-completion.py", provider: "antigravity", auth: "subscription", model: "gemini-4-carbon", effort: "medium"},
+  "sol-6.1-medium-subscription": {script: "codex-completion.py", provider: "codex", auth: "subscription", model: "gpt-6.1-sol", effort: "medium"},
+  // DeepSeek is the one API-billed exception to subscription-only seats.
+  "deepseek-v4.1-flash-deploy": {script: "deploy-completion.py", provider: "deploy", auth: "api", model: "deepseek-ai/deepseek-v4.1-flash-1017", effort: "high"},
 } as const;
 function isNativeCompletion(model: string): model is keyof typeof NATIVE_COMPLETIONS {
   return Object.prototype.hasOwnProperty.call(NATIVE_COMPLETIONS, model);
@@ -276,9 +278,9 @@ export class LLMClient {
           env: {HOME: "/Users/rolly", PATH: "/usr/bin:/bin"}});
         const result = JSON.parse(stdout) as ChatCompletionResult;
         if (!result.content?.trim() || result.model !== this.model ||
-            result.provenance?.provider !== profile.provider || result.provenance.auth !== "subscription" ||
-            result.provenance.model !== profile.model || result.provenance.effort !== "medium" || !result.callId) {
-          throw new Error("Invalid native subscription completion receipt");
+            result.provenance?.provider !== profile.provider || result.provenance.auth !== profile.auth ||
+            result.provenance.model !== profile.model || result.provenance.effort !== profile.effort || !result.callId) {
+          throw new Error("Invalid native completion receipt");
         }
         return result;
       }

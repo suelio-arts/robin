@@ -32,6 +32,10 @@ inputs:
     description: "Optional second model family, on the same base URL, for the adversarial pass and a second vote on every finding. A High survives one approval; anything lower needs both."
     required: false
     default: ""
+  council-fallback-model:
+    description: "Optional seat that replaces council-model for the rest of the review when the council seat hits a subscription quota or rate limit, such as deepseek-v4.1-flash-deploy with rolly-agent. The receipt marks the substitution."
+    required: false
+    default: ""
   llm-user:
     description: "Optional OpenAI-compatible user identifier for provider usage attribution."
     required: false

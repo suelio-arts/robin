@@ -384,6 +384,92 @@ function wrapContractSearchEvidence(evidence) {
 
 /***/ }),
 
+/***/ 6178:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createCouncilSeat = createCouncilSeat;
+exports.onCouncilSeat = onCouncilSeat;
+exports.councilReceipt = councilReceipt;
+const core = __importStar(__nccwpck_require__(7484));
+const subscription_limit_1 = __nccwpck_require__(3478);
+function createCouncilSeat(seat, fallback) {
+    return { ...seat, fallback, discoveryFallbacks: 0, gateVoted: false, splitVerdicts: 0 };
+}
+/**
+ * Runs one council call. A subscription limit hands the seat to the fallback
+ * for this call and the rest of the review; without one it stays fatal. A
+ * limit on the fallback is an ordinary seat failure, so it cannot block.
+ */
+async function onCouncilSeat(council, run) {
+    const seat = council.llm;
+    try {
+        return await run(seat);
+    }
+    catch (error) {
+        const { fallback } = council;
+        if (!(error instanceof subscription_limit_1.SubscriptionLimitError) || !fallback)
+            throw error;
+        if (seat === fallback.llm)
+            throw new Error(`Fallback council seat ${fallback.model} failed: ${error.message}`);
+        if (council.llm !== fallback.llm) {
+            core.warning(`Council seat ${council.model} hit its subscription limit; ${fallback.model} takes the seat: ${error.message}`);
+            council.substitutedFor = { llm: council.llm, model: council.model };
+            council.llm = fallback.llm;
+            council.model = fallback.model;
+        }
+        return onCouncilSeat(council, run);
+    }
+}
+function councilReceipt(model, council) {
+    const degraded = council.discoveryFallbacks > 0 || !council.gateVoted;
+    const { substitutedFor } = council;
+    const metrics = council.llm.getMetrics();
+    const calls = metrics.calls + (substitutedFor?.llm.getMetrics().calls ?? 0);
+    return `Robin council: ${model} + ${council.model} (${calls} calls) · ${council.splitVerdicts} split verdicts`
+        + (substitutedFor ? ` · SUBSTITUTED: ${substitutedFor.model} hit its subscription limit;`
+            + ` ${council.model} used ${metrics.inputTokens} input and ${metrics.outputTokens} output tokens` : "")
+        + (degraded ? ` · DEGRADED: ${council.discoveryFallbacks} discovery fallbacks, final vote ${council.gateVoted ? "held" : "single-seat"}` : "");
+}
+//# sourceMappingURL=council.js.map
+
+/***/ }),
+
 /***/ 4523:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -1596,8 +1682,10 @@ const subscription_limit_1 = __nccwpck_require__(3478);
 const ROLLY_AGENT_URL = "rolly-agent";
 const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
 const NATIVE_COMPLETIONS = {
-    "gemini-4-carbon-medium-subscription": { script: "antigravity-completion.py", provider: "antigravity", model: "gemini-4-carbon" },
-    "sol-6.1-medium-subscription": { script: "codex-completion.py", provider: "codex", model: "gpt-6.1-sol" },
+    "gemini-4-carbon-medium-subscription": { script: "antigravity-completion.py", provider: "antigravity", auth: "subscription", model: "gemini-4-carbon", effort: "medium" },
+    "sol-6.1-medium-subscription": { script: "codex-completion.py", provider: "codex", auth: "subscription", model: "gpt-6.1-sol", effort: "medium" },
+    // DeepSeek is the one API-billed exception to subscription-only seats.
+    "deepseek-v4.1-flash-deploy": { script: "deploy-completion.py", provider: "deploy", auth: "api", model: "deepseek-ai/deepseek-v4.1-flash-1017", effort: "high" },
 };
 function isNativeCompletion(model) {
     return Object.prototype.hasOwnProperty.call(NATIVE_COMPLETIONS, model);
@@ -1773,9 +1861,9 @@ class LLMClient {
                     env: { HOME: "/Users/rolly", PATH: "/usr/bin:/bin" } });
                 const result = JSON.parse(stdout);
                 if (!result.content?.trim() || result.model !== this.model ||
-                    result.provenance?.provider !== profile.provider || result.provenance.auth !== "subscription" ||
-                    result.provenance.model !== profile.model || result.provenance.effort !== "medium" || !result.callId) {
-                    throw new Error("Invalid native subscription completion receipt");
+                    result.provenance?.provider !== profile.provider || result.provenance.auth !== profile.auth ||
+                    result.provenance.model !== profile.model || result.provenance.effort !== profile.effort || !result.callId) {
+                    throw new Error("Invalid native completion receipt");
                 }
                 return result;
             }
@@ -2204,6 +2292,7 @@ const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const llm_client_1 = __nccwpck_require__(3316);
 const subscription_limit_1 = __nccwpck_require__(3478);
+const council_1 = __nccwpck_require__(6178);
 const git_utils_1 = __nccwpck_require__(8529);
 const review_parser_1 = __nccwpck_require__(2141);
 const review_retry_1 = __nccwpck_require__(450);
@@ -2311,6 +2400,9 @@ async function run() {
         const baseUrl = core.getInput("llm-base-url") || "";
         const model = core.getInput("model") || "";
         const councilModel = core.getInput("council-model") || "";
+        const councilFallbackModel = core.getInput("council-fallback-model") || "";
+        if (councilFallbackModel && !councilModel)
+            throw new Error("council-fallback-model requires council-model");
         const providerOptions = (0, llm_usage_1.parseLlmProviderOptions)(core.getInput("llm-user"), core.getInput("llm-metadata"), core.getInput("llm-usage-jsonl"));
         if (providerOptions.usageJsonl)
             core.setOutput("llm-usage-jsonl", providerOptions.usageJsonl);
@@ -2457,7 +2549,7 @@ async function run() {
         }, effort, (0, review_run_1.resolveAgentCaller)(process.env.ROBIN_AGENT_CALLER), providerOptions);
         const llm = createLlm(model, reasoningEffortInput);
         const council = councilModel && command === "review"
-            ? { llm: createLlm(councilModel, ""), model: councilModel, discoveryFallbacks: 0, gateVoted: false, splitVerdicts: 0 }
+            ? (0, council_1.createCouncilSeat)({ llm: createLlm(councilModel, ""), model: councilModel }, councilFallbackModel ? { llm: createLlm(councilFallbackModel, ""), model: councilFallbackModel } : undefined)
             : undefined;
         const useJsonMode = command === "review" && jsonResponseMode;
         if (command === "summary") {
@@ -2494,7 +2586,7 @@ async function run() {
             findings.summary += [
                 "",
                 `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${reviewBudget.usedFollowups} evidence follow-ups`,
-                ...(council ? [councilReceipt(model, council)] : []),
+                ...(council ? [(0, council_1.councilReceipt)(model, council)] : []),
             ].join("\n");
             core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
             const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
@@ -2838,7 +2930,7 @@ async function discoverChunk(llm, diff, context, reviewInstructions, jsonRespons
     // A lost council seat must not cost the pass: the primary seat runs it instead.
     const councilComplete = council && (async (instructions) => {
         try {
-            return await completeWith(council.llm)(instructions);
+            return await (0, council_1.onCouncilSeat)(council, (seat) => completeWith(seat)(instructions));
         }
         catch (error) {
             if (error instanceof subscription_limit_1.SubscriptionLimitError)
@@ -2849,11 +2941,6 @@ async function discoverChunk(llm, diff, context, reviewInstructions, jsonRespons
         }
     });
     return (0, discovery_1.runDiscovery)(complete, loadEvidence, budget, councilComplete);
-}
-function councilReceipt(model, council) {
-    const degraded = council.discoveryFallbacks > 0 || !council.gateVoted;
-    return `Robin council: ${model} + ${council.model} (${council.llm.getMetrics().calls} calls) · ${council.splitVerdicts} split verdicts`
-        + (degraded ? ` · DEGRADED: ${council.discoveryFallbacks} discovery fallbacks, final vote ${council.gateVoted ? "held" : "single-seat"}` : "");
 }
 async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFindings, reviewInstructions, council) {
     const candidates = (0, precision_gate_1.buildPrecisionCandidates)(reviews);
@@ -2874,7 +2961,7 @@ async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFind
     // A council seat that cannot vote leaves the primary verdict standing.
     const councilVote = council && (async () => {
         try {
-            const vote = await council.llm.chatCompletion(precisionPrompt, precisionInput, true);
+            const vote = await (0, council_1.onCouncilSeat)(council, (seat) => seat.chatCompletion(precisionPrompt, precisionInput, true));
             return (0, precision_gate_1.selectApprovedCandidates)(candidates, vote.content, summary);
         }
         catch (error) {

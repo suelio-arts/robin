@@ -27,7 +27,6 @@ import {
   ReviewTarget,
   handleReviewFailure,
   postSkippedReceipt,
-  resolveAgentCaller,
   resolveReviewTarget,
   setPostedOutputs,
 } from "./review-run";
@@ -378,7 +377,6 @@ async function run(): Promise<void> {
         );
       },
       effort as "low" | "medium" | "high" | undefined,
-      resolveAgentCaller(process.env.ROBIN_AGENT_CALLER),
       providerOptions
     );
     const llm = createLlm(model, reasoningEffortInput);

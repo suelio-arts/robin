@@ -32,7 +32,7 @@ The frozen synthetic generation-5 holdout caught all six seeded regressions
 (6/6) after generation 4 was promoted to development. Synthetic commits remain
 machine-local and are not part of this portable historical manifest.
 
-Use subscription transport (agent-bridge `luna-6-*-subscription`, model `gpt-6-luna`)
+Use subscription transport (`darma t3 run` seat `luna-6-*-subscription`, model `gpt-6-luna`)
 for prompt development without API spend. Promotion requires OpenAI-direct API
 transport so cost is recomputed from native per-call usage at the pinned official
 rate for the run's model (standard, per million tokens; prompts over 272K input

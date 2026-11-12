@@ -1,7 +1,6 @@
 import * as core from "@actions/core";
 import { GitHubReviewer, PostedReview, ReviewVerdict } from "./github-reviewer";
 import { validateExpectedHeadSha } from "./events";
-import { LOCAL_AGENT_CALLERS, LocalAgentCaller } from "./llm-client";
 import { OutcomeCounts, ReviewOutcome, ZERO_COUNTS } from "./outcome";
 
 /**
@@ -10,19 +9,6 @@ import { OutcomeCounts, ReviewOutcome, ZERO_COUNTS } from "./outcome";
  * here is about the receipt a consumer reads: which head was covered, whether
  * anything was posted, and what the action outputs say.
  */
-
-/**
- * Which harness is spending the subscription quota, from `ROBIN_AGENT_CALLER`.
- *
- * Defaults to `github` so an Actions run is attributed correctly with no
- * configuration. An unrecognised value falls back to the default rather than
- * failing the review: caller attribution is bookkeeping, not policy, and a
- * typo in a local invocation must not cost a review.
- */
-export function resolveAgentCaller(value: string | undefined): LocalAgentCaller {
-  const caller = (value || "").trim() as LocalAgentCaller;
-  return LOCAL_AGENT_CALLERS.includes(caller) ? caller : "github";
-}
 
 /** A pull request that has been fetched AND confirmed to still be at the expected head. */
 export interface ReviewTarget {

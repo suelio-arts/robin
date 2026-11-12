@@ -4,7 +4,6 @@ import {
   ReviewTarget,
   handleReviewFailure,
   postSkippedReceipt,
-  resolveAgentCaller,
   resolveReviewTarget,
 } from "./review-run";
 
@@ -174,17 +173,5 @@ describe("terminal review outcomes", () => {
     });
     expect(outputs(setOutput)).toMatchObject({outcome: "skipped", head: HEAD, verdict: "COMMENTED"});
     expect(warning).not.toHaveBeenCalled();
-  });
-});
-
-describe("agent caller attribution", () => {
-  it("accepts the three known callers and defaults everything else to github", () => {
-    expect(resolveAgentCaller("codex")).toBe("codex");
-    expect(resolveAgentCaller("claude")).toBe("claude");
-    expect(resolveAgentCaller("github")).toBe("github");
-    expect(resolveAgentCaller(" codex ")).toBe("codex");
-    expect(resolveAgentCaller(undefined)).toBe("github");
-    expect(resolveAgentCaller("")).toBe("github");
-    expect(resolveAgentCaller("root")).toBe("github");
   });
 });

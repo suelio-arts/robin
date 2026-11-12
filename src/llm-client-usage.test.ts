@@ -26,7 +26,7 @@ beforeEach(async () => {
 afterEach(async () => rm(root, {recursive: true, force: true}));
 const receipts = async () => (await readFile(usageJsonl, "utf8")).trim().split("\n").map(line => JSON.parse(line));
 const client = (model = "gpt-6-luna", maxAttempts = 1) => new LLMClient("https://api.openai.com/v1", "secret-fixture-key",
-  model, 8000, 60000, maxAttempts, undefined, "low", "github", {...options, usageJsonl});
+  model, 8000, 60000, maxAttempts, undefined, "low", {...options, usageJsonl});
 const response = (content = "{}") => ({id: "provider_fixture", model: "gpt-6-luna", choices: [{message: {content}, finish_reason: "length"}],
   usage: {prompt_tokens: 1000, completion_tokens: 20, prompt_tokens_details: {cached_tokens: 400, cache_write_tokens: 200},
     completion_tokens_details: {reasoning_tokens: 5}}});
@@ -141,7 +141,7 @@ test("evaluation environment configuration reaches SDK attribution and durable r
   });
   mockCreate.mockResolvedValueOnce(response("")).mockResolvedValueOnce(response("{}"));
   const instance = new LLMClient("https://api.openai.com/v1", "fixture-key", "gpt-6-luna",
-    undefined, 90000, 2, undefined, "high", "codex", providerOptions);
+    undefined, 90000, 2, undefined, "high", providerOptions);
   await instance.chatCompletion("system", "user");
   expect(mockCreate).toHaveBeenCalledTimes(2);
   for (const [request] of mockCreate.mock.calls) {

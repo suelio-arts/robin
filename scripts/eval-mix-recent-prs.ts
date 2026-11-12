@@ -36,7 +36,7 @@ const EVAL_AGENTS = {
   "luna-6-high-subscription": {effort: "high", transport: "subscription", model: "gpt-6-luna"},
   "luna-6-medium-subscription": {effort: "medium", transport: "subscription", model: "gpt-6-luna"},
   "luna-6-low-subscription": {effort: "low", transport: "subscription", model: "gpt-6-luna"},
-  // OpenAI-direct promotion runs; these labels are not agent-bridge profiles.
+  // OpenAI-direct promotion runs; these labels are not subscription seats.
   "luna-6-high-api": {effort: "high", transport: "api", model: "gpt-6-luna"},
   "luna-6-low-api": {effort: "low", transport: "api", model: "gpt-6-luna"},
   "luna-5-6-high-api": {effort: "high", transport: "api", model: "gpt-5.6-luna"},
@@ -68,7 +68,6 @@ const client = new LLMClient(
   1,
   undefined,
   evalConfig.effort,
-  "codex",
   evalLlmProviderOptions(process.env)
 );
 const runStartedMs = Date.now();

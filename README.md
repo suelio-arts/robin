@@ -285,30 +285,19 @@ offer it as a separate next step. Source: [skills/robin/SKILL.md](skills/robin/S
 | Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
 | Ollama (your server) | `http://YOUR_SERVER:11434/v1` | `llama3.2` |
 
-The trusted Rolly transport also supports `gemini-4-carbon-medium-subscription`
-alongside `sol-6.1-medium-subscription`. Carbon uses Rolly's existing T3
-Antigravity OAuth subscription and the qualified ACP 1.4.5 runtime. Its fresh
-profile shares only that host's OAuth login, enables only the native `finish`
-operation, and contains no repository settings, hooks, skills or MCP servers.
-Client operations and model tool calls fail the completion. Each call has a
-bounded deadline and closes its native session and process group on exit;
-it creates no T3 thread. Missing login, model access or runtime fails without
-an API or alternative-model fallback. Carbon token usage is unavailable from
-this transport; completed calls are counted without inventing token counts.
-
-Sol medium uses Codex's native app-server transport, as T3 does, instead of
-`codex exec`. Before starting an ephemeral completion it verifies the installed
-Agent Bridge's read-only boundary and ChatGPT authentication through native
-configuration/account RPCs. It inherits no API credentials and rejects tool
-items, failed turns, empty responses and model substitutions. Sol low/high and
-the existing Claude paths are unchanged.
-
-Before every new Sol completion, Robin reads the native backend's included-usage
-permission. Exhausted or unavailable allowance stops before creating a thread,
-even when purchased credits are available; Robin changes no account settings.
-Quota and rate-limit errors from either native seat produce an explicit
-incomplete review with `/robin` retry guidance. They never become a cached clean
-or degraded verdict, so the same head can be re-requested after recovery.
+On the trusted Rolly runner, subscription seats are named
+`<family>-<low|medium|high>-subscription`, with family `sol-6.1` or `luna-6`
+(Codex), `opus-5-5` or `sonnet-5-5` (Claude), or `gemini-4-carbon`
+(Antigravity). Each call is one tool-free [`darma t3 run`](https://github.com/daydemir/darma-fleet#subscription-completions-for-automation-darma-t3-run)
+on that provider's T3 Code account (`~/.t3`). darma refuses API-key billing
+before launch, starts the provider with an allowlisted environment and no
+tools, and stops on a subscription limit, including Claude paid extra usage.
+Robin checks that darma's receipt names the requested seat on a subscription,
+records its call ID and token usage (Antigravity reports none), and deletes
+darma's run folder. Quota and rate-limit stops produce an explicit incomplete
+review with `/robin` retry guidance, or hand the council seat to
+`council-fallback-model`. They never become a cached clean or degraded verdict,
+so the same head can be re-requested after recovery.
 
 GitHub’s servers cannot reach `localhost` on your laptop. For Ollama at home, use a public server, a tunnel, or a [self-hosted runner](docs/ADVANCED.md#save-github-actions-minutes).
 
@@ -385,10 +374,6 @@ npm run build
 Runtime code lives in `dist/index.js`; run `npm run build` before releasing. A full build removes intermediate files under `dist/` after bundling so only `index.js` remains locally (same file CI checks against).
 
 If you ran `tsc` alone and see extra files under `dist/`, run `npm run clean`.
-
-Local subscription council seats support `opus-5-5-low-subscription`,
-`opus-5-5-medium-subscription`, and `opus-5-5-high-subscription` through Rolly.
-The selected profile forwards its model and effort to agent-bridge with no tools.
 
 `council-fallback-model: deepseek-v4.1-flash-deploy` replaces a council seat that
 hits its subscription quota or rate limit with DeepSeek V4.1 Flash on Rolly's

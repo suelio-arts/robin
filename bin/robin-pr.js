@@ -606,13 +606,11 @@ function runLocal(session, options, workflows) {
 
   const token = ghQuiet(["auth", "token"]);
   if (!token) fail("gh auth token failed; sign in with gh before using --local.", options.json);
-  const caller = process.env.CLAUDECODE ? "claude" : "codex";
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "robin-local-"));
   const engine = {
     path: enginePath,
     sha256: crypto.createHash("sha256").update(fs.readFileSync(enginePath)).digest("hex"),
     model: options.model,
-    caller,
   };
   let outputs = {};
   let spawned;
@@ -628,7 +626,6 @@ function runLocal(session, options, workflows) {
       GITHUB_WORKSPACE: workspace,
       GITHUB_OUTPUT: outputPath,
       RUNNER_TEMP: temp,
-      ROBIN_AGENT_CALLER: caller,
       "INPUT_GITHUB-TOKEN": token,
       "INPUT_PR-NUMBER": String(session.number),
       "INPUT_EXPECTED-HEAD-SHA": session.head,

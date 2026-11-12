@@ -26,7 +26,7 @@ inputs:
     description: "OpenAI-compatible base URL, or rolly-agent on a trusted self-hosted Rolly runner."
     required: true
   model:
-    description: "Provider model name (for example gpt-6-luna on the OpenAI API), or a subscription profile such as sol-6.1-low-subscription or luna-6-low-subscription with rolly-agent."
+    description: "Provider model name (for example gpt-6-luna on the OpenAI API), or a subscription seat such as sol-6.1-low-subscription or opus-5-5-low-subscription with rolly-agent (run through darma t3 run)."
     required: true
   council-model:
     description: "Optional second model family, on the same base URL, for the adversarial pass and a second vote on every finding. A High survives one approval; anything lower needs both."

@@ -22,32 +22,34 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { subscriptionLimitFromStderr } from "./subscription-limit";
-const ROLLY_AGENT_URL = "rolly-agent";
-const ROLLY_BIN = "/Users/rolly/.local/bin/rolly";
-const NATIVE_COMPLETIONS = {
-  "gemini-4-carbon-medium-subscription": {script: "antigravity-completion.py", provider: "antigravity", auth: "subscription", model: "gemini-4-carbon", effort: "medium"},
-  "sol-6.1-medium-subscription": {script: "codex-completion.py", provider: "codex", auth: "subscription", model: "gpt-6.1-sol", effort: "medium"},
-  // DeepSeek is the one API-billed exception to subscription-only seats.
-  "deepseek-v4.1-flash-deploy": {script: "deploy-completion.py", provider: "deploy", auth: "api", model: "deepseek-ai/deepseek-v4.1-flash-1017", effort: "high"},
-} as const;
-function isNativeCompletion(model: string): model is keyof typeof NATIVE_COMPLETIONS {
-  return Object.prototype.hasOwnProperty.call(NATIVE_COMPLETIONS, model);
+/** `llm-base-url` value selecting the trusted self-hosted Rolly runner's local seats. */
+const LOCAL_AGENT_URL = "rolly-agent";
+const HOME = "/Users/rolly";
+const DARMA = `${HOME}/.local/bin/darma`;
+const T3_ROOT = `${HOME}/.t3`;
+type T3Instance = "claudeAgent" | "codex" | "antigravity";
+/** darma's provenance provider name for each T3 instance. */
+const T3_PROVIDERS: Record<T3Instance, string> = {claudeAgent: "claude", codex: "codex", antigravity: "antigravity"};
+const SUBSCRIPTION_FAMILIES: Record<string, {instance: T3Instance; model: string}> = {
+  "sol-6.1": {instance: "codex", model: "gpt-6.1-sol"},
+  "luna-6": {instance: "codex", model: "gpt-6-luna"},
+  "opus-5-5": {instance: "claudeAgent", model: "claude-opus-5-5"},
+  "sonnet-5-5": {instance: "claudeAgent", model: "claude-sonnet-5-5"},
+  "gemini-4-carbon": {instance: "antigravity", model: "gemini-4-carbon"},
+};
+const SEAT_EFFORTS = ["low", "medium", "high"] as const;
+interface SubscriptionSeat {
+  instance: T3Instance;
+  model: string;
+  effort: typeof SEAT_EFFORTS[number];
 }
-const ROBIN_LOCAL_AGENTS = new Set([
-  "sol-6.1-low-subscription",
-  "sol-6.1-high-subscription",
-  "luna-6-low-subscription",
-  "luna-6-medium-subscription",
-  "luna-6-high-subscription",
-  "opus-5-5-low-subscription",
-  "opus-5-5-medium-subscription",
-  "opus-5-5-high-subscription",
-  "sonnet-5-5-medium-subscription",
-  "sonnet-5-5-high-subscription",
-  ...Object.keys(NATIVE_COMPLETIONS),
-]);
-// agent-bridge admits Claude on the GitHub-caller boundary only with no tools.
-const TOOL_FREE_LOCAL_AGENT = /^(opus|sonnet)-/;
+/** `<family>-<effort>-subscription`: one tool-free `darma t3 run` on that T3 account. */
+const SUBSCRIPTION_SEATS: ReadonlyMap<string, SubscriptionSeat> = new Map(
+  Object.entries(SUBSCRIPTION_FAMILIES).flatMap(([family, seat]) =>
+    SEAT_EFFORTS.map((effort) => [`${family}-${effort}-subscription`, {...seat, effort}] as const)));
+// DeepSeek is the one API-billed exception to subscription-only seats.
+const DEPLOY_SEAT = "deepseek-v4.1-flash-deploy";
+const DEPLOY_RECEIPT = {provider: "deploy", auth: "api", model: "deepseek-ai/deepseek-v4.1-flash-1017", effort: "high"};
 export const LOCAL_AGENT_COMPLETION_CONTRACT = [
   "Act as a stateless model completion, not an autonomous coding agent.",
   "Do not call tools, run commands, read files, browse, or inspect any repository.",
@@ -60,6 +62,75 @@ function runFile(file: string, args: string[], options: { timeout: number; maxBu
       ? reject(subscriptionLimitFromStderr(String(stderr)) || error)
       : resolve(String(stdout)));
   });
+}
+
+interface DarmaMeta {
+  session?: string;
+  provider?: string;
+  auth?: string;
+  model?: string;
+  effort?: string;
+  duration_seconds?: number;
+  events?: string;
+}
+
+interface UsageEvent {
+  type?: string;
+  usage?: {
+    input_tokens?: number;
+    cached_input_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+    output_tokens?: number;
+    reasoning_output_tokens?: number;
+  };
+}
+
+/** Token usage from darma's events file: Codex `turn.completed`, Claude's final `result`. */
+async function readEventUsage(events: string): Promise<LlmTokenUsage> {
+  const usage = {inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0};
+  let usageEvents = 0;
+  for (const line of (await readFile(events, "utf8")).split("\n")) {
+    if (!line.trim()) continue;
+    const event = JSON.parse(line) as UsageEvent;
+    if ((event.type !== "turn.completed" && event.type !== "result") || !event.usage) continue;
+    const counters = [
+      (event.usage.input_tokens ?? 0) + (event.usage.cache_read_input_tokens ?? 0) + (event.usage.cache_creation_input_tokens ?? 0),
+      event.usage.cached_input_tokens ?? event.usage.cache_read_input_tokens,
+      event.usage.output_tokens,
+      event.usage.reasoning_output_tokens,
+    ].map((value) => value ?? 0);
+    if (!counters.every((value) => Number.isInteger(value) && value >= 0)) {
+      throw new Error("Invalid subscription token usage");
+    }
+    usageEvents += 1;
+    usage.inputTokens += counters[0];
+    usage.cachedInputTokens += counters[1];
+    usage.outputTokens += counters[2];
+    usage.reasoningOutputTokens += counters[3];
+  }
+  if (usageEvents === 0) throw new Error("Subscription completion emitted no token usage");
+  return usage;
+}
+
+/**
+ * darma's receipt must name the requested seat on a subscription. Antigravity
+ * reports no events file, so it carries call ID and provenance without usage.
+ */
+async function readSubscriptionReceipt(resultPath: string, seat: SubscriptionSeat):
+    Promise<Pick<ChatCompletionResult, "callId" | "provenance" | "usage">> {
+  const meta = JSON.parse(await readFile(`${resultPath}.meta.json`, "utf8")) as DarmaMeta;
+  const provenance = {provider: T3_PROVIDERS[seat.instance], auth: "subscription", model: seat.model, effort: seat.effort};
+  if (!meta.session || meta.provider !== provenance.provider || meta.auth !== provenance.auth ||
+      meta.model !== provenance.model || meta.effort !== provenance.effort) {
+    throw new Error("Invalid subscription completion receipt");
+  }
+  const durationMs = typeof meta.duration_seconds === "number" ? meta.duration_seconds * 1000 : undefined;
+  return {
+    callId: meta.session,
+    provenance,
+    ...(meta.events ? {usage: {...await readEventUsage(meta.events), durationMs}} : {}),
+  };
 }
 
 export interface ChatCompletionResult {
@@ -77,9 +148,6 @@ export interface ChatCompletionResult {
 
 export type LlmProgressHandler = (detail: string) => void | Promise<void>;
 export type ReasoningEffort = "low" | "medium" | "high";
-/** Harness spending the subscription quota; forwarded to `rolly agent run --caller`. */
-export type LocalAgentCaller = "github" | "codex" | "claude";
-export const LOCAL_AGENT_CALLERS: readonly LocalAgentCaller[] = ["github", "codex", "claude"];
 export interface LlmMetrics {
   calls: number;
   durationMs: number;
@@ -99,7 +167,6 @@ export class LLMClient {
   private reasoningEffort?: ReasoningEffort;
   private localAgent: boolean;
   private timeoutMs: number;
-  private localAgentCaller: LocalAgentCaller;
   private providerOptions: LlmProviderOptions;
   private startedAt = Date.now();
   private metrics = {calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0};
@@ -113,18 +180,16 @@ export class LLMClient {
     maxAttempts = DEFAULT_LLM_COMPLETION_ATTEMPTS,
     onProgress?: LlmProgressHandler,
     reasoningEffort?: ReasoningEffort,
-    localAgentCaller: LocalAgentCaller = "github",
     providerOptions: LlmProviderOptions = {}
   ) {
     this.model = model;
-    this.localAgent = baseUrl === ROLLY_AGENT_URL;
-    if (this.localAgent && !ROBIN_LOCAL_AGENTS.has(model)) {
+    this.localAgent = baseUrl === LOCAL_AGENT_URL;
+    if (this.localAgent && model !== DEPLOY_SEAT && !SUBSCRIPTION_SEATS.has(model)) {
       throw new Error(`Unsupported Robin local agent: ${model}`);
     }
     this.routerModel = isOpenRouterRouterModel(model);
     this.onProgress = onProgress;
     this.reasoningEffort = reasoningEffort;
-    this.localAgentCaller = localAgentCaller;
     this.providerOptions = providerOptions;
     this.maxOutputTokens =
       maxOutputTokens && Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
@@ -270,96 +335,40 @@ export class LLMClient {
         userContent,
       ].join("\n\n"), { mode: 0o600 });
       const timeoutSeconds = Math.max(1, Math.floor(this.timeoutMs / 1000));
-      if (isNativeCompletion(this.model)) {
-        const profile = NATIVE_COMPLETIONS[this.model];
+      const seat = SUBSCRIPTION_SEATS.get(this.model);
+      if (!seat) {
         const stdout = await runFile("/usr/bin/python3", [
-          join(__dirname, "../scripts", profile.script), prompt, String(timeoutSeconds),
-        ], {timeout: this.timeoutMs + 6000, maxBuffer: 10 * 1024 * 1024,
-          env: {HOME: "/Users/rolly", PATH: "/usr/bin:/bin"}});
+          join(__dirname, "../scripts/deploy-completion.py"), prompt, String(timeoutSeconds),
+        ], {timeout: this.timeoutMs + 6000, maxBuffer: 10 * 1024 * 1024, env: {HOME, PATH: "/usr/bin:/bin"}});
         const result = JSON.parse(stdout) as ChatCompletionResult;
-        if (!result.content?.trim() || result.model !== this.model ||
-            result.provenance?.provider !== profile.provider || result.provenance.auth !== profile.auth ||
-            result.provenance.model !== profile.model || result.provenance.effort !== profile.effort || !result.callId) {
+        const receipt = result.provenance;
+        if (!result.content?.trim() || result.model !== this.model || !result.callId || !receipt ||
+            Object.entries(DEPLOY_RECEIPT).some(([key, value]) => receipt[key as keyof typeof DEPLOY_RECEIPT] !== value)) {
           throw new Error("Invalid native completion receipt");
         }
         return result;
       }
-      const stdout = await runFile(ROLLY_BIN, [
-        "agent", "run",
-        "--agent", this.model,
-        "--mode", "read",
-        "--caller", this.localAgentCaller,
-        "--user", "deniz",
-        "--workdir", workdir,
+      // darma writes its run directory under TMPDIR, inside `root`, removed below.
+      const stdout = await runFile(DARMA, [
+        "t3", "run",
+        "--root", T3_ROOT,
+        "--instance", seat.instance,
+        "--model", seat.model,
+        "--effort", seat.effort,
         "--prompt", prompt,
+        "--workdir", workdir,
         "--timeout", String(timeoutSeconds),
-        ...(TOOL_FREE_LOCAL_AGENT.test(this.model) ? ["--tool-policy", "none"] : []),
-      ], { timeout: this.timeoutMs, maxBuffer: 10 * 1024 * 1024 });
+      ], {timeout: this.timeoutMs + 10000, maxBuffer: 10 * 1024 * 1024,
+        env: {HOME, PATH: `${HOME}/.local/bin:/usr/bin:/bin`, TMPDIR: root}});
       const resultPath = JSON.parse(stdout).result;
-      if (typeof resultPath !== "string" || !resultPath) throw new Error("Rolly agent returned no result path");
+      if (typeof resultPath !== "string" || !resultPath.startsWith(`${root}/`)) {
+        throw new Error("darma t3 run returned no result path");
+      }
       const content = await readFile(resultPath, "utf8");
-      if (!content.trim()) throw new Error("Rolly agent returned an empty result");
-      return { content, model: this.model, ...await this.readLocalAgentMetadata(resultPath) };
+      if (!content.trim()) throw new Error("darma t3 run returned an empty result");
+      return {content, model: this.model, ...await readSubscriptionReceipt(resultPath, seat)};
     } finally {
       if (root) await rm(root, { recursive: true, force: true });
-    }
-  }
-
-  private async readLocalAgentMetadata(resultPath: string): Promise<Pick<ChatCompletionResult, "callId" | "provenance" | "usage">> {
-    try {
-      const meta = JSON.parse(await readFile(`${resultPath}.meta.json`, "utf8")) as {
-        duration_seconds?: number;
-        events?: string;
-        session?: string;
-        provider?: string;
-        auth?: string;
-        model?: string;
-        effort?: string;
-      };
-      if (!meta.events) return {};
-      const usage = {inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0};
-      let usageEvents = 0;
-      for (const line of (await readFile(meta.events, "utf8")).split("\n")) {
-        if (!line.trim()) continue;
-        const event = JSON.parse(line) as {
-          type?: string;
-          usage?: {
-            input_tokens?: number;
-            cached_input_tokens?: number;
-            cache_read_input_tokens?: number;
-            cache_creation_input_tokens?: number;
-            output_tokens?: number;
-            reasoning_output_tokens?: number;
-          };
-        };
-        // Codex streams turn.completed; Claude ends with one result event.
-        if ((event.type !== "turn.completed" && event.type !== "result") || !event.usage) continue;
-        const counters = [
-          (event.usage.input_tokens ?? 0) + (event.usage.cache_read_input_tokens ?? 0) + (event.usage.cache_creation_input_tokens ?? 0),
-          event.usage.cached_input_tokens ?? event.usage.cache_read_input_tokens,
-          event.usage.output_tokens,
-          event.usage.reasoning_output_tokens,
-        ].map((value) => value ?? 0);
-        if (!counters.every((value) => Number.isInteger(value) && value >= 0)) {
-          throw new Error("Invalid local agent token usage");
-        }
-        usageEvents += 1;
-        usage.inputTokens += counters[0];
-        usage.cachedInputTokens += counters[1];
-        usage.outputTokens += counters[2];
-        usage.reasoningOutputTokens += counters[3];
-      }
-      if (usageEvents === 0) throw new Error("Local agent emitted no token usage");
-      return {
-        callId: meta.session,
-        provenance: [meta.provider, meta.auth, meta.model, meta.effort].every((value) => typeof value === "string" && value)
-          ? {provider: meta.provider!, auth: meta.auth!, model: meta.model!, effort: meta.effort!}
-          : undefined,
-        usage: {...usage, durationMs: typeof meta.duration_seconds === "number" ? meta.duration_seconds * 1000 : undefined},
-      };
-    } catch (error) {
-      core.warning(`Could not read local agent usage metadata: ${error}`);
-      return {};
     }
   }
 

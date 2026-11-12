@@ -1095,7 +1095,7 @@ process.stdout.write("fake engine stdout\\n");
 process.stderr.write("fake engine stderr\\n");
 const inputs = {};
 for (const [key, value] of Object.entries(process.env)) {
-  if (key.startsWith("INPUT_") || key.startsWith("GITHUB_") || key.startsWith("RUNNER_") || key.startsWith("ACTIONS_") || key === "CI" || key === "ROBIN_AGENT_CALLER" || key === "ROBIN_POISON") {
+  if (key.startsWith("INPUT_") || key.startsWith("GITHUB_") || key.startsWith("RUNNER_") || key.startsWith("ACTIONS_") || key === "CI" || key === "ROBIN_POISON") {
     inputs[key] = key === "INPUT_GITHUB-TOKEN" ? "<present:" + String(value).length + ">" : value;
   }
 }
@@ -1206,7 +1206,7 @@ describe("robin-review pr --local", () => {
         coverage: "reviewed",
         execution: "local",
         findings: { high: 0, medium: 0, low: 1, suggestions: 0 },
-        engine: expect.objectContaining({ path: enginePath, model: "sol-6.1-low-subscription", caller: expect.stringMatching(/^(codex|claude)$/) }),
+        engine: expect.objectContaining({ path: enginePath, model: "sol-6.1-low-subscription" }),
       }),
     );
     expect(payload.engine.sha256).toMatch(/^[0-9a-f]{64}$/);

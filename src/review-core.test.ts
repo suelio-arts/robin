@@ -1,4 +1,7 @@
-import { mapPool } from "./review-core";
+import { mapPool, runReviewCore } from "./review-core";
+import { LLMClient } from "./llm-client";
+import { createCouncilSeat } from "./council";
+import { currentStage, ReviewTimings } from "./review-timing";
 
 describe("mapPool", () => {
   it("keeps at most the limit in flight, starts the next as one finishes, and keeps order", async () => {
@@ -50,4 +53,46 @@ describe("mapPool", () => {
   it("handles no items", async () => {
     await expect(mapPool([], 4, async () => 1)).resolves.toEqual([]);
   });
+});
+
+
+it("keeps both discovery passes and gates every piece together after parallel prior loading", async () => {
+  const passes: string[] = [];
+  let priorStarted = false;
+  let release!: () => void;
+  const firstPiece = new Promise<void>((resolve) => { release = resolve; });
+  const seat = (model: string): LLMClient => ({
+    chatCompletion: async (_system: string, input: string) => {
+      const stage = currentStage();
+      expect(priorStarted).toBe(true);
+      if (stage?.stage === "final-gate") {
+        expect(passes).toHaveLength(4);
+        expect(input).toContain("earlier finding");
+        expect(input).toContain('"file":"a.ts"');
+        expect(input).toContain('"file":"b.ts"');
+        const proof = {trigger: "call", path: "changed line", impact: "failure", evidence: "exact diff"};
+        return {content: JSON.stringify({approved: {c1: proof, c2: proof}, rejected: {}, already_reported: {}})};
+      }
+      passes.push(`${model}:${stage?.piece}`);
+      if (stage?.piece === 1) await firstPiece;
+      else release();
+      return {content: JSON.stringify({summary: "", high: [], medium: [{
+        file: stage?.piece === 1 ? "a.ts" : "b.ts", line: 1, description: "A concrete failure",
+      }], low: [], suggestions: []})};
+    },
+  } as unknown as LLMClient);
+  const llm = seat("primary");
+  const council = createCouncilSeat({llm: seat("council"), model: "council"});
+  const result = await runReviewCore({
+    git: {getFileContent: async () => "", getTreePaths: async () => [], searchPaths: async () => []},
+    owner: "o", repo: "r", baseRef: "base", headRef: "head",
+    reviewDiff: ["a.ts", "b.ts"].map((file) => `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1 +1 @@\n-old\n+new\n`).join(""),
+    maxDiffSize: 50000, pieceConcurrency: 2, reviewInstructions: "", jsonResponseMode: true,
+    llm, council, timings: new ReviewTimings(),
+    loadPriorFindings: async () => { priorStarted = true; return "earlier finding"; },
+  });
+  expect(result.pieces).toBe(2);
+  expect(result.findings.medium.map(({file}) => file)).toEqual(["a.ts", "b.ts"]);
+  expect(passes.sort()).toEqual(["council:1", "council:2", "primary:1", "primary:2"]);
+  expect(council.gateVoted).toBe(true);
 });

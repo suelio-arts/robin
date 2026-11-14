@@ -150,6 +150,8 @@ To run the engine yourself against an exact head — a self-hosted subscription 
 
 To measure or compare a review without posting anything, replay one base/head pair from a full local clone: `npm run review:replay -- --workspace <clone> --repo <owner/name> --base <sha> --head <sha> --out <file.json>`. It runs the same review core as the action on the subscription seats and writes findings and timing as JSON. Repository search greps the clone's `HEAD`, so point it at the commit the replayed run checked out.
 
+The broad and adversarial discovery passes run concurrently. Eight active pieces permit up to sixteen initial calls on a single model; a healthy council splits these into eight per seat. Each piece finishes its initial passes before any bounded evidence follow-up, and the final precision gate waits for every piece.
+
 Every review summary ends with a timing receipt: wall time per stage (context, discovery, evidence, follow-up, final gate) and, per seat, calls, p50 and max call time, the provider's own duration when available, failed calls, stage activity and the peak number of calls in flight. Robin currently dispatches calls immediately (client queue time is zero); provider duration includes the external CLI and cannot isolate a provider-side queue. The log adds one line per call and per piece as it finishes. Stage activity is the union of overlapping intervals, so stage totals are not additive. Skipped and reused verdicts do not run the review core.
 
 ## Usage patterns

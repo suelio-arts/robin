@@ -26,6 +26,7 @@ export interface ReviewCoreInput {
   headRef: string;
   reviewDiff: string;
   maxDiffSize: number;
+  pieceConcurrency: number;
   reviewInstructions: string;
   jsonResponseMode: boolean;
   llm: LLMClient;
@@ -41,6 +42,23 @@ export interface ReviewCoreResult {
   usedFollowups: number;
 }
 
+/**
+ * Runs `run` over `items` with at most `limit` in flight, starting the next item
+ * as soon as one finishes. Results keep input order; the first rejection rejects.
+ */
+export async function mapPool<T, R>(items: T[], limit: number, run: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await run(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
+  return results;
+}
+
 /** Diff pieces: one per file, oversized files split on hunk boundaries. */
 export function reviewPieces(reviewDiff: string, maxDiffSize: number): string[] {
   return splitDiffIntoFiles(reviewDiff).flatMap(({ content }) => chunkDiffByFile(content, maxDiffSize));
@@ -52,12 +70,10 @@ export async function runReviewCore(input: ReviewCoreInput): Promise<ReviewCoreR
   const pieces = reviewPieces(reviewDiff, input.maxDiffSize);
   const reviewedPaths = changedHeadPaths(reviewDiff);
   const reviewBudget = new ReviewBudget(Math.min(4, Math.max(1, Math.ceil(pieces.length / 2))), Date.now() + 205_000);
-  const candidateReviews: StructuredReview[] = [];
-  let evidenceRequests = 0;
-  for (let start = 0; start < pieces.length; start += PIECE_CONCURRENCY) {
-    const batch = pieces.slice(start, start + PIECE_CONCURRENCY);
-    const reviews = await Promise.all(batch.map(async (piece, offset) => {
-      const number = start + offset + 1;
+  // Prior findings and contract evidence need no piece results, so they load while pieces run.
+  const [reviews, priorRobinFindings, contractEvidence] = await Promise.all([
+    mapPool(pieces, input.pieceConcurrency, async (piece, index) => {
+      const number = index + 1;
       core.info(`Reviewing chunk ${number}/${pieces.length}...`);
       const context = await timings.time("context", () => buildFileContext(git, owner, repo, piece, baseRef, headRef), number);
       const result = await discoverPiece(llm, piece, context, reviewInstructions, jsonResponseMode,
@@ -65,15 +81,15 @@ export async function runReviewCore(input: ReviewCoreInput): Promise<ReviewCoreR
         reviewBudget, timings, number, council);
       core.info(timings.pieceLine(number, pieces.length));
       return result;
-    }));
-    candidateReviews.push(...reviews.map(({review}) => review));
-    evidenceRequests += reviews.reduce((total, review) => total + review.evidenceRequests, 0);
-  }
-  const priorRobinFindings = await timings.time("prior-findings", input.loadPriorFindings);
-  const contractEvidence = await timings.time("contract-evidence", () => buildContractSearchEvidence(
-    git, owner, repo, headRef, extractChangedContractQueries(reviewDiff), reviewedPaths,
-    {counterevidence: true, reviewedPaths}
-  ));
+    }),
+    timings.time("prior-findings", input.loadPriorFindings),
+    timings.time("contract-evidence", () => buildContractSearchEvidence(
+      git, owner, repo, headRef, extractChangedContractQueries(reviewDiff), reviewedPaths,
+      {counterevidence: true, reviewedPaths}
+    )),
+  ]);
+  const candidateReviews = reviews.map(({review}) => review);
+  const evidenceRequests = reviews.reduce((total, review) => total + review.evidenceRequests, 0);
   const findings = await timings.time("final-gate", () => runFinalGate(
     llm, candidateReviews, reviewDiff, contractEvidence, priorRobinFindings, reviewInstructions, council
   ));

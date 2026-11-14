@@ -35,6 +35,7 @@ const {values: args} = parseArgs({options: {
   effort: {type: "string", default: "medium"},
   "max-diff-size": {type: "string", default: "50000"},
   "instructions-file": {type: "string", default: ".github/code-reviewer.md"},
+  concurrency: {type: "string", default: String(PIECE_CONCURRENCY)},
 }});
 const {workspace, repo: fullName, base, head, out} = args;
 if (!workspace || !fullName || !base || !head || !out) {
@@ -42,6 +43,8 @@ if (!workspace || !fullName || !base || !head || !out) {
 }
 if (!["low", "medium", "high"].includes(args.effort)) throw new Error(`Invalid --effort: ${args.effort}`);
 const [owner, repo] = fullName.split("/");
+const pieceConcurrency = Number(args.concurrency);
+if (!Number.isInteger(pieceConcurrency) || pieceConcurrency < 1) throw new Error(`Invalid --concurrency: ${args.concurrency}`);
 
 async function main(): Promise<void> {
   const token = process.env.GITHUB_TOKEN || execFileSync("gh", ["auth", "token"], {encoding: "utf8"}).trim();
@@ -61,7 +64,7 @@ async function main(): Promise<void> {
   const council = createCouncilSeat({llm: seat(args["council-model"]), model: args["council-model"]},
     {llm: seat(args["council-fallback-model"]), model: args["council-fallback-model"]});
   const result = await runReviewCore({
-    git, owner, repo, baseRef: base!, headRef: head!, reviewDiff, maxDiffSize, reviewInstructions,
+    git, owner, repo, baseRef: base!, headRef: head!, reviewDiff, maxDiffSize, pieceConcurrency, reviewInstructions,
     jsonResponseMode: resolveJsonResponseMode("", repoConfig), llm, council, timings,
     loadPriorFindings: async () => "",
   });
@@ -69,7 +72,7 @@ async function main(): Promise<void> {
   const receipt = timings.receipt(seats);
   console.log(receipt);
   writeFileSync(out!, `${JSON.stringify({
-    base, head, pieceConcurrency: PIECE_CONCURRENCY, diffChars: reviewDiff.length, pieces, removedFiles,
+    base, head, pieceConcurrency, diffChars: reviewDiff.length, pieces, removedFiles,
     startedAt: timings.startedAt, receipt, spans: timings.spans, seats,
     evidenceRequests: result.evidenceRequests, usedFollowups: result.usedFollowups, findings: result.findings,
   }, null, 2)}\n`);

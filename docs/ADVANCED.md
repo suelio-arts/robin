@@ -23,7 +23,7 @@ skip-paths:
 | `request-changes` | Used when `request-changes` input is empty. `true` (default) requests changes on high findings and approves otherwise; `false` posts advisor-only comments |
 | `skip-paths` | Extra paths removed from the diff before the LLM call |
 
-Lockfiles (npm, yarn, pnpm, Cargo, Gemfile, poetry), `dist/`, `node_modules/`, and minified assets are always skipped automatically. If every changed file is skipped, the action posts a status comment and skips the LLM call.
+Lockfiles (npm, yarn, pnpm, Cargo, Gemfile, poetry), `dist/`, `node_modules/`, `vendor/`, and minified assets are always skipped automatically. If every changed file is skipped, the action posts a status comment and skips the LLM call.
 
 The config file uses a small YAML subset (line-based keys only), not full YAML nesting.
 

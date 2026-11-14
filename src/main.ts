@@ -25,7 +25,7 @@ import {
   resolveReviewTarget,
   setPostedOutputs,
 } from "./review-run";
-import { reviewPieces, runReviewCore, seatCalls } from "./review-core";
+import { PIECE_CONCURRENCY, reviewPieces, runReviewCore, seatCalls } from "./review-core";
 import { ReviewTimings } from "./review-timing";
 import { loadRepoConfig, loadReviewInstructions } from "./review-settings";
 
@@ -371,7 +371,7 @@ async function run(): Promise<void> {
       // Full review parsed and posted as a review
       const timings = new ReviewTimings();
       const {findings, evidenceRequests, usedFollowups} = await runReviewCore({
-        git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, reviewInstructions,
+        git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: PIECE_CONCURRENCY, reviewInstructions,
         jsonResponseMode: useJsonMode, llm, council, timings,
         loadPriorFindings: () => loadPriorRobinFindings(octokit!, owner, repo, prNumber!),
       });

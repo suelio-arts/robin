@@ -11,6 +11,7 @@ export const DEFAULT_SKIP_PATH_PATTERNS = [
   "**/*.min.css",
   "**/dist/**",
   "**/node_modules/**",
+  "**/vendor/**",
 ];
 
 export function matchPathPattern(pattern: string, filePath: string): boolean {

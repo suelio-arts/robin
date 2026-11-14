@@ -638,3 +638,17 @@ export class GitHubReviewer {
     return false;
   }
 }
+
+/** Prior Robin findings, minus any whose thread a human has resolved. */
+export function formatPriorFindings(
+  comments: Array<{id: number; path?: string; line?: number | null; body?: string; pull_request_review_id?: number | null}>,
+  robinReviewIds: Set<number>,
+  resolvedCommentIds: Set<number>
+): string {
+  return comments
+    .filter(({pull_request_review_id: id}) => id !== null && id !== undefined && robinReviewIds.has(id))
+    .filter(({id}) => !resolvedCommentIds.has(id))
+    .map(({path, line, body}) => `${path}:${line || 0}: ${body}`)
+    .join("\n\n")
+    .slice(-30000);
+}

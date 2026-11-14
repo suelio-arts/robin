@@ -5,7 +5,7 @@ import { LLMClient } from "./llm-client";
 import { councilReceipt, createCouncilSeat } from "./council";
 import { GitUtils } from "./git-utils";
 import { StructuredReview } from "./review-parser";
-import { GitHubReviewer, ROBIN_SIGNATURE, reviewKey, findCachedVerdict } from "./github-reviewer";
+import { GitHubReviewer, ROBIN_SIGNATURE, reviewKey, findCachedVerdict, formatPriorFindings } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
 import { filterDiff, isWhitespaceOnlyDiff, splitDiffIntoFiles } from "./diff-filter";
 import {
@@ -719,20 +719,6 @@ async function loadPriorRobinFindings(
   });
   const resolved = await resolvedReviewCommentIds(octokit, owner, repo, pullNumber);
   return formatPriorFindings(comments, ids, resolved);
-}
-
-/** Prior Robin findings, minus any whose thread a human has resolved. */
-export function formatPriorFindings(
-  comments: Array<{id: number; path?: string; line?: number | null; body?: string; pull_request_review_id?: number | null}>,
-  robinReviewIds: Set<number>,
-  resolvedCommentIds: Set<number>
-): string {
-  return comments
-    .filter(({pull_request_review_id: id}) => id !== null && id !== undefined && robinReviewIds.has(id))
-    .filter(({id}) => !resolvedCommentIds.has(id))
-    .map(({path, line, body}) => `${path}:${line || 0}: ${body}`)
-    .join("\n\n")
-    .slice(-30000);
 }
 
 /**

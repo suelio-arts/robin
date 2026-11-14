@@ -734,12 +734,12 @@ class ReviewBudget {
     }
 }
 exports.ReviewBudget = ReviewBudget;
-async function runDiscovery(complete, loadEvidence, budget, councilComplete) {
-    // Alone, serial keeps one seat's concurrency at the batch size. A council seat runs
-    // the adversarial pass in parallel: each provider still sees one call per chunk.
-    const [broad, adversarial] = councilComplete
-        ? await Promise.all([complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), councilComplete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)])
-        : [await complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), await complete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)];
+async function runDiscovery(complete, loadEvidence, budget, councilComplete, time = (_stage, run) => run()) {
+    // Alone, serial keeps one seat's concurrency at the piece concurrency. A council seat runs
+    // the adversarial pass in parallel: each provider still sees one call per piece.
+    const [broad, adversarial] = await time("discovery", async () => councilComplete
+        ? Promise.all([complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), councilComplete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)])
+        : [await complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), await complete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)]);
     const initial = combine([broad, adversarial]);
     const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
     if (requests.length === 0) {
@@ -748,12 +748,12 @@ async function runDiscovery(complete, loadEvidence, budget, councilComplete) {
     const evidence = await loadEvidence(requests);
     if (!evidence || !budget.claimFollowup())
         return { review: initial, evidenceRequests: requests.length, followedUp: false };
-    const followup = await complete([
+    const followup = await time("followup", () => complete([
         "EVIDENCE FOLLOW-UP: Re-evaluate the initial candidates against the exact-head evidence below.",
         "Keep every still-proven root cause, reject disproven candidates, and add newly proven roots. Request no further evidence.",
         `INITIAL CANDIDATES:\n${JSON.stringify((0, precision_gate_1.buildPrecisionCandidates)([initial]))}`,
         evidence,
-    ].join("\n\n"));
+    ].join("\n\n")));
     return { review: combine([initial, followup]), evidenceRequests: requests.length, followedUp: true };
 }
 function combine(reviews) {
@@ -1679,6 +1679,7 @@ const promises_1 = __nccwpck_require__(1943);
 const os_1 = __nccwpck_require__(857);
 const path_1 = __nccwpck_require__(6928);
 const subscription_limit_1 = __nccwpck_require__(3478);
+const review_timing_1 = __nccwpck_require__(4220);
 /** `llm-base-url` value selecting the trusted self-hosted Rolly runner's local seats. */
 const LOCAL_AGENT_URL = "rolly-agent";
 const HOME = "/Users/rolly";
@@ -1771,6 +1772,8 @@ class LLMClient {
     providerOptions;
     startedAt = Date.now();
     metrics = { calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0 };
+    inFlight = 0;
+    calls = [];
     constructor(baseUrl, apiKey, model, maxOutputTokens, timeoutMs = config_1.DEFAULT_LLM_TIMEOUT_MS, maxAttempts = config_1.DEFAULT_LLM_COMPLETION_ATTEMPTS, onProgress, reasoningEffort, providerOptions = {}) {
         this.model = model;
         this.localAgent = baseUrl === LOCAL_AGENT_URL;
@@ -1813,7 +1816,30 @@ class LLMClient {
             core.warning(`LLM progress update failed (non-fatal): ${error}`);
         }
     }
+    /** Records every completed call's wall time, stage and concurrency on `calls`. */
     async chatCompletion(systemPrompt, userContent, jsonResponseMode = false) {
+        const stage = (0, review_timing_1.currentStage)();
+        const startMs = Date.now();
+        this.inFlight += 1;
+        const inFlight = this.inFlight;
+        let result;
+        try {
+            result = await this.completion(systemPrompt, userContent, jsonResponseMode);
+            return result;
+        }
+        finally {
+            const span = { ...stage, startMs, endMs: Date.now(), providerMs: result?.usage?.durationMs,
+                inFlight, failed: result === undefined };
+            this.calls.push(span);
+            core.info(`Robin call: ${this.model} · ${stage?.stage ?? "unattributed"}`
+                + (stage?.piece === undefined ? "" : ` · piece ${stage.piece}`)
+                + ` · ${span.endMs - startMs}ms wall · client queue 0ms`
+                + (span.providerMs === undefined ? "" : ` · provider ${span.providerMs.toFixed(0)}ms`)
+                + (span.failed ? " · failed" : ""));
+            this.inFlight -= 1;
+        }
+    }
+    async completion(systemPrompt, userContent, jsonResponseMode) {
         if (this.localAgent) {
             const result = await this.localAgentCompletion(systemPrompt, userContent);
             this.recordMetrics(result);
@@ -2286,25 +2312,19 @@ const llm_usage_1 = __nccwpck_require__(9292);
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const llm_client_1 = __nccwpck_require__(3316);
-const subscription_limit_1 = __nccwpck_require__(3478);
 const council_1 = __nccwpck_require__(6178);
 const git_utils_1 = __nccwpck_require__(8529);
-const review_parser_1 = __nccwpck_require__(2141);
-const review_retry_1 = __nccwpck_require__(450);
 const github_reviewer_1 = __nccwpck_require__(268);
 const config_1 = __nccwpck_require__(4008);
 const diff_filter_1 = __nccwpck_require__(7561);
-const diff_annotate_1 = __nccwpck_require__(4523);
 const repo_config_1 = __nccwpck_require__(2800);
 const review_prompts_1 = __nccwpck_require__(319);
 const commands_1 = __nccwpck_require__(367);
 const events_1 = __nccwpck_require__(6420);
 const review_run_1 = __nccwpck_require__(7917);
-const review_context_1 = __nccwpck_require__(4635);
-const precision_gate_1 = __nccwpck_require__(1006);
-const contract_discovery_1 = __nccwpck_require__(9972);
-const discovery_1 = __nccwpck_require__(7211);
-const evidence_loop_1 = __nccwpck_require__(356);
+const review_core_1 = __nccwpck_require__(5105);
+const review_timing_1 = __nccwpck_require__(4220);
+const review_settings_1 = __nccwpck_require__(5111);
 async function run() {
     let octokit;
     let statusOwner = "";
@@ -2453,7 +2473,7 @@ async function run() {
         const gitUtils = new git_utils_1.GitUtils(octokit);
         const baseRef = target.baseSha;
         const headRef = headSha;
-        const repoConfig = await loadRepoConfig(octokit, gitUtils, owner, repo, prNumber, configFile, baseRef);
+        const repoConfig = await (0, review_settings_1.loadRepoConfig)(gitUtils, owner, repo, configFile, baseRef);
         const maxDiffSize = (0, repo_config_1.resolveMaxDiffSize)(maxDiffSizeInput, repoConfig);
         const maxComments = (0, repo_config_1.resolveMaxComments)(maxCommentsInput, repoConfig);
         const jsonResponseMode = (0, repo_config_1.resolveJsonResponseMode)(jsonResponseModeInput, repoConfig);
@@ -2490,14 +2510,12 @@ async function run() {
             await skipReceipt("only whitespace changed.");
             return;
         }
-        const reviewedPaths = (0, contract_discovery_1.changedHeadPaths)(reviewDiff);
-        const reviewChunks = (0, diff_filter_1.splitDiffIntoFiles)(reviewDiff).flatMap(({ content }) => (0, diff_filter_1.chunkDiffByFile)(content, maxDiffSize));
         const summaryDiff = reviewDiff.length > maxDiffSize
             ? reviewDiff.slice(0, maxDiffSize) + "\n\n[... Diff truncated due to size limit]"
             : reviewDiff;
-        core.info(`Diff size: ${reviewDiff.length} chars in ${reviewChunks.length} review chunk(s)${removedFiles.length > 0 ? ` (${removedFiles.length} file(s) filtered)` : ""}`);
+        core.info(`Diff size: ${reviewDiff.length} chars in ${(0, review_core_1.reviewPieces)(reviewDiff, maxDiffSize).length} review chunk(s)${removedFiles.length > 0 ? ` (${removedFiles.length} file(s) filtered)` : ""}`);
         const reviewInstructions = command === "review"
-            ? await loadReviewInstructions(octokit, gitUtils, owner, repo, prNumber, inlineReviewInstructions, reviewInstructionsFile, baseRef)
+            ? await (0, review_settings_1.loadReviewInstructions)(gitUtils, owner, repo, inlineReviewInstructions, reviewInstructionsFile, baseRef)
             : "";
         // Content-addressed review reuse.
         //
@@ -2560,28 +2578,20 @@ async function run() {
         }
         else {
             // Full review parsed and posted as a review
-            const candidateReviews = [];
-            const reviewBudget = new discovery_1.ReviewBudget(Math.min(4, Math.max(1, Math.ceil(reviewChunks.length / 2))), Date.now() + 205_000);
-            let evidenceRequests = 0;
-            const searchContracts = async (queries, counterevidence = false) => (0, contract_discovery_1.buildContractSearchEvidence)(gitUtils, owner, repo, headRef, queries, reviewedPaths, { counterevidence, reviewedPaths });
-            for (let start = 0; start < reviewChunks.length; start += 8) {
-                const batch = reviewChunks.slice(start, start + 8);
-                const reviews = await Promise.all(batch.map(async (chunk, offset) => {
-                    core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
-                    const context = await (0, review_context_1.buildFileContext)(gitUtils, owner, repo, chunk, baseRef, headRef);
-                    return discoverChunk(llm, chunk, context, reviewInstructions, useJsonMode, (requests) => (0, evidence_loop_1.executeEvidenceRequests)(gitUtils, owner, repo, headRef, requests), reviewBudget, council);
-                }));
-                candidateReviews.push(...reviews.map(({ review }) => review));
-                evidenceRequests += reviews.reduce((total, review) => total + review.evidenceRequests, 0);
-            }
-            const priorRobinFindings = await loadPriorRobinFindings(octokit, owner, repo, prNumber);
-            const contractEvidence = await searchContracts((0, contract_discovery_1.extractChangedContractQueries)(reviewDiff), true);
-            const findings = await runFinalGate(llm, candidateReviews, reviewDiff, contractEvidence, priorRobinFindings, reviewInstructions, council);
+            const timings = new review_timing_1.ReviewTimings();
+            const { findings, evidenceRequests, usedFollowups } = await (0, review_core_1.runReviewCore)({
+                git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: review_core_1.PIECE_CONCURRENCY, reviewInstructions,
+                jsonResponseMode: useJsonMode, llm, council, timings,
+                loadPriorFindings: () => loadPriorRobinFindings(octokit, owner, repo, prNumber),
+            });
             const metrics = llm.getMetrics();
+            const timingReceipt = timings.receipt((0, review_core_1.seatCalls)(llm, model, council));
+            core.info(timingReceipt);
             findings.summary += [
                 "",
-                `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${reviewBudget.usedFollowups} evidence follow-ups`,
+                `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${usedFollowups} evidence follow-ups`,
                 ...(council ? [(0, council_1.councilReceipt)(model, council)] : []),
+                timingReceipt,
             ].join("\n");
             core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
             const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
@@ -2816,63 +2826,6 @@ function registerJobCancelHandler(onCancel) {
     process.once("SIGTERM", run);
     process.once("SIGINT", run);
 }
-async function loadRepoConfig(octokit, gitUtils, owner, repo, prNumber, configFile, baseRef) {
-    const filePath = configFile.trim();
-    if (!filePath)
-        return {};
-    try {
-        let ref = baseRef;
-        if (!ref) {
-            const { data: pullRequest } = await octokit.rest.pulls.get({
-                owner,
-                repo,
-                pull_number: prNumber,
-            });
-            ref = pullRequest.base.sha;
-        }
-        if (!ref)
-            return {};
-        const fileContent = await gitUtils.getFileContent(owner, repo, filePath, ref);
-        if (!fileContent.trim())
-            return {};
-        core.info(`Loaded repo config from ${filePath}`);
-        return (0, repo_config_1.parseRepoConfigYaml)(fileContent);
-    }
-    catch (error) {
-        core.info(`No repo config at ${filePath} (${error})`);
-        return {};
-    }
-}
-async function loadReviewInstructions(octokit, gitUtils, owner, repo, prNumber, inlineInstructions, instructionsFile, baseRef) {
-    const instructions = inlineInstructions.trim() ? [inlineInstructions.trim()] : [];
-    const filePath = instructionsFile.trim();
-    if (!filePath) {
-        return instructions.join("\n\n");
-    }
-    try {
-        let ref;
-        if (baseRef) {
-            ref = baseRef;
-        }
-        else {
-            const { data: pullRequest } = await octokit.rest.pulls.get({
-                owner,
-                repo,
-                pull_number: prNumber,
-            });
-            ref = pullRequest.base.sha;
-        }
-        const fileInstructions = await gitUtils.getFileContent(owner, repo, filePath, ref);
-        if (fileInstructions.trim()) {
-            core.info(`Loaded reviewer instructions from ${filePath}`);
-            instructions.push(`Instructions from ${filePath}:\n${fileInstructions.trim()}`);
-        }
-    }
-    catch (error) {
-        core.warning(`Could not load review instructions from ${filePath}: ${error}`);
-    }
-    return instructions.join("\n\n");
-}
 async function isAuthorizedCommenter(octokit, owner, repo, username, minCommandPermission) {
     if (!username)
         return false;
@@ -2903,108 +2856,6 @@ async function postHelpComment(octokit, payload) {
         body: helpBody,
     });
     core.info("Posted help comment.");
-}
-async function runReview(llm, diff, reviewInstructions, jsonResponseMode, context = "", focusInstructions = "") {
-    const systemPrompt = (0, review_prompts_1.getReviewPrompt)(reviewInstructions);
-    const userContent = [
-        buildReviewInput(diff, context),
-        focusInstructions && `REVIEW FOCUS:\n${focusInstructions}`,
-    ].filter(Boolean).join("\n\n");
-    core.info("Getting full code review...");
-    return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
-}
-async function discoverChunk(llm, diff, context, reviewInstructions, jsonResponseMode, loadEvidence, budget, council) {
-    const completeWith = (seat) => async (instructions) => {
-        const response = await runReview(seat, diff, reviewInstructions, jsonResponseMode, context, instructions);
-        const parsed = review_parser_1.ReviewParser.parseDetailed(response.content);
-        if (!(0, review_retry_1.shouldRetryStructuredReview)(parsed.findings, parsed.usedJson))
-            return parsed.findings;
-        return review_parser_1.ReviewParser.parse((await runReview(seat, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
-    };
-    const complete = completeWith(llm);
-    // A lost council seat must not cost the pass: the primary seat runs it instead.
-    const councilComplete = council && (async (instructions) => {
-        try {
-            return await (0, council_1.onCouncilSeat)(council, (seat) => completeWith(seat)(instructions));
-        }
-        catch (error) {
-            if (error instanceof subscription_limit_1.SubscriptionLimitError)
-                throw error;
-            council.discoveryFallbacks += 1;
-            core.warning(`Council seat ${council.model} failed discovery; primary seat ran the pass: ${error}`);
-            return complete(instructions);
-        }
-    });
-    return (0, discovery_1.runDiscovery)(complete, loadEvidence, budget, councilComplete);
-}
-async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFindings, reviewInstructions, council) {
-    const candidates = (0, precision_gate_1.buildPrecisionCandidates)(reviews);
-    const summary = "";
-    if (candidates.length === 0) {
-        if (council)
-            council.gateVoted = true;
-        return { summary, high: [], medium: [], low: [], suggestions: [], rawResponse: "" };
-    }
-    const precisionPrompt = [reviewInstructions, review_prompts_1.PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n");
-    const precisionInput = [
-        "CANDIDATES:",
-        JSON.stringify(candidates),
-        contractEvidence && `EXACT-HEAD REPOSITORY EVIDENCE:\n${(0, contract_discovery_1.wrapContractSearchEvidence)(contractEvidence)}`,
-        priorRobinFindings && `PRIOR ROBIN FINDINGS (keep only if still present):\n${priorRobinFindings}`,
-        `CANDIDATE DIFF EVIDENCE:\n${buildCandidateDiffEvidence(diff, candidates.map(({ finding }) => finding))}`,
-    ].filter(Boolean).join("\n\n");
-    // A council seat that cannot vote leaves the primary verdict standing.
-    const councilVote = council && (async () => {
-        try {
-            const vote = await (0, council_1.onCouncilSeat)(council, (seat) => seat.chatCompletion(precisionPrompt, precisionInput, true));
-            return (0, precision_gate_1.selectApprovedCandidates)(candidates, vote.content, summary);
-        }
-        catch (error) {
-            if (error instanceof subscription_limit_1.SubscriptionLimitError)
-                throw error;
-            core.warning(`Council seat ${council.model} could not vote: ${error}`);
-            return undefined;
-        }
-    })();
-    // Attach both rejection handlers immediately: a quota refusal from one seat
-    // must not become an unhandled rejection while the other is still working.
-    const [firstVerdict, vote] = await Promise.all([
-        llm.chatCompletion(precisionPrompt, precisionInput, true), councilVote,
-    ]);
-    let verdict = firstVerdict;
-    let precise;
-    try {
-        precise = (0, precision_gate_1.selectApprovedCandidates)(candidates, verdict.content, summary);
-    }
-    catch {
-        try {
-            verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
-            precise = (0, precision_gate_1.selectApprovedCandidates)(candidates, verdict.content, summary);
-        }
-        catch (error) {
-            if (error instanceof subscription_limit_1.SubscriptionLimitError)
-                throw error;
-            core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
-            precise = (0, precision_gate_1.retainAllCandidates)(candidates, summary, verdict.content);
-        }
-    }
-    if (council && vote) {
-        const merged = (0, precision_gate_1.mergeCouncilVerdicts)(precise, vote);
-        precise = merged.review;
-        council.splitVerdicts = merged.splitVerdicts;
-        council.gateVoted = true;
-    }
-    deduplicateFindings(precise);
-    return precise;
-}
-function buildCandidateDiffEvidence(diff, findings) {
-    if (diff.length <= 120000)
-        return diff;
-    const paths = new Set(findings.map(({ file }) => file).filter((path) => Boolean(path)));
-    const chunks = (0, diff_filter_1.splitDiffIntoFiles)(diff)
-        .filter(({ path }) => paths.has(path))
-        .map(({ content }) => content.length > 20000 ? `${content.slice(0, 20000)}\n[... truncated ...]` : content);
-    return chunks.join("\n").slice(0, 120000);
 }
 async function loadPriorRobinFindings(octokit, owner, repo, pullNumber) {
     const reviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
@@ -3079,40 +2930,11 @@ async function resolvedReviewCommentIds(octokit, owner, repo, pullNumber) {
     }
     return resolved;
 }
-function deduplicateFindings(review) {
-    const seen = new Set();
-    for (const severity of ["high", "medium", "low", "suggestions"]) {
-        review[severity] = review[severity].filter((finding) => {
-            const key = `${finding.file || ""}:${finding.line || 0}:${finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").slice(0, 12).join(" ")}`;
-            if (seen.has(key))
-                return false;
-            seen.add(key);
-            return true;
-        });
-    }
-}
 async function runSummary(llm, diff) {
     const systemPrompt = (0, review_prompts_1.getSummaryPrompt)();
     const userContent = buildSummaryInput(diff);
     core.info("Getting PR summary...");
     return await llm.chatCompletion(systemPrompt, userContent, false);
-}
-function buildReviewInput(diff, context = "") {
-    const annotated = (0, diff_annotate_1.annotateDiffWithLineNumbers)(diff);
-    const input = [
-        "Review the following code diff and return only the strict JSON object described in the system prompt.",
-        "Each line is prefixed with its line number in the NEW file (blank for removed lines and headers).",
-        "For any line-specific finding, copy that exact number into the `line` field. Do not guess or recount.",
-        "---",
-        "CODE DIFF:",
-        "```diff",
-        annotated,
-        "```",
-    ];
-    if (context) {
-        input.push("UNCHANGED BASE/HEAD FILE CONTEXT (evidence only; anchor comments to changed lines):", "```", context, "```");
-    }
-    return input.join("\n");
 }
 function buildSummaryInput(diff) {
     return [
@@ -3841,6 +3663,264 @@ function matchingNeighborhoods(content, terms, limit) {
 
 /***/ }),
 
+/***/ 5105:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PIECE_CONCURRENCY = void 0;
+exports.mapPool = mapPool;
+exports.reviewPieces = reviewPieces;
+exports.runReviewCore = runReviewCore;
+exports.seatCalls = seatCalls;
+const core = __importStar(__nccwpck_require__(7484));
+const subscription_limit_1 = __nccwpck_require__(3478);
+const council_1 = __nccwpck_require__(6178);
+const review_parser_1 = __nccwpck_require__(2141);
+const review_retry_1 = __nccwpck_require__(450);
+const diff_filter_1 = __nccwpck_require__(7561);
+const diff_annotate_1 = __nccwpck_require__(4523);
+const review_prompts_1 = __nccwpck_require__(319);
+const review_context_1 = __nccwpck_require__(4635);
+const precision_gate_1 = __nccwpck_require__(1006);
+const contract_discovery_1 = __nccwpck_require__(9972);
+const discovery_1 = __nccwpck_require__(7211);
+const evidence_loop_1 = __nccwpck_require__(356);
+/** Eight pieces keep both seats busy without the local startup/memory cost of 12–16.
+ * See the measured concurrency sweep in the phase-1 speed handoff (2026-11-14).
+ */
+exports.PIECE_CONCURRENCY = 8;
+/**
+ * Runs `run` over `items` with at most `limit` in flight, starting the next item
+ * as soon as one finishes. Results keep input order; the first rejection rejects.
+ */
+async function mapPool(items, limit, run) {
+    if (!Number.isInteger(limit) || limit < 1)
+        throw new Error("Piece concurrency must be a positive integer");
+    const results = new Array(items.length);
+    let failed = false;
+    let next = 0;
+    const worker = async () => {
+        while (!failed && next < items.length) {
+            const index = next++;
+            try {
+                results[index] = await run(items[index], index);
+            }
+            catch (error) {
+                failed = true;
+                throw error;
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+    return results;
+}
+/** Diff pieces: one per file, oversized files split on hunk boundaries. */
+function reviewPieces(reviewDiff, maxDiffSize) {
+    return (0, diff_filter_1.splitDiffIntoFiles)(reviewDiff).flatMap(({ content }) => (0, diff_filter_1.chunkDiffByFile)(content, maxDiffSize));
+}
+/** Discovery on every piece, then one precision gate over all candidates. Posts nothing. */
+async function runReviewCore(input) {
+    const { git, owner, repo, baseRef, headRef, reviewDiff, reviewInstructions, jsonResponseMode, llm, council, timings } = input;
+    const pieces = reviewPieces(reviewDiff, input.maxDiffSize);
+    const reviewedPaths = (0, contract_discovery_1.changedHeadPaths)(reviewDiff);
+    const reviewBudget = new discovery_1.ReviewBudget(Math.min(4, Math.max(1, Math.ceil(pieces.length / 2))), Date.now() + 205_000);
+    // Prior findings and contract evidence need no piece results, so they load while pieces run.
+    const [reviews, priorRobinFindings, contractEvidence] = await Promise.all([
+        mapPool(pieces, input.pieceConcurrency, async (piece, index) => {
+            const number = index + 1;
+            core.info(`Reviewing chunk ${number}/${pieces.length}...`);
+            const context = await timings.time("context", () => (0, review_context_1.buildFileContext)(git, owner, repo, piece, baseRef, headRef), number);
+            const result = await discoverPiece(llm, piece, context, reviewInstructions, jsonResponseMode, (requests) => timings.time("evidence", () => (0, evidence_loop_1.executeEvidenceRequests)(git, owner, repo, headRef, requests), number), reviewBudget, timings, number, council);
+            core.info(timings.pieceLine(number, pieces.length));
+            return result;
+        }),
+        timings.time("prior-findings", input.loadPriorFindings),
+        timings.time("contract-evidence", () => (0, contract_discovery_1.buildContractSearchEvidence)(git, owner, repo, headRef, (0, contract_discovery_1.extractChangedContractQueries)(reviewDiff), reviewedPaths, { counterevidence: true, reviewedPaths })),
+    ]);
+    const candidateReviews = reviews.map(({ review }) => review);
+    const evidenceRequests = reviews.reduce((total, review) => total + review.evidenceRequests, 0);
+    const findings = await timings.time("final-gate", () => runFinalGate(llm, candidateReviews, reviewDiff, contractEvidence, priorRobinFindings, reviewInstructions, council));
+    return { findings, pieces: pieces.length, evidenceRequests, usedFollowups: reviewBudget.usedFollowups };
+}
+async function runReview(llm, diff, reviewInstructions, jsonResponseMode, context = "", focusInstructions = "") {
+    const systemPrompt = (0, review_prompts_1.getReviewPrompt)(reviewInstructions);
+    const userContent = [
+        buildReviewInput(diff, context),
+        focusInstructions && `REVIEW FOCUS:\n${focusInstructions}`,
+    ].filter(Boolean).join("\n\n");
+    core.info("Getting full code review...");
+    return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
+}
+async function discoverPiece(llm, diff, context, reviewInstructions, jsonResponseMode, loadEvidence, budget, timings, piece, council) {
+    const completeWith = (seat) => async (instructions) => {
+        const response = await runReview(seat, diff, reviewInstructions, jsonResponseMode, context, instructions);
+        const parsed = review_parser_1.ReviewParser.parseDetailed(response.content);
+        if (!(0, review_retry_1.shouldRetryStructuredReview)(parsed.findings, parsed.usedJson))
+            return parsed.findings;
+        return review_parser_1.ReviewParser.parse((await runReview(seat, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`)).content);
+    };
+    const complete = completeWith(llm);
+    // A lost council seat must not cost the pass: the primary seat runs it instead.
+    const councilComplete = council && (async (instructions) => {
+        try {
+            return await (0, council_1.onCouncilSeat)(council, (seat) => completeWith(seat)(instructions));
+        }
+        catch (error) {
+            if (error instanceof subscription_limit_1.SubscriptionLimitError)
+                throw error;
+            council.discoveryFallbacks += 1;
+            core.warning(`Council seat ${council.model} failed discovery; primary seat ran the pass: ${error}`);
+            return complete(instructions);
+        }
+    });
+    return (0, discovery_1.runDiscovery)(complete, loadEvidence, budget, councilComplete, (stage, run) => timings.time(stage, run, piece));
+}
+async function runFinalGate(llm, reviews, diff, contractEvidence, priorRobinFindings, reviewInstructions, council) {
+    const candidates = (0, precision_gate_1.buildPrecisionCandidates)(reviews);
+    core.info(`Precision gate: ${candidates.length} candidates`);
+    const summary = "";
+    if (candidates.length === 0) {
+        if (council)
+            council.gateVoted = true;
+        return { summary, high: [], medium: [], low: [], suggestions: [], rawResponse: "" };
+    }
+    const precisionPrompt = [reviewInstructions, review_prompts_1.PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n");
+    const precisionInput = [
+        "CANDIDATES:",
+        JSON.stringify(candidates),
+        contractEvidence && `EXACT-HEAD REPOSITORY EVIDENCE:\n${(0, contract_discovery_1.wrapContractSearchEvidence)(contractEvidence)}`,
+        priorRobinFindings && `PRIOR ROBIN FINDINGS (keep only if still present):\n${priorRobinFindings}`,
+        `CANDIDATE DIFF EVIDENCE:\n${buildCandidateDiffEvidence(diff, candidates.map(({ finding }) => finding))}`,
+    ].filter(Boolean).join("\n\n");
+    // A council seat that cannot vote leaves the primary verdict standing.
+    const councilVote = council && (async () => {
+        try {
+            const vote = await (0, council_1.onCouncilSeat)(council, (seat) => seat.chatCompletion(precisionPrompt, precisionInput, true));
+            return (0, precision_gate_1.selectApprovedCandidates)(candidates, vote.content, summary);
+        }
+        catch (error) {
+            if (error instanceof subscription_limit_1.SubscriptionLimitError)
+                throw error;
+            core.warning(`Council seat ${council.model} could not vote: ${error}`);
+            return undefined;
+        }
+    })();
+    // Attach both rejection handlers immediately: a quota refusal from one seat
+    // must not become an unhandled rejection while the other is still working.
+    const [firstVerdict, vote] = await Promise.all([
+        llm.chatCompletion(precisionPrompt, precisionInput, true), councilVote,
+    ]);
+    let verdict = firstVerdict;
+    let precise;
+    try {
+        precise = (0, precision_gate_1.selectApprovedCandidates)(candidates, verdict.content, summary);
+    }
+    catch {
+        try {
+            verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
+            precise = (0, precision_gate_1.selectApprovedCandidates)(candidates, verdict.content, summary);
+        }
+        catch (error) {
+            if (error instanceof subscription_limit_1.SubscriptionLimitError)
+                throw error;
+            core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
+            precise = (0, precision_gate_1.retainAllCandidates)(candidates, summary, verdict.content);
+        }
+    }
+    if (council && vote) {
+        const merged = (0, precision_gate_1.mergeCouncilVerdicts)(precise, vote);
+        precise = merged.review;
+        council.splitVerdicts = merged.splitVerdicts;
+        council.gateVoted = true;
+    }
+    deduplicateFindings(precise);
+    return precise;
+}
+function buildCandidateDiffEvidence(diff, findings) {
+    if (diff.length <= 120000)
+        return diff;
+    const paths = new Set(findings.map(({ file }) => file).filter((path) => Boolean(path)));
+    const chunks = (0, diff_filter_1.splitDiffIntoFiles)(diff)
+        .filter(({ path }) => paths.has(path))
+        .map(({ content }) => content.length > 20000 ? `${content.slice(0, 20000)}\n[... truncated ...]` : content);
+    return chunks.join("\n").slice(0, 120000);
+}
+function deduplicateFindings(review) {
+    const seen = new Set();
+    for (const severity of ["high", "medium", "low", "suggestions"]) {
+        review[severity] = review[severity].filter((finding) => {
+            const key = `${finding.file || ""}:${finding.line || 0}:${finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").slice(0, 12).join(" ")}`;
+            if (seen.has(key))
+                return false;
+            seen.add(key);
+            return true;
+        });
+    }
+}
+function buildReviewInput(diff, context = "") {
+    const annotated = (0, diff_annotate_1.annotateDiffWithLineNumbers)(diff);
+    const input = [
+        "Review the following code diff and return only the strict JSON object described in the system prompt.",
+        "Each line is prefixed with its line number in the NEW file (blank for removed lines and headers).",
+        "For any line-specific finding, copy that exact number into the `line` field. Do not guess or recount.",
+        "---",
+        "CODE DIFF:",
+        "```diff",
+        annotated,
+        "```",
+    ];
+    if (context) {
+        input.push("UNCHANGED BASE/HEAD FILE CONTEXT (evidence only; anchor comments to changed lines):", "```", context, "```");
+    }
+    return input.join("\n");
+}
+/** Every seat that took calls, including a council seat replaced by its fallback. */
+function seatCalls(llm, model, council) {
+    return [
+        { model, calls: llm.calls },
+        ...(council?.substitutedFor ? [{ model: council.substitutedFor.model, calls: council.substitutedFor.llm.calls }] : []),
+        ...(council ? [{ model: council.model, calls: council.llm.calls }] : []),
+    ];
+}
+//# sourceMappingURL=review-core.js.map
+
+/***/ }),
+
 /***/ 2141:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -4286,6 +4366,181 @@ async function postSkippedReceipt(octokit, target, reason) {
     }
 }
 //# sourceMappingURL=review-run.js.map
+
+/***/ }),
+
+/***/ 5111:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.loadRepoConfig = loadRepoConfig;
+exports.loadReviewInstructions = loadReviewInstructions;
+const core = __importStar(__nccwpck_require__(7484));
+const repo_config_1 = __nccwpck_require__(2800);
+/** The repository's Robin config at the trusted base; absent or unreadable means defaults. */
+async function loadRepoConfig(git, owner, repo, configFile, baseRef) {
+    const filePath = configFile.trim();
+    if (!filePath)
+        return {};
+    try {
+        const fileContent = await git.getFileContent(owner, repo, filePath, baseRef);
+        if (!fileContent.trim())
+            return {};
+        core.info(`Loaded repo config from ${filePath}`);
+        return (0, repo_config_1.parseRepoConfigYaml)(fileContent);
+    }
+    catch (error) {
+        core.info(`No repo config at ${filePath} (${error})`);
+        return {};
+    }
+}
+/** Inline instructions plus the instructions file at the trusted base. */
+async function loadReviewInstructions(git, owner, repo, inlineInstructions, instructionsFile, baseRef) {
+    const instructions = inlineInstructions.trim() ? [inlineInstructions.trim()] : [];
+    const filePath = instructionsFile.trim();
+    if (!filePath)
+        return instructions.join("\n\n");
+    try {
+        const fileInstructions = await git.getFileContent(owner, repo, filePath, baseRef);
+        if (fileInstructions.trim()) {
+            core.info(`Loaded reviewer instructions from ${filePath}`);
+            instructions.push(`Instructions from ${filePath}:\n${fileInstructions.trim()}`);
+        }
+    }
+    catch (error) {
+        core.warning(`Could not load review instructions from ${filePath}: ${error}`);
+    }
+    return instructions.join("\n\n");
+}
+//# sourceMappingURL=review-settings.js.map
+
+/***/ }),
+
+/***/ 4220:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ReviewTimings = exports.REVIEW_STAGES = void 0;
+exports.currentStage = currentStage;
+exports.union = union;
+exports.percentile = percentile;
+const async_hooks_1 = __nccwpck_require__(290);
+/** The review's timed stages, in pipeline order. */
+exports.REVIEW_STAGES = [
+    "context", "discovery", "evidence", "followup", "prior-findings", "contract-evidence", "final-gate",
+];
+const current = new async_hooks_1.AsyncLocalStorage();
+/** The stage (and piece) the calling code runs under, so a seat can attribute its calls. */
+function currentStage() {
+    return current.getStore();
+}
+class ReviewTimings {
+    startedAt;
+    spans = [];
+    constructor(startedAt = Date.now()) {
+        this.startedAt = startedAt;
+    }
+    async time(stage, run, piece) {
+        const startMs = Date.now();
+        try {
+            return await current.run({ stage, piece }, run);
+        }
+        finally {
+            this.spans.push({ stage, piece, startMs, endMs: Date.now() });
+        }
+    }
+    /** Per-piece stage durations, for one log line when a piece finishes. */
+    pieceLine(piece, total) {
+        const spans = this.spans.filter((span) => span.piece === piece);
+        const start = Math.min(...spans.map(({ startMs }) => startMs));
+        const end = Math.max(...spans.map(({ endMs }) => endMs));
+        const parts = exports.REVIEW_STAGES.flatMap((stage) => {
+            const own = spans.filter((span) => span.stage === stage);
+            return own.length ? [`${stage} ${seconds(union(own))}`] : [];
+        });
+        return `Piece ${piece}/${total} done in ${seconds(end - start)} (${parts.join(", ")}), finished at +${seconds(end - this.startedAt)}`;
+    }
+    /** Wall time each stage was active (overlapping pieces counted once), and each seat's calls. */
+    receipt(seats) {
+        const stages = exports.REVIEW_STAGES.flatMap((stage) => {
+            const spans = this.spans.filter((span) => span.stage === stage);
+            return spans.length ? [`${stage} ${seconds(union(spans))}`] : [];
+        });
+        const seatParts = seats.filter(({ calls }) => calls.length > 0).map(({ model, calls }) => {
+            const walls = calls.map(({ startMs, endMs }) => endMs - startMs);
+            const provider = calls.flatMap(({ providerMs }) => providerMs === undefined ? [] : [providerMs]);
+            return `${model} ${calls.length} calls, p50 ${seconds(percentile(walls, 0.5))}, max ${seconds(Math.max(...walls))}`
+                + (provider.length ? `, provider p50 ${seconds(percentile(provider, 0.5))}` : "")
+                + `, peak ${Math.max(...calls.map(({ inFlight }) => inFlight))} in flight`
+                + `, ${calls.filter(({ failed }) => failed).length} failed, client queue 0.0s`
+                + exports.REVIEW_STAGES.flatMap((stage) => {
+                    const own = calls.filter((call) => call.stage === stage);
+                    return own.length ? [`; ${stage} ${own.length} calls / ${seconds(union(own))} active`] : [];
+                }).join("");
+        });
+        const total = Math.max(this.startedAt, ...this.spans.map(({ endMs }) => endMs)) - this.startedAt;
+        return [`Robin timing: ${seconds(total)} · ${stages.join(" · ")}`, ...seatParts.map((part) => `Robin seat: ${part}`)].join("\n");
+    }
+}
+exports.ReviewTimings = ReviewTimings;
+/** Length of the union of the intervals: wall time during which at least one ran. */
+function union(spans) {
+    const sorted = [...spans].sort((left, right) => left.startMs - right.startMs);
+    let covered = 0;
+    let end = -Infinity;
+    for (const { startMs, endMs } of sorted) {
+        if (endMs <= end)
+            continue;
+        covered += endMs - Math.max(startMs, end);
+        end = endMs;
+    }
+    return covered;
+}
+function percentile(values, fraction) {
+    const sorted = [...values].sort((left, right) => left - right);
+    return sorted[Math.min(sorted.length - 1, Math.ceil(fraction * sorted.length) - 1)] ?? 0;
+}
+function seconds(ms) {
+    return `${(ms / 1000).toFixed(1)}s`;
+}
+//# sourceMappingURL=review-timing.js.map
 
 /***/ }),
 
@@ -54434,6 +54689,14 @@ module.exports = eval("require")("encoding");
 
 "use strict";
 module.exports = require("assert");
+
+/***/ }),
+
+/***/ 290:
+/***/ ((module) => {
+
+"use strict";
+module.exports = require("async_hooks");
 
 /***/ }),
 

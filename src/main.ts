@@ -2,19 +2,14 @@ import {parseLlmProviderOptions} from "./llm-usage";
 import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
-import { SubscriptionLimitError } from "./subscription-limit";
-import { type CouncilSeat, councilReceipt, createCouncilSeat, onCouncilSeat } from "./council";
+import { councilReceipt, createCouncilSeat } from "./council";
 import { GitUtils } from "./git-utils";
-import { ReviewFinding, ReviewParser, StructuredReview } from "./review-parser";
-import { shouldRetryStructuredReview } from "./review-retry";
+import { StructuredReview } from "./review-parser";
 import { GitHubReviewer, ROBIN_SIGNATURE, reviewKey, findCachedVerdict } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
-import { chunkDiffByFile, filterDiff, isWhitespaceOnlyDiff, splitDiffIntoFiles } from "./diff-filter";
-import { annotateDiffWithLineNumbers } from "./diff-annotate";
+import { filterDiff, isWhitespaceOnlyDiff, splitDiffIntoFiles } from "./diff-filter";
 import {
   DEFAULT_CONFIG_FILE,
-  RepoConfig,
-  parseRepoConfigYaml,
   resolveJsonResponseMode,
   resolveMaxComments,
   resolveMaxDiffSize,
@@ -30,11 +25,9 @@ import {
   resolveReviewTarget,
   setPostedOutputs,
 } from "./review-run";
-import { buildFileContext } from "./review-context";
-import { buildPrecisionCandidates, mergeCouncilVerdicts, retainAllCandidates, selectApprovedCandidates } from "./precision-gate";
-import { buildContractSearchEvidence, changedHeadPaths, extractChangedContractQueries, wrapContractSearchEvidence } from "./contract-discovery";
-import { ReviewBudget, runDiscovery } from "./discovery";
-import { executeEvidenceRequests } from "./evidence-loop";
+import { PIECE_CONCURRENCY, reviewPieces, runReviewCore, seatCalls } from "./review-core";
+import { ReviewTimings } from "./review-timing";
+import { loadRepoConfig, loadReviewInstructions } from "./review-settings";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
@@ -218,15 +211,7 @@ async function run(): Promise<void> {
     const gitUtils = new GitUtils(octokit as any);
     const baseRef = target.baseSha;
     const headRef = headSha;
-    const repoConfig = await loadRepoConfig(
-      octokit,
-      gitUtils,
-      owner,
-      repo,
-      prNumber,
-      configFile,
-      baseRef
-    );
+    const repoConfig = await loadRepoConfig(gitUtils, owner, repo, configFile, baseRef);
     const maxDiffSize = resolveMaxDiffSize(maxDiffSizeInput, repoConfig);
     const maxComments = resolveMaxComments(maxCommentsInput, repoConfig);
     const jsonResponseMode = resolveJsonResponseMode(jsonResponseModeInput, repoConfig);
@@ -286,29 +271,15 @@ async function run(): Promise<void> {
       await skipReceipt("only whitespace changed.");
       return;
     }
-    const reviewedPaths = changedHeadPaths(reviewDiff);
-
-    const reviewChunks = splitDiffIntoFiles(reviewDiff).flatMap(({ content }) =>
-      chunkDiffByFile(content, maxDiffSize)
-    );
     const summaryDiff = reviewDiff.length > maxDiffSize
       ? reviewDiff.slice(0, maxDiffSize) + "\n\n[... Diff truncated due to size limit]"
       : reviewDiff;
 
     core.info(
-      `Diff size: ${reviewDiff.length} chars in ${reviewChunks.length} review chunk(s)${removedFiles.length > 0 ? ` (${removedFiles.length} file(s) filtered)` : ""}`
+      `Diff size: ${reviewDiff.length} chars in ${reviewPieces(reviewDiff, maxDiffSize).length} review chunk(s)${removedFiles.length > 0 ? ` (${removedFiles.length} file(s) filtered)` : ""}`
     );
     const reviewInstructions = command === "review"
-      ? await loadReviewInstructions(
-        octokit,
-        gitUtils,
-        owner,
-        repo,
-        prNumber,
-        inlineReviewInstructions,
-        reviewInstructionsFile,
-        baseRef
-      )
+      ? await loadReviewInstructions(gitUtils, owner, repo, inlineReviewInstructions, reviewInstructionsFile, baseRef)
       : "";
 
     // Content-addressed review reuse.
@@ -398,49 +369,20 @@ async function run(): Promise<void> {
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("summary"));
     } else {
       // Full review parsed and posted as a review
-      const candidateReviews: StructuredReview[] = [];
-      const reviewBudget = new ReviewBudget(Math.min(4, Math.max(1, Math.ceil(reviewChunks.length / 2))), Date.now() + 205_000);
-      let evidenceRequests = 0;
-      const searchContracts = async (queries: string[], counterevidence = false) => buildContractSearchEvidence(
-        gitUtils,
-        owner,
-        repo,
-        headRef,
-        queries,
-        reviewedPaths,
-        {counterevidence, reviewedPaths}
-      );
-      for (let start = 0; start < reviewChunks.length; start += 8) {
-        const batch = reviewChunks.slice(start, start + 8);
-        const reviews = await Promise.all(batch.map(async (chunk, offset) => {
-          core.info(`Reviewing chunk ${start + offset + 1}/${reviewChunks.length}...`);
-          const context = await buildFileContext(gitUtils, owner, repo, chunk, baseRef, headRef);
-          return discoverChunk(
-            llm, chunk, context, reviewInstructions, useJsonMode,
-            (requests) => executeEvidenceRequests(gitUtils, owner, repo, headRef, requests),
-            reviewBudget,
-            council
-          );
-        }));
-        candidateReviews.push(...reviews.map(({review}) => review));
-        evidenceRequests += reviews.reduce((total, review) => total + review.evidenceRequests, 0);
-      }
-      const priorRobinFindings = await loadPriorRobinFindings(octokit, owner, repo, prNumber);
-      const contractEvidence = await searchContracts(extractChangedContractQueries(reviewDiff), true);
-      const findings = await runFinalGate(
-        llm,
-        candidateReviews,
-        reviewDiff,
-        contractEvidence,
-        priorRobinFindings,
-        reviewInstructions,
-        council
-      );
+      const timings = new ReviewTimings();
+      const {findings, evidenceRequests, usedFollowups} = await runReviewCore({
+        git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: PIECE_CONCURRENCY, reviewInstructions,
+        jsonResponseMode: useJsonMode, llm, council, timings,
+        loadPriorFindings: () => loadPriorRobinFindings(octokit!, owner, repo, prNumber!),
+      });
       const metrics = llm.getMetrics();
+      const timingReceipt = timings.receipt(seatCalls(llm, model, council));
+      core.info(timingReceipt);
       findings.summary += [
         "",
-        `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${reviewBudget.usedFollowups} evidence follow-ups`,
+        `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${usedFollowups} evidence follow-ups`,
         ...(council ? [councilReceipt(model, council)] : []),
+        timingReceipt,
       ].join("\n");
 
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
@@ -717,84 +659,6 @@ function registerJobCancelHandler(onCancel: () => Promise<void>): void {
   process.once("SIGINT", run);
 }
 
-async function loadRepoConfig(
-  octokit: any,
-  gitUtils: GitUtils,
-  owner: string,
-  repo: string,
-  prNumber: number,
-  configFile: string,
-  baseRef?: string
-): Promise<RepoConfig> {
-  const filePath = configFile.trim();
-  if (!filePath) return {};
-
-  try {
-    let ref = baseRef;
-    if (!ref) {
-      const { data: pullRequest } = await octokit.rest.pulls.get({
-        owner,
-        repo,
-        pull_number: prNumber,
-      });
-      ref = pullRequest.base.sha;
-    }
-
-    if (!ref) return {};
-
-    const fileContent = await gitUtils.getFileContent(owner, repo, filePath, ref);
-    if (!fileContent.trim()) return {};
-
-    core.info(`Loaded repo config from ${filePath}`);
-    return parseRepoConfigYaml(fileContent);
-  } catch (error) {
-    core.info(`No repo config at ${filePath} (${error})`);
-    return {};
-  }
-}
-
-async function loadReviewInstructions(
-  octokit: any,
-  gitUtils: GitUtils,
-  owner: string,
-  repo: string,
-  prNumber: number,
-  inlineInstructions: string,
-  instructionsFile: string,
-  baseRef?: string
-): Promise<string> {
-  const instructions = inlineInstructions.trim() ? [inlineInstructions.trim()] : [];
-  const filePath = instructionsFile.trim();
-
-  if (!filePath) {
-    return instructions.join("\n\n");
-  }
-
-  try {
-    let ref: string;
-    if (baseRef) {
-      ref = baseRef;
-    } else {
-      const { data: pullRequest } = await octokit.rest.pulls.get({
-        owner,
-        repo,
-        pull_number: prNumber,
-      });
-      ref = pullRequest.base.sha;
-    }
-
-    const fileInstructions = await gitUtils.getFileContent(owner, repo, filePath, ref);
-    if (fileInstructions.trim()) {
-      core.info(`Loaded reviewer instructions from ${filePath}`);
-      instructions.push(`Instructions from ${filePath}:\n${fileInstructions.trim()}`);
-    }
-  } catch (error) {
-    core.warning(`Could not load review instructions from ${filePath}: ${error}`);
-  }
-
-  return instructions.join("\n\n");
-}
-
 async function isAuthorizedCommenter(
   octokit: any,
   owner: string,
@@ -835,129 +699,6 @@ async function postHelpComment(octokit: any, payload: any): Promise<void> {
   });
 
   core.info("Posted help comment.");
-}
-
-async function runReview(
-  llm: LLMClient,
-  diff: string,
-  reviewInstructions: string,
-  jsonResponseMode: boolean,
-  context = "",
-  focusInstructions = ""
-) {
-  const systemPrompt = getReviewPrompt(reviewInstructions);
-  const userContent = [
-    buildReviewInput(diff, context),
-    focusInstructions && `REVIEW FOCUS:\n${focusInstructions}`,
-  ].filter(Boolean).join("\n\n");
-  core.info("Getting full code review...");
-  return await llm.chatCompletion(systemPrompt, userContent, jsonResponseMode);
-}
-
-async function discoverChunk(
-  llm: LLMClient,
-  diff: string,
-  context: string,
-  reviewInstructions: string,
-  jsonResponseMode: boolean,
-  loadEvidence: Parameters<typeof runDiscovery>[1],
-  budget: ReviewBudget,
-  council?: CouncilSeat
-): Promise<{review: StructuredReview; evidenceRequests: number; followedUp: boolean}> {
-  const completeWith = (seat: LLMClient) => async (instructions: string) => {
-    const response = await runReview(seat, diff, reviewInstructions, jsonResponseMode, context, instructions);
-    const parsed = ReviewParser.parseDetailed(response.content);
-    if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
-    return ReviewParser.parse((await runReview(
-      seat, diff, reviewInstructions, true, context, `${instructions}\n\nReturn ONLY a single valid JSON object.`
-    )).content);
-  };
-  const complete = completeWith(llm);
-  // A lost council seat must not cost the pass: the primary seat runs it instead.
-  const councilComplete = council && (async (instructions: string) => {
-    try {
-      return await onCouncilSeat(council, (seat) => completeWith(seat)(instructions));
-    } catch (error) {
-      if (error instanceof SubscriptionLimitError) throw error;
-      council.discoveryFallbacks += 1;
-      core.warning(`Council seat ${council.model} failed discovery; primary seat ran the pass: ${error}`);
-      return complete(instructions);
-    }
-  });
-  return runDiscovery(complete, loadEvidence, budget, councilComplete);
-}
-
-async function runFinalGate(
-  llm: LLMClient,
-  reviews: StructuredReview[],
-  diff: string,
-  contractEvidence: string,
-  priorRobinFindings: string,
-  reviewInstructions: string,
-  council?: CouncilSeat
-): Promise<StructuredReview> {
-  const candidates = buildPrecisionCandidates(reviews);
-  const summary = "";
-  if (candidates.length === 0) {
-    if (council) council.gateVoted = true;
-    return {summary, high: [], medium: [], low: [], suggestions: [], rawResponse: ""};
-  }
-  const precisionPrompt = [reviewInstructions, PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n");
-  const precisionInput = [
-    "CANDIDATES:",
-    JSON.stringify(candidates),
-    contractEvidence && `EXACT-HEAD REPOSITORY EVIDENCE:\n${wrapContractSearchEvidence(contractEvidence)}`,
-    priorRobinFindings && `PRIOR ROBIN FINDINGS (keep only if still present):\n${priorRobinFindings}`,
-    `CANDIDATE DIFF EVIDENCE:\n${buildCandidateDiffEvidence(diff, candidates.map(({finding}) => finding))}`,
-  ].filter(Boolean).join("\n\n");
-  // A council seat that cannot vote leaves the primary verdict standing.
-  const councilVote = council && (async () => {
-    try {
-      const vote = await onCouncilSeat(council, (seat) => seat.chatCompletion(precisionPrompt, precisionInput, true));
-      return selectApprovedCandidates(candidates, vote.content, summary);
-    } catch (error) {
-      if (error instanceof SubscriptionLimitError) throw error;
-      core.warning(`Council seat ${council.model} could not vote: ${error}`);
-      return undefined;
-    }
-  })();
-  // Attach both rejection handlers immediately: a quota refusal from one seat
-  // must not become an unhandled rejection while the other is still working.
-  const [firstVerdict, vote] = await Promise.all([
-    llm.chatCompletion(precisionPrompt, precisionInput, true), councilVote,
-  ]);
-  let verdict = firstVerdict;
-  let precise: StructuredReview;
-  try {
-    precise = selectApprovedCandidates(candidates, verdict.content, summary);
-  } catch {
-    try {
-      verdict = await llm.chatCompletion(`${precisionPrompt}\n\nYour prior response was invalid. Return only the required JSON object.`, precisionInput, true);
-      precise = selectApprovedCandidates(candidates, verdict.content, summary);
-    } catch (error) {
-      if (error instanceof SubscriptionLimitError) throw error;
-      core.warning(`Precision gate failed twice; retaining every candidate: ${error}`);
-      precise = retainAllCandidates(candidates, summary, verdict.content);
-    }
-  }
-  if (council && vote) {
-    const merged = mergeCouncilVerdicts(precise, vote);
-    precise = merged.review;
-    council.splitVerdicts = merged.splitVerdicts;
-    council.gateVoted = true;
-  }
-
-  deduplicateFindings(precise);
-  return precise;
-}
-
-function buildCandidateDiffEvidence(diff: string, findings: ReviewFinding[]): string {
-  if (diff.length <= 120000) return diff;
-  const paths = new Set(findings.map(({file}) => file).filter((path): path is string => Boolean(path)));
-  const chunks = splitDiffIntoFiles(diff)
-    .filter(({path}) => paths.has(path))
-    .map(({content}) => content.length > 20000 ? `${content.slice(0, 20000)}\n[... truncated ...]` : content);
-  return chunks.join("\n").slice(0, 120000);
 }
 
 async function loadPriorRobinFindings(
@@ -1048,46 +789,11 @@ async function resolvedReviewCommentIds(
   return resolved;
 }
 
-function deduplicateFindings(review: StructuredReview): void {
-  const seen = new Set<string>();
-  for (const severity of ["high", "medium", "low", "suggestions"] as const) {
-    review[severity] = review[severity].filter((finding: ReviewFinding) => {
-      const key = `${finding.file || ""}:${finding.line || 0}:${finding.description.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ").slice(0, 12).join(" ")}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }
-}
-
 async function runSummary(llm: LLMClient, diff: string) {
   const systemPrompt = getSummaryPrompt();
   const userContent = buildSummaryInput(diff);
   core.info("Getting PR summary...");
   return await llm.chatCompletion(systemPrompt, userContent, false);
-}
-
-function buildReviewInput(diff: string, context = ""): string {
-  const annotated = annotateDiffWithLineNumbers(diff);
-  const input = [
-    "Review the following code diff and return only the strict JSON object described in the system prompt.",
-    "Each line is prefixed with its line number in the NEW file (blank for removed lines and headers).",
-    "For any line-specific finding, copy that exact number into the `line` field. Do not guess or recount.",
-    "---",
-    "CODE DIFF:",
-    "```diff",
-    annotated,
-    "```",
-  ];
-  if (context) {
-    input.push(
-      "UNCHANGED BASE/HEAD FILE CONTEXT (evidence only; anchor comments to changed lines):",
-      "```",
-      context,
-      "```"
-    );
-  }
-  return input.join("\n");
 }
 
 function buildSummaryInput(diff: string): string {

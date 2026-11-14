@@ -70,6 +70,12 @@ describe("shouldSkipPath", () => {
     expect(shouldSkipPath("Gemfile.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
     expect(shouldSkipPath("poetry.lock", DEFAULT_SKIP_PATH_PATTERNS)).toBe(true);
   });
+
+  it("keeps vendor patches and generator fixtures reviewable unless explicitly excluded", () => {
+    expect(shouldSkipPath("web/qr/800/vendor/three/0.185.1/three.module.js", DEFAULT_SKIP_PATH_PATTERNS)).toBe(false);
+    expect(shouldSkipPath("vendor/github.com/pkg/errors/errors.go", DEFAULT_SKIP_PATH_PATTERNS)).toBe(false);
+    expect(shouldSkipPath("src/vendors/catalog.ts", DEFAULT_SKIP_PATH_PATTERNS)).toBe(false);
+  });
 });
 
 describe("isWhitespaceOnlyDiff", () => {

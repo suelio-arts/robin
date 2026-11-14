@@ -6,6 +6,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["src/**/*.ts", "scripts/eval-mix-recent-prs.ts", "scripts/score-mix-eval.ts"],
+  "include": ["src/**/*.ts", "scripts/eval-mix-recent-prs.ts", "scripts/score-mix-eval.ts", "scripts/review-replay.ts"],
   "exclude": ["src/**/*.test.ts"]
 }

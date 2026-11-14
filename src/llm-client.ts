@@ -22,6 +22,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { subscriptionLimitFromStderr } from "./subscription-limit";
+import { type CallSpan, currentStage } from "./review-timing";
 /** `llm-base-url` value selecting the trusted self-hosted Rolly runner's local seats. */
 const LOCAL_AGENT_URL = "rolly-agent";
 const HOME = "/Users/rolly";
@@ -170,6 +171,8 @@ export class LLMClient {
   private providerOptions: LlmProviderOptions;
   private startedAt = Date.now();
   private metrics = {calls: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0};
+  private inFlight = 0;
+  readonly calls: CallSpan[] = [];
 
   constructor(
     baseUrl: string,
@@ -231,10 +234,37 @@ export class LLMClient {
     }
   }
 
+  /** Records every completed call's wall time, stage and concurrency on `calls`. */
   async chatCompletion(
     systemPrompt: string,
     userContent: string,
     jsonResponseMode = false
+  ): Promise<ChatCompletionResult> {
+    const stage = currentStage();
+    const startMs = Date.now();
+    this.inFlight += 1;
+    const inFlight = this.inFlight;
+    let result: ChatCompletionResult | undefined;
+    try {
+      result = await this.completion(systemPrompt, userContent, jsonResponseMode);
+      return result;
+    } finally {
+      const span: CallSpan = {...stage, startMs, endMs: Date.now(), providerMs: result?.usage?.durationMs,
+        inFlight, failed: result === undefined};
+      this.calls.push(span);
+      core.info(`Robin call: ${this.model} · ${stage?.stage ?? "unattributed"}`
+        + (stage?.piece === undefined ? "" : ` · piece ${stage.piece}`)
+        + ` · ${span.endMs - startMs}ms wall · client queue 0ms`
+        + (span.providerMs === undefined ? "" : ` · provider ${span.providerMs.toFixed(0)}ms`)
+        + (span.failed ? " · failed" : ""));
+      this.inFlight -= 1;
+    }
+  }
+
+  private async completion(
+    systemPrompt: string,
+    userContent: string,
+    jsonResponseMode: boolean
   ): Promise<ChatCompletionResult> {
     if (this.localAgent) {
       const result = await this.localAgentCompletion(systemPrompt, userContent);

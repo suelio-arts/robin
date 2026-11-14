@@ -148,6 +148,10 @@ Direct action only. Every terminal path sets all nine outputs once a pull reques
 
 To run the engine yourself against an exact head — a self-hosted subscription model, no Actions minutes — use the CLI: `robin-review pr <n> --local --workspace <dir>`. It prepares a bounded environment, runs the shipped `dist/index.js` once against the checkout you point it at, and returns the same receipt the action outputs carry. Run `robin-review pr --help` for the flags.
 
+To measure or compare a review without posting anything, replay one base/head pair from a full local clone: `npm run review:replay -- --workspace <clone> --repo <owner/name> --base <sha> --head <sha> --out <file.json>`. It runs the same review core as the action on the subscription seats and writes findings and timing as JSON. Repository search greps the clone's `HEAD`, so point it at the commit the replayed run checked out.
+
+Every review summary ends with a timing receipt: wall time per stage (context, discovery, evidence, follow-up, final gate) and, per seat, calls, p50 and max call time, the provider's own duration when available, failed calls, stage activity and the peak number of calls in flight. Robin currently dispatches calls immediately (client queue time is zero); provider duration includes the external CLI and cannot isolate a provider-side queue. The log adds one line per call and per piece as it finishes. Stage activity is the union of overlapping intervals, so stage totals are not additive. Skipped and reused verdicts do not run the review core.
+
 ## Usage patterns
 
 ### Advisor mode (never block the PR)

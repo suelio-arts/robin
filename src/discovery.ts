@@ -2,6 +2,9 @@ import { ADVERSARIAL_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS } from "./prompts/revi
 import { buildPrecisionCandidates } from "./precision-gate";
 import { EvidenceRequest } from "./evidence-loop";
 import { StructuredReview } from "./review-parser";
+import type { ReviewStage } from "./review-timing";
+
+type TimeStage = <T>(stage: ReviewStage, run: () => Promise<T>) => Promise<T>;
 
 export class ReviewBudget {
   private followups = 0;
@@ -23,13 +26,14 @@ export async function runDiscovery(
   complete: (instructions: string) => Promise<StructuredReview>,
   loadEvidence: (requests: EvidenceRequest[]) => Promise<string>,
   budget: ReviewBudget,
-  councilComplete?: (instructions: string) => Promise<StructuredReview>
+  councilComplete?: (instructions: string) => Promise<StructuredReview>,
+  time: TimeStage = (_stage, run) => run()
 ): Promise<{review: StructuredReview; evidenceRequests: number; followedUp: boolean}> {
-  // Alone, serial keeps one seat's concurrency at the batch size. A council seat runs
-  // the adversarial pass in parallel: each provider still sees one call per chunk.
-  const [broad, adversarial] = councilComplete
-    ? await Promise.all([complete(DISCOVERY_INSTRUCTIONS), councilComplete(ADVERSARIAL_INSTRUCTIONS)])
-    : [await complete(DISCOVERY_INSTRUCTIONS), await complete(ADVERSARIAL_INSTRUCTIONS)];
+  // Alone, serial keeps one seat's concurrency at the piece concurrency. A council seat runs
+  // the adversarial pass in parallel: each provider still sees one call per piece.
+  const [broad, adversarial] = await time("discovery", async () => councilComplete
+    ? Promise.all([complete(DISCOVERY_INSTRUCTIONS), councilComplete(ADVERSARIAL_INSTRUCTIONS)])
+    : [await complete(DISCOVERY_INSTRUCTIONS), await complete(ADVERSARIAL_INSTRUCTIONS)]);
   const initial = combine([broad, adversarial]);
   const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
   if (requests.length === 0) {
@@ -37,12 +41,12 @@ export async function runDiscovery(
   }
   const evidence = await loadEvidence(requests);
   if (!evidence || !budget.claimFollowup()) return {review: initial, evidenceRequests: requests.length, followedUp: false};
-  const followup = await complete([
+  const followup = await time("followup", () => complete([
     "EVIDENCE FOLLOW-UP: Re-evaluate the initial candidates against the exact-head evidence below.",
     "Keep every still-proven root cause, reject disproven candidates, and add newly proven roots. Request no further evidence.",
     `INITIAL CANDIDATES:\n${JSON.stringify(buildPrecisionCandidates([initial]))}`,
     evidence,
-  ].join("\n\n"));
+  ].join("\n\n")));
   return {review: combine([initial, followup]), evidenceRequests: requests.length, followedUp: true};
 }
 

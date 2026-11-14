@@ -15,7 +15,7 @@ import { writeFileSync } from "fs";
 import { parseArgs } from "util";
 import { DEFAULT_LLM_TIMEOUT_MS } from "../src/config";
 import { createCouncilSeat } from "../src/council";
-import { filterDiff } from "../src/diff-filter";
+import { filterDiff, isWhitespaceOnlyDiff } from "../src/diff-filter";
 import { GitUtils } from "../src/git-utils";
 import { LLMClient } from "../src/llm-client";
 import { DEFAULT_CONFIG_FILE, resolveJsonResponseMode, resolveMaxDiffSize } from "../src/repo-config";
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
   const maxDiffSize = resolveMaxDiffSize(args["max-diff-size"], repoConfig);
   const diff = await git.getPullRequestDiff(base!, head!);
   const {filtered, removedFiles} = filterDiff(diff, repoConfig.skipPaths || []);
-  const reviewDiff = filtered.trim() ? filtered : diff;
+  const reviewDiff = filtered;
   const pieces = reviewPieces(reviewDiff, maxDiffSize).length;
   console.log(`Diff size: ${reviewDiff.length} chars in ${pieces} piece(s); ${removedFiles.length} file(s) skipped: ${removedFiles.join(", ")}`);
   const reviewInstructions = await loadReviewInstructions(git, owner, repo, "", args["instructions-file"], base!);
@@ -63,7 +63,10 @@ async function main(): Promise<void> {
   const llm = seat(args.model, args.effort as "low" | "medium" | "high");
   const council = createCouncilSeat({llm: seat(args["council-model"]), model: args["council-model"]},
     {llm: seat(args["council-fallback-model"]), model: args["council-fallback-model"]});
-  const result = await runReviewCore({
+  const skipped = !reviewDiff.trim() || isWhitespaceOnlyDiff(reviewDiff);
+  const result = skipped
+    ? {findings: {summary: "Skipped: no reviewable changes", high: [], medium: [], low: [], suggestions: [], rawResponse: ""}, evidenceRequests: 0, usedFollowups: 0}
+    : await runReviewCore({
     git, owner, repo, baseRef: base!, headRef: head!, reviewDiff, maxDiffSize, pieceConcurrency, reviewInstructions,
     jsonResponseMode: resolveJsonResponseMode("", repoConfig), llm, council, timings,
     loadPriorFindings: async () => "",
@@ -72,7 +75,9 @@ async function main(): Promise<void> {
   const receipt = timings.receipt(seats);
   console.log(receipt);
   writeFileSync(out!, `${JSON.stringify({
-    base, head, pieceConcurrency, diffChars: reviewDiff.length, pieces, removedFiles,
+    base, head, skipped, workspaceHead: execFileSync("git", ["-C", workspace!, "rev-parse", "HEAD"], {encoding: "utf8"}).trim(),
+    pipelineSha: execFileSync("git", ["rev-parse", "HEAD"], {encoding: "utf8"}).trim(),
+    pieceConcurrency, diffChars: reviewDiff.length, pieces, removedFiles,
     startedAt: timings.startedAt, receipt, spans: timings.spans, seats,
     evidenceRequests: result.evidenceRequests, usedFollowups: result.usedFollowups, findings: result.findings,
   }, null, 2)}\n`);

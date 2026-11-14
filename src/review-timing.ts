@@ -21,6 +21,7 @@ export interface CallSpan {
   endMs: number;
   providerMs?: number;
   inFlight: number;
+  failed?: boolean;
 }
 
 const current = new AsyncLocalStorage<{stage: ReviewStage; piece?: number}>();
@@ -67,7 +68,12 @@ export class ReviewTimings {
       const provider = calls.flatMap(({providerMs}) => providerMs === undefined ? [] : [providerMs]);
       return `${model} ${calls.length} calls, p50 ${seconds(percentile(walls, 0.5))}, max ${seconds(Math.max(...walls))}`
         + (provider.length ? `, provider p50 ${seconds(percentile(provider, 0.5))}` : "")
-        + `, peak ${Math.max(...calls.map(({inFlight}) => inFlight))} in flight`;
+        + `, peak ${Math.max(...calls.map(({inFlight}) => inFlight))} in flight`
+        + `, ${calls.filter(({failed}) => failed).length} failed, client queue 0.0s`
+        + REVIEW_STAGES.flatMap((stage) => {
+          const own = calls.filter((call) => call.stage === stage);
+          return own.length ? [`; ${stage} ${own.length} calls / ${seconds(union(own))} active`] : [];
+        }).join("");
     });
     const total = Math.max(this.startedAt, ...this.spans.map(({endMs}) => endMs)) - this.startedAt;
     return [`Robin timing: ${seconds(total)} · ${stages.join(" · ")}`, ...seatParts.map((part) => `Robin seat: ${part}`)].join("\n");

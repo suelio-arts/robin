@@ -27,6 +27,26 @@ describe("mapPool", () => {
     })).rejects.toThrow("piece 2 failed");
   });
 
+  it("does not dispatch more pieces after a failure", async () => {
+    let release!: () => void;
+    const waiting = new Promise<void>((resolve) => { release = resolve; });
+    const started: number[] = [];
+    const result = mapPool([0, 1, 2, 3], 2, async (item) => {
+      started.push(item);
+      if (item === 0) throw new Error("quota");
+      await waiting;
+      return item;
+    });
+    await expect(result).rejects.toThrow("quota");
+    release();
+    await waiting;
+    expect(started).toEqual([0, 1]);
+  });
+
+  it.each([0, -1, 1.5, NaN])("rejects invalid concurrency %s", async (limit) => {
+    await expect(mapPool([1], limit, async (item) => item)).rejects.toThrow("positive integer");
+  });
+
   it("handles no items", async () => {
     await expect(mapPool([], 4, async () => 1)).resolves.toEqual([]);
   });

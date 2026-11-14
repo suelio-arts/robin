@@ -40,11 +40,13 @@ describe("LLMClient", () => {
     mock.mockReset();
     mock.mockImplementation((_file, _args, _options, callback: Callback) =>
       callback(new Error("failed"), "", `ROBIN_SUBSCRIPTION_LIMIT:${provider}:${kind}\n`));
-    const result = new LLMClient("rolly-agent", "", model).chatCompletion("system", "user");
+    const client = new LLMClient("rolly-agent", "", model);
+    const result = client.chatCompletion("system", "user");
     await expect(result).rejects.toBeInstanceOf(SubscriptionLimitError);
     await expect(result).rejects.toThrow(`${provider} subscription ${detail}`);
     await expect(result).rejects.toThrow("re-request with /robin");
     expect(mock).toHaveBeenCalledTimes(1);
+    expect(client.calls).toEqual([expect.objectContaining({failed: true, inFlight: 1})]);
   });
 
   const claudeEvents = [

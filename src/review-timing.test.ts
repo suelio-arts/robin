@@ -31,7 +31,7 @@ describe("review timing", () => {
     ]);
     expect(receipt).toBe([
       "Robin timing: 40.0s · context 2.0s · discovery 30.0s · final-gate 8.0s",
-      "Robin seat: sol 2 calls, p50 8.0s, max 28.0s, provider p50 25.0s, peak 2 in flight",
+      "Robin seat: sol 2 calls, p50 8.0s, max 28.0s, provider p50 25.0s, peak 2 in flight, 0 failed, client queue 0.0s",
     ].join("\n"));
     expect(timings.pieceLine(1, 4)).toBe("Piece 1/4 done in 32.0s (context 2.0s, discovery 30.0s), finished at +32.0s");
   });

@@ -15,7 +15,9 @@ import { ReviewBudget, runDiscovery } from "./discovery";
 import { executeEvidenceRequests } from "./evidence-loop";
 import { type CallSpan, ReviewTimings } from "./review-timing";
 
-/** Pieces reviewed at once. Each piece holds one call per seat in flight. */
+/** Eight pieces keep both seats busy without the local startup/memory cost of 12–16.
+ * See the measured concurrency sweep in the phase-1 speed handoff (2026-11-14).
+ */
 export const PIECE_CONCURRENCY = 8;
 
 export interface ReviewCoreInput {
@@ -47,12 +49,19 @@ export interface ReviewCoreResult {
  * as soon as one finishes. Results keep input order; the first rejection rejects.
  */
 export async function mapPool<T, R>(items: T[], limit: number, run: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  if (!Number.isInteger(limit) || limit < 1) throw new Error("Piece concurrency must be a positive integer");
   const results: R[] = new Array(items.length);
+  let failed = false;
   let next = 0;
   const worker = async () => {
-    while (next < items.length) {
+    while (!failed && next < items.length) {
       const index = next++;
-      results[index] = await run(items[index], index);
+      try {
+        results[index] = await run(items[index], index);
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
     }
   };
   await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
@@ -158,6 +167,7 @@ async function runFinalGate(
   council?: CouncilSeat
 ): Promise<StructuredReview> {
   const candidates = buildPrecisionCandidates(reviews);
+  core.info(`Precision gate: ${candidates.length} candidates`);
   const summary = "";
   if (candidates.length === 0) {
     if (council) council.gateVoted = true;

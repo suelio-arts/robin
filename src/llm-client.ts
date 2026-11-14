@@ -244,11 +244,19 @@ export class LLMClient {
     const startMs = Date.now();
     this.inFlight += 1;
     const inFlight = this.inFlight;
+    let result: ChatCompletionResult | undefined;
     try {
-      const result = await this.completion(systemPrompt, userContent, jsonResponseMode);
-      this.calls.push({...stage, startMs, endMs: Date.now(), providerMs: result.usage?.durationMs, inFlight});
+      result = await this.completion(systemPrompt, userContent, jsonResponseMode);
       return result;
     } finally {
+      const span: CallSpan = {...stage, startMs, endMs: Date.now(), providerMs: result?.usage?.durationMs,
+        inFlight, failed: result === undefined};
+      this.calls.push(span);
+      core.info(`Robin call: ${this.model} · ${stage?.stage ?? "unattributed"}`
+        + (stage?.piece === undefined ? "" : ` · piece ${stage.piece}`)
+        + ` · ${span.endMs - startMs}ms wall · client queue 0ms`
+        + (span.providerMs === undefined ? "" : ` · provider ${span.providerMs.toFixed(0)}ms`)
+        + (span.failed ? " · failed" : ""));
       this.inFlight -= 1;
     }
   }

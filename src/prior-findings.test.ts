@@ -1,4 +1,4 @@
-import { formatPriorFindings } from "./main";
+import { formatPriorFindings } from "./github-reviewer";
 
 describe("formatPriorFindings", () => {
   const comment = (id: number, reviewId: number, body: string) => ({

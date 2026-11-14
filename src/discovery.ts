@@ -29,11 +29,12 @@ export async function runDiscovery(
   councilComplete?: (instructions: string) => Promise<StructuredReview>,
   time: TimeStage = (_stage, run) => run()
 ): Promise<{review: StructuredReview; evidenceRequests: number; followedUp: boolean}> {
-  // Alone, serial keeps one seat's concurrency at the piece concurrency. A council seat runs
-  // the adversarial pass in parallel: each provider still sees one call per piece.
-  const [broad, adversarial] = await time("discovery", async () => councilComplete
-    ? Promise.all([complete(DISCOVERY_INSTRUCTIONS), councilComplete(ADVERSARIAL_INSTRUCTIONS)])
-    : [await complete(DISCOVERY_INSTRUCTIONS), await complete(ADVERSARIAL_INSTRUCTIONS)]);
+  // Both passes are independent; the piece pool bounds admission to sixteen
+  // calls on a single seat, or eight per seat with a council.
+  const [broad, adversarial] = await time("discovery", () => Promise.all([
+    complete(DISCOVERY_INSTRUCTIONS),
+    (councilComplete || complete)(ADVERSARIAL_INSTRUCTIONS),
+  ]));
   const initial = combine([broad, adversarial]);
   const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
   if (requests.length === 0) {

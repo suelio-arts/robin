@@ -6,7 +6,7 @@ const empty = (summary: string, evidenceRequests: StructuredReview["evidenceRequ
 });
 
 describe("runDiscovery", () => {
-  it("serializes broad then adversarial and permits one bounded evidence follow-up", async () => {
+  it("runs broad and adversarial and permits one bounded evidence follow-up", async () => {
     const calls: string[] = [];
     const result = await runDiscovery(async (instructions) => {
       calls.push(instructions);
@@ -19,6 +19,20 @@ describe("runDiscovery", () => {
     expect(calls[1]).toContain("adversarial failure analyst");
     expect(calls[2]).toContain("EVIDENCE FOLLOW-UP");
     expect(result.followedUp).toBe(true);
+  });
+
+  it("starts the adversarial pass before the broad pass finishes on one seat", async () => {
+    let releaseBroad: () => void = () => undefined;
+    const broadGate = new Promise<void>((resolve) => { releaseBroad = resolve; });
+    const calls: string[] = [];
+    const result = await runDiscovery(async (instructions) => {
+      calls.push(instructions);
+      if (calls.length === 1) await broadGate;
+      else releaseBroad();
+      return empty(instructions);
+    }, async () => "", new ReviewBudget(0, 0));
+    expect(calls).toHaveLength(2);
+    expect(result.followedUp).toBe(false);
   });
 
   it("sends the adversarial pass to the council seat in parallel", async () => {

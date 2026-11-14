@@ -735,11 +735,12 @@ class ReviewBudget {
 }
 exports.ReviewBudget = ReviewBudget;
 async function runDiscovery(complete, loadEvidence, budget, councilComplete, time = (_stage, run) => run()) {
-    // Alone, serial keeps one seat's concurrency at the piece concurrency. A council seat runs
-    // the adversarial pass in parallel: each provider still sees one call per piece.
-    const [broad, adversarial] = await time("discovery", async () => councilComplete
-        ? Promise.all([complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), councilComplete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)])
-        : [await complete(review_prompts_1.DISCOVERY_INSTRUCTIONS), await complete(review_prompts_1.ADVERSARIAL_INSTRUCTIONS)]);
+    // Both passes are independent; the piece pool bounds admission to sixteen
+    // calls on a single seat, or eight per seat with a council.
+    const [broad, adversarial] = await time("discovery", () => Promise.all([
+        complete(review_prompts_1.DISCOVERY_INSTRUCTIONS),
+        (councilComplete || complete)(review_prompts_1.ADVERSARIAL_INSTRUCTIONS),
+    ]));
     const initial = combine([broad, adversarial]);
     const requests = [...(broad.evidenceRequests || []), ...(adversarial.evidenceRequests || [])].slice(0, 4);
     if (requests.length === 0) {
@@ -1148,6 +1149,7 @@ exports.reviewVerdict = reviewVerdict;
 exports.reviewKey = reviewKey;
 exports.cacheMarker = cacheMarker;
 exports.findCachedVerdict = findCachedVerdict;
+exports.formatPriorFindings = formatPriorFindings;
 const core = __importStar(__nccwpck_require__(7484));
 const node_crypto_1 = __nccwpck_require__(7598);
 const outcome_1 = __nccwpck_require__(2513);
@@ -1625,6 +1627,15 @@ class GitHubReviewer {
     }
 }
 exports.GitHubReviewer = GitHubReviewer;
+/** Prior Robin findings, minus any whose thread a human has resolved. */
+function formatPriorFindings(comments, robinReviewIds, resolvedCommentIds) {
+    return comments
+        .filter(({ pull_request_review_id: id }) => id !== null && id !== undefined && robinReviewIds.has(id))
+        .filter(({ id }) => !resolvedCommentIds.has(id))
+        .map(({ path, line, body }) => `${path}:${line || 0}: ${body}`)
+        .join("\n\n")
+        .slice(-30000);
+}
 //# sourceMappingURL=github-reviewer.js.map
 
 /***/ }),
@@ -2307,7 +2318,6 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.formatPriorFindings = formatPriorFindings;
 const llm_usage_1 = __nccwpck_require__(9292);
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
@@ -2870,16 +2880,7 @@ async function loadPriorRobinFindings(octokit, owner, repo, pullNumber) {
         owner, repo, pull_number: pullNumber, per_page: 100,
     });
     const resolved = await resolvedReviewCommentIds(octokit, owner, repo, pullNumber);
-    return formatPriorFindings(comments, ids, resolved);
-}
-/** Prior Robin findings, minus any whose thread a human has resolved. */
-function formatPriorFindings(comments, robinReviewIds, resolvedCommentIds) {
-    return comments
-        .filter(({ pull_request_review_id: id }) => id !== null && id !== undefined && robinReviewIds.has(id))
-        .filter(({ id }) => !resolvedCommentIds.has(id))
-        .map(({ path, line, body }) => `${path}:${line || 0}: ${body}`)
-        .join("\n\n")
-        .slice(-30000);
+    return (0, github_reviewer_1.formatPriorFindings)(comments, ids, resolved);
 }
 /**
  * Review-comment ids belonging to threads a human has resolved.

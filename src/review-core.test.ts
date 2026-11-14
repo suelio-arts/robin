@@ -8,15 +8,30 @@ describe("mapPool", () => {
     let inFlight = 0;
     let peak = 0;
     const finished: number[] = [];
-    const delays = [30, 5, 5, 5, 5];
-    const results = await mapPool(delays, 2, async (delay, index) => {
+    const signal = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => { resolve = done; });
+      return {promise, resolve};
+    };
+    const items = Array.from({length: 5}, () => ({start: signal(), release: signal(), done: signal()}));
+    const pending = mapPool(items, 2, async (item, index) => {
       inFlight += 1;
       peak = Math.max(peak, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      item.start.resolve();
+      await item.release.promise;
       inFlight -= 1;
       finished.push(index);
+      item.done.resolve();
       return index * 10;
     });
+    // Hold item 0 while the other slot drains; no wall-clock assumptions under host load.
+    for (let index = 1; index < items.length; index++) {
+      await items[index].start.promise;
+      items[index].release.resolve();
+      await items[index].done.promise;
+    }
+    items[0].release.resolve();
+    const results = await pending;
     expect(results).toEqual([0, 10, 20, 30, 40]);
     expect(peak).toBe(2);
     // Item 0 is slow; items 2-4 run through the second slot without waiting for it.

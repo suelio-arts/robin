@@ -30,8 +30,8 @@ const {values: args} = parseArgs({options: {
   head: {type: "string"},
   out: {type: "string"},
   model: {type: "string", default: "sol-6.1-medium-subscription"},
-  "council-model": {type: "string", default: "opus-5-5-low-subscription"},
-  "council-fallback-model": {type: "string", default: "deepseek-v4.1-flash-deploy"},
+  "council-model": {type: "string", default: ""},
+  "council-fallback-model": {type: "string", default: ""},
   effort: {type: "string", default: "medium"},
   "max-diff-size": {type: "string", default: "50000"},
   "instructions-file": {type: "string", default: ".github/code-reviewer.md"},
@@ -61,8 +61,8 @@ async function main(): Promise<void> {
   const seat = (model: string, effort?: "low" | "medium" | "high") =>
     new LLMClient("rolly-agent", "", model, undefined, DEFAULT_LLM_TIMEOUT_MS, undefined, undefined, effort);
   const llm = seat(args.model, args.effort as "low" | "medium" | "high");
-  const council = createCouncilSeat({llm: seat(args["council-model"]), model: args["council-model"]},
-    {llm: seat(args["council-fallback-model"]), model: args["council-fallback-model"]});
+  const council = args["council-model"] ? createCouncilSeat({llm: seat(args["council-model"]), model: args["council-model"]},
+    args["council-fallback-model"] ? {llm: seat(args["council-fallback-model"]), model: args["council-fallback-model"]} : undefined) : undefined;
   const skipped = !reviewDiff.trim() || isWhitespaceOnlyDiff(reviewDiff);
   const result = skipped
     ? {findings: {summary: "Skipped: no reviewable changes", high: [], medium: [], low: [], suggestions: [], rawResponse: ""}, evidenceRequests: 0, usedFollowups: 0}

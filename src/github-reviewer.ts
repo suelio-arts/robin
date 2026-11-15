@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 import * as core from "@actions/core";
 import { createHash } from "node:crypto";
 import { StructuredReview, ReviewFinding } from "./review-parser";
+import { patchId } from "./git-utils";
 import { OutcomeCounts, ZERO_COUNTS, appendOutcomeMarker, buildOutcomeMarker, parseOutcomeMarker } from "./outcome";
 
 /** Marker present in every Robin review body; used to recognize Robin's own reviews. */
@@ -35,10 +36,11 @@ export interface PostedReview {
 /**
  * Content address of everything that determines a verdict.
  *
- * A rebase onto a moved main dismisses Robin's approval but usually leaves the
- * reviewed diff byte-identical, so the model would be asked to re-derive a
- * verdict from inputs it has already seen. Hashing the prompts and model
- * alongside the diff means any prompt, model, or repo-instruction edit
+ * A merge or rebase onto a moved main shifts hunk line numbers and blob ids
+ * while the pull request's own change stays the same, so the diff enters the
+ * key as its `git patch-id --verbatim`: whitespace and every changed or
+ * context line count, line numbers and index lines do not. Hashing the prompts
+ * and model alongside means any prompt, model, or repo-instruction edit
  * invalidates the key automatically — there is no cache version to remember to
  * bump.
  */
@@ -56,7 +58,7 @@ export function reviewKey(parts: {
         parts.systemPrompt,
         parts.precisionPrompt,
         String(parts.gatekeeper),
-        parts.diff,
+        patchId(parts.diff),
       ].join("\0")
     )
     .digest("hex");
@@ -245,7 +247,7 @@ export class GitHubReviewer {
   }
 
   /**
-   * Re-post a verdict already derived from byte-identical inputs.
+   * Re-post a verdict already derived from the same change and prompts.
    *
    * Body-only, with ZERO inline comments, and that constraint is the safety
    * argument rather than a caveat on it. Re-mapping the original findings onto
@@ -273,7 +275,7 @@ export class GitHubReviewer {
     const counts = parseOutcomeMarker(cached.body)?.counts ?? null;
     const body = appendOutcomeMarker(
       [
-        "> Reused a prior review: this head's diff is byte-identical to one already",
+        "> Reused a prior review: this head's change is identical to one already",
         "> reviewed on this pull request, so no model call was made. Edit or delete",
         "> that review's body to force a full re-review.",
         "",

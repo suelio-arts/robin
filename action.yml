@@ -57,7 +57,7 @@ inputs:
     required: false
     default: "false"
   request-changes:
-    description: "Whether Robin acts as a gatekeeper. true posts REQUEST_CHANGES for high findings and APPROVE otherwise; false always posts COMMENT. Leave empty to use the repo config, which defaults to true."
+    description: "Whether Robin posts REQUEST_CHANGES for high findings. Either way a complete review is an APPROVE when every high finding is an inline thread, and a COMMENT when one stays in the body. Needs Allow GitHub Actions to create and approve pull requests. Leave empty to use the repo config, which defaults to true."
     required: false
     default: ""
   max-diff-size:
@@ -73,7 +73,7 @@ inputs:
     required: false
     default: "600000"
   max-comments:
-    description: "Maximum number of inline review comments to post. Extra findings stay in the review body."
+    description: "Maximum number of inline high findings to post. Only high findings are posted inline; extra findings stay in the review body and withhold approval."
     required: false
     default: "15"
   review-on-synchronize:

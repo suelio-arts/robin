@@ -5,11 +5,108 @@ const HEAD = "a".repeat(40);
 const OLD_HEAD = "b".repeat(40);
 
 describe("GitHubReviewer", () => {
-  it("resolves review event from high findings and request-changes mode", () => {
-    expect(GitHubReviewer.resolveReviewEvent(true, true)).toBe("REQUEST_CHANGES");
-    expect(GitHubReviewer.resolveReviewEvent(true, false)).toBe("COMMENT");
-    expect(GitHubReviewer.resolveReviewEvent(false, true)).toBe("APPROVE");
-    expect(GitHubReviewer.resolveReviewEvent(false, false)).toBe("COMMENT");
+  it("approves a complete review only when every High is an inline thread", () => {
+    expect(GitHubReviewer.resolveReviewEvent(true, true, true)).toBe("REQUEST_CHANGES");
+    expect(GitHubReviewer.resolveReviewEvent(true, false, true)).toBe("REQUEST_CHANGES");
+    expect(GitHubReviewer.resolveReviewEvent(false, true, true)).toBe("APPROVE");
+    expect(GitHubReviewer.resolveReviewEvent(true, true, false)).toBe("APPROVE");
+    expect(GitHubReviewer.resolveReviewEvent(true, false, false)).toBe("COMMENT");
+    expect(GitHubReviewer.resolveReviewEvent(false, true, false)).toBe("APPROVE");
+  });
+
+  it("carries a reused review as an approval unless a High stayed in its body", () => {
+    const body = "## " + ROBIN_SIGNATURE;
+    const bodyOnlyHigh = body + "\n\n### :page_facing_up: Findings Not Posted Inline\n\n:rotating_light: **1** — unsafe";
+    const bodyOnlyLow = body + "\n\n### :page_facing_up: Findings Not Posted Inline\n\n:large_blue_circle: **1** — nit";
+    expect(GitHubReviewer.carriedEvent({event: "COMMENT", body, counts: null})).toBe("APPROVE");
+    expect(GitHubReviewer.carriedEvent({event: "COMMENT", body: bodyOnlyLow, counts: null})).toBe("APPROVE");
+    expect(GitHubReviewer.carriedEvent({event: "COMMENT", body: bodyOnlyHigh, counts: null})).toBe("COMMENT");
+    expect(GitHubReviewer.carriedEvent({event: "APPROVE", body: bodyOnlyHigh, counts: null})).toBe("COMMENT");
+    expect(GitHubReviewer.carriedEvent({event: "REQUEST_CHANGES", body, counts: null})).toBe("REQUEST_CHANGES");
+  });
+
+  it("posts only High findings inline; Medium and Low stay in the body", async () => {
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 25, html_url: "u" } });
+    const files = [{ filename: "src/a.ts", patch: "@@ -1 +1,2 @@\n-x\n+y\n+z" }];
+    const octokit = {
+      paginate: jest.fn().mockImplementation(async (method) => method === "files" ? files : []),
+      rest: { pulls: { createReview, listFiles: "files", listReviews: "reviews", dismissReview: jest.fn() } },
+    };
+    const findings = {
+      summary: "s", suggestions: [], rawResponse: "",
+      high: [{ severity: "high", file: "src/a.ts", line: 1, description: "high one" }],
+      medium: [{ severity: "medium", file: "src/a.ts", line: 2, description: "medium one" }],
+      low: [{ severity: "low", file: "src/a.ts", line: 2, description: "low one" }],
+    } as any;
+
+    const posted = await new GitHubReviewer(octokit as any).postReview("o", "r", 7, findings, false, undefined, HEAD);
+
+    const request = createReview.mock.calls[0][0];
+    expect(request.event).toBe("APPROVE");
+    expect(request.comments).toHaveLength(1);
+    expect(request.comments[0].body).toContain("high one");
+    expect(request.body).toContain("medium one");
+    expect(request.body).toContain("low one");
+    expect(GitHubReviewer.hasUnpostedHighFinding(request.body)).toBe(false);
+    expect(posted.verdict).toBe("APPROVED");
+  });
+
+  it.each([
+    ["has no location", { severity: "high", description: "unplaced" }, 25],
+    ["exceeds max-comments", { severity: "high", file: "src/a.ts", line: 1, description: "over the cap" }, 0],
+  ])("does not approve when a High %s", async (_case, high, maxComments) => {
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 26, html_url: "u" } });
+    const octokit = {
+      paginate: jest.fn().mockImplementation(async (method) => method === "files" ? [{ filename: "src/a.ts", patch: "@@ -1 +1 @@\n-x\n+y" }] : []),
+      rest: { pulls: { createReview, listFiles: "files", listReviews: "reviews", dismissReview: jest.fn() } },
+    };
+    const findings = { summary: "s", medium: [], low: [], suggestions: [], rawResponse: "", high: [high] } as any;
+
+    const posted = await new GitHubReviewer(octokit as any, maxComments).postReview("o", "r", 7, findings, false, "f".repeat(64), HEAD);
+
+    expect(createReview.mock.calls[0][0].event).toBe("COMMENT");
+    expect(createReview.mock.calls[0][0].body).toContain(cacheMarker("f".repeat(64), "COMMENT"));
+    expect(posted.verdict).toBe("COMMENTED");
+  });
+
+  it("does not approve when GitHub rejects the inline High and the summary carries it", async () => {
+    const createReview = jest.fn()
+      .mockRejectedValueOnce({ status: 422, response: { data: { errors: [{ field: "comments.line", code: "invalid" }] } } })
+      .mockResolvedValueOnce({ data: { id: 27, html_url: "u" } });
+    const octokit = {
+      paginate: jest.fn().mockImplementation(async (method) => method === "files" ? [{ filename: "src/a.ts", patch: "@@ -1 +1 @@\n-x\n+y" }] : []),
+      rest: { pulls: { createReview, listFiles: "files", listReviews: "reviews", dismissReview: jest.fn() } },
+    };
+    const findings = { summary: "s", medium: [], low: [], suggestions: [], rawResponse: "",
+      high: [{ severity: "high", file: "src/a.ts", line: 1, description: "rejected" }] } as any;
+
+    const posted = await new GitHubReviewer(octokit as any).postReview("o", "r", 7, findings, false, "f".repeat(64), HEAD);
+
+    expect(createReview.mock.calls[0][0].event).toBe("APPROVE");
+    expect(createReview.mock.calls[1][0].event).toBe("COMMENT");
+    expect(createReview.mock.calls[1][0].comments).toEqual([]);
+    expect(createReview.mock.calls[1][0].body).toContain(cacheMarker("f".repeat(64), "COMMENT"));
+    expect(posted.verdict).toBe("COMMENTED");
+  });
+
+  it("dismisses earlier Robin approvals when a newer review does not approve, and fails if it cannot", async () => {
+    const robinBody = "## " + ROBIN_SIGNATURE;
+    const bot = { type: "Bot" };
+    const reviews = [
+      { id: 10, state: "APPROVED", body: robinBody, user: bot },
+      { id: 11, state: "APPROVED", body: "human", user: { type: "User" } },
+      { id: 20, state: "COMMENTED", body: robinBody, user: bot },
+    ];
+    const dismissReview = jest.fn().mockResolvedValue({});
+    const createReview = jest.fn().mockResolvedValue({ data: { id: 20, html_url: "u" } });
+    const octokit = { paginate: jest.fn().mockResolvedValue(reviews), rest: { pulls: { createReview, listReviews: {}, dismissReview } } };
+
+    await new GitHubReviewer(octokit as any).postFailureReview("o", "r", 7, "timeout", HEAD);
+    expect(dismissReview).toHaveBeenCalledTimes(1);
+    expect(dismissReview).toHaveBeenCalledWith(expect.objectContaining({ review_id: 10 }));
+
+    dismissReview.mockRejectedValue(new Error("403"));
+    await expect(new GitHubReviewer(octokit as any).postFailureReview("o", "r", 7, "timeout", HEAD)).rejects.toThrow("403");
   });
 
   it.each(["reviewed", "fallback", "reused", "skipped", "incomplete"])(
@@ -32,8 +129,8 @@ describe("GitHubReviewer", () => {
       };
       const reviewer = new GitHubReviewer(octokit as any);
       const findings = {
-        summary: "Finding", high: [], medium: [], suggestions: [], rawResponse: "",
-        low: [{severity: "low", file: "src/example.ts", line: 1, description: "Finding"}],
+        summary: "Finding", medium: [], low: [], suggestions: [], rawResponse: "",
+        high: [{severity: "high", file: "src/example.ts", line: 1, description: "Finding"}],
       } as any;
       if (outcome === "reviewed" || outcome === "fallback") {
         await reviewer.postReview("o", "r", 7, findings, false, undefined, HEAD);
@@ -57,28 +154,29 @@ describe("GitHubReviewer", () => {
     const robinBody = "## :bow_and_arrow: Robin\n\nfindings…";
     const bot = { type: "Bot" };
     expect(
-      GitHubReviewer.isStaleRobinReview({ id: 1, state: "CHANGES_REQUESTED", body: robinBody, user: bot }, 2)
+      GitHubReviewer.isStaleRobinReview({ id: 1, state: "CHANGES_REQUESTED", body: robinBody, user: bot }, 2, "APPROVE")
     ).toBe(true);
     // the review just posted
     expect(
-      GitHubReviewer.isStaleRobinReview({ id: 2, state: "CHANGES_REQUESTED", body: robinBody, user: bot }, 2)
+      GitHubReviewer.isStaleRobinReview({ id: 2, state: "CHANGES_REQUESTED", body: robinBody, user: bot }, 2, "APPROVE")
     ).toBe(false);
     // non-blocking Robin review
     expect(
-      GitHubReviewer.isStaleRobinReview({ id: 1, state: "COMMENTED", body: robinBody, user: bot }, 2)
+      GitHubReviewer.isStaleRobinReview({ id: 1, state: "COMMENTED", body: robinBody, user: bot }, 2, "COMMENT")
     ).toBe(false);
     // human review must never be dismissed — even one quoting Robin's signature
     expect(
       GitHubReviewer.isStaleRobinReview(
         { id: 1, state: "CHANGES_REQUESTED", body: robinBody, user: { type: "User" } },
-        2
+        2,
+        "APPROVE"
       )
     ).toBe(false);
     expect(
-      GitHubReviewer.isStaleRobinReview({ id: 1, state: "CHANGES_REQUESTED", body: "LGTM-ish", user: bot }, 2)
+      GitHubReviewer.isStaleRobinReview({ id: 1, state: "CHANGES_REQUESTED", body: "LGTM-ish", user: bot }, 2, "APPROVE")
     ).toBe(false);
     expect(
-      GitHubReviewer.isStaleRobinReview({ id: 1, state: "CHANGES_REQUESTED", body: null, user: bot }, 2)
+      GitHubReviewer.isStaleRobinReview({ id: 1, state: "CHANGES_REQUESTED", body: null, user: bot }, 2, "APPROVE")
     ).toBe(false);
     expect(
       GitHubReviewer.isStaleRobinReview(
@@ -88,9 +186,16 @@ describe("GitHubReviewer", () => {
           body: `${robinBody}\n\n### :page_facing_up: Findings Not Posted Inline\n\n:rotating_light: **1** — unsafe operation`,
           user: bot,
         },
-        2
+        2,
+        "APPROVE"
       )
     ).toBe(false);
+    expect(
+      GitHubReviewer.isStaleRobinReview({ id: 1, state: "APPROVED", body: robinBody, user: bot }, 2, "APPROVE")
+    ).toBe(false);
+    expect(
+      GitHubReviewer.isStaleRobinReview({ id: 1, state: "APPROVED", body: robinBody, user: bot }, 2, "COMMENT")
+    ).toBe(true);
   });
 
   it("dismisses only stale Robin CHANGES_REQUESTED reviews after posting", async () => {
@@ -109,7 +214,7 @@ describe("GitHubReviewer", () => {
     };
 
     const reviewer = new GitHubReviewer(octokit as any);
-    await (reviewer as any).dismissStaleRobinReviews("o", "r", 1, 20);
+    await (reviewer as any).dismissStaleRobinReviews("o", "r", 1, 20, "APPROVE");
 
     expect(dismissReview).toHaveBeenCalledTimes(1);
     expect(dismissReview).toHaveBeenCalledWith(
@@ -152,7 +257,7 @@ describe("GitHubReviewer", () => {
       "o", "r", 7, HEAD, "only whitespace changed."
     );
 
-    expect(createReview.mock.calls[0][0].event).toBe("COMMENT");
+    expect(createReview.mock.calls[0][0].event).toBe("APPROVE");
     expect(createReview.mock.calls[0][0].body).toContain("only whitespace changed.");
     expect(parseOutcomeMarker(createReview.mock.calls[0][0].body)).toEqual({
       outcome: "skipped",
@@ -271,15 +376,15 @@ describe("GitHubReviewer", () => {
 
     const findings = {
       summary: "Summary",
-      high: [],
-      medium: [
+      high: [
         {
-          severity: "medium",
+          severity: "high",
           file: "src/example.ts",
           line: 3,
           description: "Finding",
         },
       ],
+      medium: [],
       low: [],
       suggestions: [],
     };

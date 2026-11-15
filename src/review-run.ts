@@ -145,8 +145,9 @@ export async function handleReviewFailure(failure: ReviewFailure): Promise<void>
       setPostedOutputs("incomplete", target.headSha, posted);
       core.warning(`Incomplete review posted after execution failure: ${message}`);
     } catch (reviewError) {
-      core.error(`Could not post incomplete review: ${reviewError}`);
+      core.setFailed(`Could not post incomplete review: ${reviewError}`);
       setTerminalOutputs({outcome: "incomplete", head: target.headSha, counts: ZERO_COUNTS});
+      return;
     }
   }
 

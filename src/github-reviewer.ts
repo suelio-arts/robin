@@ -145,7 +145,7 @@ export class GitHubReviewer {
         ZERO_COUNTS
       ),
     });
-    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
+    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id, "COMMENT");
     return {id: review.id, url: review.html_url, verdict: "COMMENTED", counts: ZERO_COUNTS};
   }
 
@@ -156,8 +156,8 @@ export class GitHubReviewer {
    * The status comment already says this, but a status comment is an issue
    * comment with no head binding: a consumer polling for coverage of head H
    * cannot tell "skipped" from "not posted yet" and waits to its timeout. This
-   * review is deliberately body-only and non-blocking, and it does not dismiss
-   * prior blocking reviews — nothing was reviewed, so nothing is superseded.
+   * review is a body-only approval, and it does not dismiss prior blocking
+   * reviews — nothing was reviewed, so nothing is superseded.
    */
   async postSkippedReview(
     owner: string,
@@ -170,7 +170,7 @@ export class GitHubReviewer {
       owner,
       repo,
       pull_number: pullNumber,
-      event: "COMMENT",
+      event: "APPROVE",
       commit_id: headSha,
       body: appendOutcomeMarker(
         [
@@ -185,28 +185,38 @@ export class GitHubReviewer {
         ZERO_COUNTS
       ),
     });
-    return {id: review.id, url: review.html_url, verdict: "COMMENTED", counts: ZERO_COUNTS};
+    return {id: review.id, url: review.html_url, verdict: "APPROVED", counts: ZERO_COUNTS};
   }
 
-  /** Gatekeeper mode blocks only High findings; lower severities stay advisory. */
-  static resolveReviewEvent(hasHigh: boolean, requestChanges: boolean): "REQUEST_CHANGES" | "APPROVE" | "COMMENT" {
-    if (!requestChanges) return "COMMENT";
-    if (hasHigh) return "REQUEST_CHANGES";
-    return "APPROVE";
+  /**
+   * A complete review approves when every High finding is a resolvable inline
+   * thread; branch protection's conversation resolution then holds the merge
+   * until each thread is resolved. A High left in the body fails closed.
+   */
+  static resolveReviewEvent(hasHigh: boolean, everyHighInline: boolean, requestChanges: boolean): ReviewEvent {
+    if (requestChanges && hasHigh) return "REQUEST_CHANGES";
+    return everyHighInline ? "APPROVE" : "COMMENT";
   }
 
-  /** A prior Robin CHANGES_REQUESTED review that a newly posted review supersedes. */
+  /** The event a reused review posts: its High findings are the original review's threads. */
+  static carriedEvent(cached: CarriedReview): ReviewEvent {
+    if (cached.event === "REQUEST_CHANGES") return cached.event;
+    return GitHubReviewer.hasUnpostedHighFinding(cached.body) ? "COMMENT" : "APPROVE";
+  }
+
+  /**
+   * A prior Robin review that a newly posted review supersedes: an approval
+   * whenever the new review does not approve, so an older approval never
+   * authorizes a merge past an incomplete or body-only-High review.
+   */
   static isStaleRobinReview(
     review: { id: number; state?: string; body?: string | null; user?: { type?: string } | null },
-    newReviewId: number
+    newReviewId: number,
+    newEvent: ReviewEvent
   ): boolean {
-    return (
-      review.id !== newReviewId &&
-      review.state === "CHANGES_REQUESTED" &&
-      review.user?.type === "Bot" &&
-      (review.body || "").includes(ROBIN_SIGNATURE) &&
-      !GitHubReviewer.hasUnpostedHighFinding(review.body || "")
-    );
+    if (review.id === newReviewId || review.user?.type !== "Bot" || !(review.body || "").includes(ROBIN_SIGNATURE)) return false;
+    if (review.state === "APPROVED") return newEvent !== "APPROVE";
+    return review.state === "CHANGES_REQUESTED" && !GitHubReviewer.hasUnpostedHighFinding(review.body || "");
   }
 
   static hasUnpostedHighFinding(body: string): boolean {
@@ -215,40 +225,33 @@ export class GitHubReviewer {
   }
 
   /**
-   * Dismiss superseded Robin CHANGES_REQUESTED reviews, except reviews with a
-   * body-only High that has no resolvable thread and must remain fail-closed.
+   * Dismiss superseded Robin reviews. Fails the run when a dismissal fails: an
+   * approval left standing would authorize a merge Robin no longer covers.
+   * CHANGES_REQUESTED reviews with a body-only High stay fail-closed.
    */
   private async dismissStaleRobinReviews(
     owner: string,
     repo: string,
     pullNumber: number,
-    newReviewId: number
+    newReviewId: number,
+    newEvent: ReviewEvent
   ): Promise<void> {
-    try {
-      const reviews = await this.octokit.paginate(this.octokit.rest.pulls.listReviews, {
+    const reviews = await this.octokit.paginate(this.octokit.rest.pulls.listReviews, {
+      owner,
+      repo,
+      pull_number: pullNumber,
+      per_page: 100,
+    });
+    for (const review of reviews) {
+      if (!GitHubReviewer.isStaleRobinReview(review, newReviewId, newEvent)) continue;
+      await this.octokit.rest.pulls.dismissReview({
         owner,
         repo,
         pull_number: pullNumber,
-        per_page: 100,
+        review_id: review.id,
+        message: "Superseded by a newer Robin review.",
       });
-
-      for (const review of reviews) {
-        if (!GitHubReviewer.isStaleRobinReview(review, newReviewId)) continue;
-        try {
-          await this.octokit.rest.pulls.dismissReview({
-            owner,
-            repo,
-            pull_number: pullNumber,
-            review_id: review.id,
-            message: "Superseded by a newer Robin review.",
-          });
-          core.info("Dismissed stale Robin review #" + review.id);
-        } catch (error) {
-          core.warning("Could not dismiss stale Robin review #" + review.id + ": " + error);
-        }
-      }
-    } catch (error) {
-      core.warning("Could not check for stale Robin reviews: " + error);
+      core.info("Dismissed stale Robin review #" + review.id);
     }
   }
 
@@ -279,6 +282,7 @@ export class GitHubReviewer {
     // before markers existed leaves them out — the consumer falls back to the
     // stat blocks it already parses.
     const counts = cached.counts;
+    const event = GitHubReviewer.carriedEvent(cached);
     const body = appendOutcomeMarker(
       [
         "> Reused a prior review: this head's change is identical to one already",
@@ -297,16 +301,16 @@ export class GitHubReviewer {
       repo,
       pull_number: pullNumber,
       body,
-      event: cached.event,
+      event,
       commit_id: headSha,
     });
 
     core.info(
-      "Reused cached " + cached.event + " verdict as review #" + review.id + " (0 model calls)"
+      "Reused cached " + cached.event + " review as " + event + " review #" + review.id + " (0 model calls)"
     );
 
-    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
-    return {id: review.id, url: review.html_url, verdict: reviewVerdict(cached.event), counts};
+    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id, event);
+    return {id: review.id, url: review.html_url, verdict: reviewVerdict(event), counts};
   }
 
   async postReview(
@@ -318,93 +322,60 @@ export class GitHubReviewer {
     cacheKey: string | undefined,
     headSha: string
   ): Promise<PostedReview> {
-    try {
-      core.info("Posting review to PR #" + pullNumber + "...");
-
-      // Fetch file patches to map line positions
-      const files = await this.octokit.paginate(this.octokit.rest.pulls.listFiles, {
-        owner,
-        repo,
-        pull_number: pullNumber,
-        per_page: 100,
-      });
-
-      // Build line-level comments from findings
-      const { comments, postedFindings } = this.buildReviewComments(findings, files);
-
-      // Determine review event type
+    core.info("Posting review to PR #" + pullNumber + "...");
+    const files = await this.octokit.paginate(this.octokit.rest.pulls.listFiles, {
+      owner,
+      repo,
+      pull_number: pullNumber,
+      per_page: 100,
+    });
+    const counts: OutcomeCounts = {
+      high: findings.high.length,
+      medium: findings.medium.length,
+      low: findings.low.length,
+      suggestions: findings.suggestions.length,
+    };
+    const submit = async (comments: any[], postedFindings: Set<ReviewFinding>) => {
       const event = GitHubReviewer.resolveReviewEvent(
         findings.high.length > 0,
+        findings.high.every((finding) => postedFindings.has(finding)),
         requestChanges
       );
-
-      // Build the review summary body (high-level). The cache and outcome
-      // markers must be stamped on BOTH createReview calls below; missing the
-      // fallback would silently make those reviews unreusable and leave the
-      // head without a receipt.
-      const counts: OutcomeCounts = {
-        high: findings.high.length,
-        medium: findings.medium.length,
-        low: findings.low.length,
-        suggestions: findings.suggestions.length,
-      };
-      const stamp =
+      const body =
+        this.buildReviewBody(findings, postedFindings) +
         (cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "") +
         "\n\n" +
         buildOutcomeMarker("reviewed", headSha, counts);
-      const body = this.buildReviewBody(findings, postedFindings) + stamp;
+      const { data } = await this.octokit.rest.pulls.createReview({
+        owner,
+        repo,
+        pull_number: pullNumber,
+        body,
+        event,
+        commit_id: headSha,
+        comments,
+      });
+      return { review: data, event, inline: comments.length };
+    };
 
-      let review;
-      let postedInlineComments = comments.length;
-      try {
-        const response = await this.octokit.rest.pulls.createReview({
-          owner,
-          repo,
-          pull_number: pullNumber,
-          body,
-          event,
-          commit_id: headSha,
-          comments,
-        });
-        review = response.data;
-      } catch (error) {
-        if (!this.shouldRetryWithoutInlineComments(error) || comments.length === 0) {
-          throw error;
-        }
-
-        core.warning(
-          "GitHub rejected one or more inline comments; posting summary review without inline comments."
-        );
-        const response = await this.octokit.rest.pulls.createReview({
-          owner,
-          repo,
-          pull_number: pullNumber,
-          // The failed review is not created, so include every finding in the fallback body.
-          body: this.buildReviewBody(findings, new Set()) + stamp,
-          event,
-          commit_id: headSha,
-        });
-        review = response.data;
-        postedInlineComments = 0;
-      }
-
-      core.info(
-        "Posted review #" + review.id + " with " + postedInlineComments + " individual line comments"
-      );
-
-      await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id);
-
-      return {id: review.id, url: review.html_url, verdict: reviewVerdict(event), counts};
-
+    const { comments, postedFindings } = this.buildReviewComments(findings, files);
+    let posted;
+    try {
+      posted = await submit(comments, postedFindings);
     } catch (error) {
-      core.error("Failed to post review: " + error);
-      throw error;
+      if (!this.shouldRetryWithoutInlineComments(error) || comments.length === 0) throw error;
+      core.warning("GitHub rejected one or more inline comments; posting summary review without inline comments.");
+      posted = await submit([], new Set());
     }
+    core.info("Posted " + posted.event + " review #" + posted.review.id + " with " + posted.inline + " inline High findings");
+    await this.dismissStaleRobinReviews(owner, repo, pullNumber, posted.review.id, posted.event);
+    return {id: posted.review.id, url: posted.review.html_url, verdict: reviewVerdict(posted.event), counts};
   }
 
   /**
-   * Build separate line-level comments for each finding that can be mapped to a line.
-   * Each comment appears as an individual thread the repo owner can reply to and resolve.
+   * Build one line-level comment per High finding that maps to a diff line.
+   * Each High becomes a thread that must be resolved; Medium, Low and
+   * suggestions stay in the review body.
    */
   private buildReviewComments(
     findings: StructuredReview,
@@ -413,15 +384,7 @@ export class GitHubReviewer {
     const comments: any[] = [];
     const postedFindings = new Set<ReviewFinding>();
 
-    // Combine all findings
-    const allFindings = [
-      ...findings.high,
-      ...findings.medium,
-      ...findings.low,
-      ...findings.suggestions,
-    ];
-
-    for (const finding of allFindings) {
+    for (const finding of findings.high) {
       if (comments.length >= this.maxComments) {
         core.info(`Reached max-comments limit (${this.maxComments}); remaining findings will stay in the review body.`);
         break;

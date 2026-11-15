@@ -47,6 +47,14 @@ export function completedRounds(reviews) {
     return heads.size;
 }
 
+/** A push that merges or rebases onto main moves the head without the author editing the change: Robin reuses or reviews it. */
+export async function integratesMain(github, repo, before, head) {
+    const {data: comparison} = await github.rest.repos.compareCommits({...repo, base: reviewHead(before), head, per_page: 1});
+    if (comparison.status !== 'ahead') return true;
+    const {data: commit} = await github.rest.git.getCommit({...repo, commit_sha: head});
+    return commit.parents.length > 1;
+}
+
 export async function prepareReview({github, context, expectedHead, prNumber}) {
     const repo = context.repo;
     const repository = `${repo.owner}/${repo.repo}`;
@@ -82,7 +90,11 @@ export async function prepareReview({github, context, expectedHead, prNumber}) {
     if (hasCompleteReceipt(reviews, target.head)) return {...target, eligible: false, reason: 'already-covered'};
     // PR events re-enter as a main dispatch: the runner admits only immutable main
     // workflow sources, and a PR's recorded base SHA goes stale (ready_for_review).
-    if (context.eventName === 'pull_request_target') return dispatch();
+    if (context.eventName === 'pull_request_target') {
+        if (context.payload.action === 'synchronize' && !await integratesMain(github, repo, context.payload.before, target.head))
+            return {...target, eligible: false, reason: 'own-push'};
+        return dispatch();
+    }
     if (completedRounds(reviews) >= MAX_REVIEW_ROUNDS) return {...target, eligible: false, reason: 'round-cap'};
     return {...target, reason: 'review-required'};
 }

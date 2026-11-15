@@ -334,16 +334,26 @@ describe("content-addressed review reuse", () => {
     systemPrompt: "system",
     precisionPrompt: "precision",
     gatekeeper: true,
-    diff: "@@ -1 +1 @@\n-a\n+b\n",
+    diff: "diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n",
   };
 
   it("is stable for identical inputs and sensitive to every field", () => {
     expect(reviewKey(base)).toBe(reviewKey({ ...base }));
-    expect(reviewKey({ ...base, diff: base.diff + " " })).not.toBe(reviewKey(base));
+    expect(reviewKey({ ...base, diff: base.diff.replace("+b", "+b ") })).not.toBe(reviewKey(base));
     expect(reviewKey({ ...base, model: "other" })).not.toBe(reviewKey(base));
     expect(reviewKey({ ...base, systemPrompt: "changed" })).not.toBe(reviewKey(base));
     expect(reviewKey({ ...base, precisionPrompt: "changed" })).not.toBe(reviewKey(base));
     expect(reviewKey({ ...base, gatekeeper: false })).not.toBe(reviewKey(base));
+  });
+
+  it("ignores line numbers and index lines but not whitespace", () => {
+    const moved = { ...base, diff: "diff --git a/x b/x\nindex 1111111..2222222 100644\n--- a/x\n+++ b/x\n@@ -40 +40 @@ fn\n-a\n+b\n" };
+    expect(reviewKey(moved)).toBe(reviewKey(base));
+    expect(reviewKey({ ...base, diff: base.diff.replace("+b", "+ b") })).not.toBe(reviewKey(base));
+  });
+
+  it("refuses a diff git cannot identify", () => {
+    expect(() => reviewKey({ ...base, diff: "@@ -1 +1 @@\n-a\n+b\n" })).toThrow("git patch-id produced no id");
   });
 
   it("cannot be spoofed by field concatenation", () => {
@@ -375,7 +385,7 @@ describe("content-addressed review reuse", () => {
   });
 
   it("misses on a different key", () => {
-    const other = reviewKey({ ...base, diff: "different" });
+    const other = reviewKey({ ...base, diff: base.diff.replace("+b", "+c") });
     expect(findCachedVerdict([{ body: robin("APPROVE"), user: bot }], other)).toBeNull();
   });
 

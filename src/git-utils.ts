@@ -1,11 +1,19 @@
 import { Octokit } from "@octokit/rest";
 import * as core from "@actions/core";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
+
+export function patchId(diff: string): string {
+  const id = /^([0-9a-f]{40}) /.exec(execFileSync("git", ["patch-id", "--verbatim"], {
+    input: diff, encoding: "utf8", maxBuffer: 1024 * 1024,
+  }))?.[1];
+  if (!id) throw new Error("git patch-id produced no id for the review diff");
+  return id;
+}
 
 export class GitUtils {
   private octokit: Octokit;

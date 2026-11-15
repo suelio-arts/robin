@@ -285,7 +285,7 @@ async function run(): Promise<void> {
     // Content-addressed review reuse.
     //
     // A rebase onto a moved main dismisses Robin's approval, but ~59% of those
-    // force-pushes leave the reviewed diff byte-identical. GitHub has already
+    // force-pushes leave the reviewed change identical. GitHub has already
     // voided the approval by the time this runs, so skipping alone would
     // deadlock the PR: the short-circuit must still POST a fresh review at the
     // current head. It just must not call the model.
@@ -311,7 +311,7 @@ async function run(): Promise<void> {
       const cached = findCachedVerdict(priorReviews, cacheKey);
 
       if (cached) {
-        core.info("Diff is byte-identical to an earlier review; reusing its " + cached.event + " verdict.");
+        core.info("Change is identical to an earlier review; reusing its " + cached.event + " verdict.");
         const reviewer = new GitHubReviewer(octokit as any, maxComments);
         const posted = await reviewer.postCachedReview(owner, repo, prNumber, cached, headSha);
         setPostedOutputs("reused", headSha, posted);
@@ -500,7 +500,7 @@ function buildReusedStatusBody(event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT")
   return [
     "## " + ROBIN_SIGNATURE,
     "",
-    `:recycle: This head's diff is byte-identical to one I already reviewed, so I ${verdict} without a model pass.`,
+    `:recycle: This head's change is identical to one I already reviewed, so I ${verdict} without a model pass.`,
     "",
     "Edit or delete that review's body to force a full re-review.",
   ].join("\n");

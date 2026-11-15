@@ -975,12 +975,21 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.GitUtils = void 0;
+exports.patchId = patchId;
 const core = __importStar(__nccwpck_require__(7484));
 const node_child_process_1 = __nccwpck_require__(1421);
 const node_fs_1 = __nccwpck_require__(3024);
 const node_path_1 = __nccwpck_require__(6760);
 const node_util_1 = __nccwpck_require__(7975);
 const exec = (0, node_util_1.promisify)(node_child_process_1.execFile);
+function patchId(diff) {
+    const id = /^([0-9a-f]{40}) /.exec((0, node_child_process_1.execFileSync)("git", ["patch-id", "--verbatim"], {
+        input: diff, encoding: "utf8", maxBuffer: 1024 * 1024,
+    }))?.[1];
+    if (!id)
+        throw new Error("git patch-id produced no id for the review diff");
+    return id;
+}
 class GitUtils {
     octokit;
     contents = new Map();
@@ -1152,6 +1161,7 @@ exports.findCachedVerdict = findCachedVerdict;
 exports.formatPriorFindings = formatPriorFindings;
 const core = __importStar(__nccwpck_require__(7484));
 const node_crypto_1 = __nccwpck_require__(7598);
+const git_utils_1 = __nccwpck_require__(8529);
 const outcome_1 = __nccwpck_require__(2513);
 /** Marker present in every Robin review body; used to recognize Robin's own reviews. */
 exports.ROBIN_SIGNATURE = ":bow_and_arrow: Robin";
@@ -1168,10 +1178,11 @@ function reviewVerdict(event) {
 /**
  * Content address of everything that determines a verdict.
  *
- * A rebase onto a moved main dismisses Robin's approval but usually leaves the
- * reviewed diff byte-identical, so the model would be asked to re-derive a
- * verdict from inputs it has already seen. Hashing the prompts and model
- * alongside the diff means any prompt, model, or repo-instruction edit
+ * A merge or rebase onto a moved main shifts hunk line numbers and blob ids
+ * while the pull request's own change stays the same, so the diff enters the
+ * key as its `git patch-id --verbatim`: whitespace and every changed or
+ * context line count, line numbers and index lines do not. Hashing the prompts
+ * and model alongside means any prompt, model, or repo-instruction edit
  * invalidates the key automatically — there is no cache version to remember to
  * bump.
  */
@@ -1182,7 +1193,7 @@ function reviewKey(parts) {
         parts.systemPrompt,
         parts.precisionPrompt,
         String(parts.gatekeeper),
-        parts.diff,
+        (0, git_utils_1.patchId)(parts.diff),
     ].join("\0"))
         .digest("hex");
 }
@@ -1324,7 +1335,7 @@ class GitHubReviewer {
         }
     }
     /**
-     * Re-post a verdict already derived from byte-identical inputs.
+     * Re-post a verdict already derived from the same change and prompts.
      *
      * Body-only, with ZERO inline comments, and that constraint is the safety
      * argument rather than a caveat on it. Re-mapping the original findings onto
@@ -1345,7 +1356,7 @@ class GitHubReviewer {
         // stat blocks it already parses.
         const counts = (0, outcome_1.parseOutcomeMarker)(cached.body)?.counts ?? null;
         const body = (0, outcome_1.appendOutcomeMarker)([
-            "> Reused a prior review: this head's diff is byte-identical to one already",
+            "> Reused a prior review: this head's change is identical to one already",
             "> reviewed on this pull request, so no model call was made. Edit or delete",
             "> that review's body to force a full re-review.",
             "",
@@ -2530,7 +2541,7 @@ async function run() {
         // Content-addressed review reuse.
         //
         // A rebase onto a moved main dismisses Robin's approval, but ~59% of those
-        // force-pushes leave the reviewed diff byte-identical. GitHub has already
+        // force-pushes leave the reviewed change identical. GitHub has already
         // voided the approval by the time this runs, so skipping alone would
         // deadlock the PR: the short-circuit must still POST a fresh review at the
         // current head. It just must not call the model.
@@ -2554,7 +2565,7 @@ async function run() {
             });
             const cached = (0, github_reviewer_1.findCachedVerdict)(priorReviews, cacheKey);
             if (cached) {
-                core.info("Diff is byte-identical to an earlier review; reusing its " + cached.event + " verdict.");
+                core.info("Change is identical to an earlier review; reusing its " + cached.event + " verdict.");
                 const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
                 const posted = await reviewer.postCachedReview(owner, repo, prNumber, cached, headSha);
                 (0, review_run_1.setPostedOutputs)("reused", headSha, posted);
@@ -2698,7 +2709,7 @@ function buildReusedStatusBody(event) {
     return [
         "## " + github_reviewer_1.ROBIN_SIGNATURE,
         "",
-        `:recycle: This head's diff is byte-identical to one I already reviewed, so I ${verdict} without a model pass.`,
+        `:recycle: This head's change is identical to one I already reviewed, so I ${verdict} without a model pass.`,
         "",
         "Edit or delete that review's body to force a full re-review.",
     ].join("\n");

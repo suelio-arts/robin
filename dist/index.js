@@ -3703,7 +3703,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PIECE_CONCURRENCY = void 0;
+exports.MAX_REVIEW_PIECES = exports.PIECE_CONCURRENCY = void 0;
 exports.mapPool = mapPool;
 exports.reviewPieces = reviewPieces;
 exports.runReviewCore = runReviewCore;
@@ -3750,9 +3750,16 @@ async function mapPool(items, limit, run) {
     await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
     return results;
 }
-/** Diff pieces: one per file, oversized files split on hunk boundaries. */
+exports.MAX_REVIEW_PIECES = 64;
 function reviewPieces(reviewDiff, maxDiffSize) {
-    return (0, diff_filter_1.splitDiffIntoFiles)(reviewDiff).flatMap(({ content }) => (0, diff_filter_1.chunkDiffByFile)(content, maxDiffSize));
+    const perFile = (0, diff_filter_1.splitDiffIntoFiles)(reviewDiff).flatMap(({ content }) => (0, diff_filter_1.chunkDiffByFile)(content, maxDiffSize));
+    if (perFile.length <= exports.MAX_REVIEW_PIECES)
+        return perFile;
+    for (let budget = Math.max(maxDiffSize, Math.ceil(reviewDiff.length / exports.MAX_REVIEW_PIECES));; budget = Math.ceil(budget * 1.25)) {
+        const packed = (0, diff_filter_1.chunkDiffByFile)(reviewDiff, budget);
+        if (packed.length <= exports.MAX_REVIEW_PIECES)
+            return packed;
+    }
 }
 /** Discovery on every piece, then one precision gate over all candidates. Posts nothing. */
 async function runReviewCore(input) {

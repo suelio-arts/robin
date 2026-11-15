@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MAX_REVIEW_ROUNDS, completedRounds, integratesMain, eligiblePullRequest, hasCompleteReceipt, isReviewCommand, prepareReview, reviewHead, reviewNumber} from './robin-review-trigger.mjs';
+import {MAX_REVIEW_ROUNDS, completedRounds, integratesMain, eligiblePullRequest, robinApprovals, isReviewCommand, prepareReview, reviewHead, reviewNumber} from './robin-review-trigger.mjs';
 
 const head = 'a'.repeat(40);
 const advanced = 'b'.repeat(40);
 const repository = 'suelio-arts/mix-mono';
 const repo = {owner: 'suelio-arts', repo: 'mix-mono'};
 const target = () => ({number: 7, state: 'open', draft: false, base: {ref: 'main', repo: {full_name: 'suelio-arts/mix-mono'}}, head: {sha: head, repo: {full_name: 'suelio-arts/mix-mono'}}});
-const receipt = (kind = 'reviewed', sha = head) => ({user: {login: 'github-actions[bot]', type: 'Bot'}, commit_id: sha, body: `<!-- robin-outcome: v1 ${kind} head=${sha} -->`});
+const receipt = (kind = 'reviewed', sha = head, state = 'APPROVED') => ({user: {login: 'github-actions[bot]', type: 'Bot'}, state, commit_id: sha, body: `<!-- robin-outcome: v1 ${kind} head=${sha} -->`});
 function fixture(eventName = 'pull_request_target') {
     const calls = [];
     const state = {pr: target(), permission: 'write', reviews: [], comparison: 'ahead', parents: 1};
@@ -42,11 +42,17 @@ test('only open non-draft same-repository main PRs are eligible', () => {
     assert.equal(eligiblePullRequest(target(), repository, advanced).reason, 'stale-head');
 });
 
-test('dedupe requires bot identity, native commit id, matching last complete marker', () => {
-    for (const kind of ['reviewed', 'reused', 'skipped']) assert.equal(hasCompleteReceipt([receipt(kind)], head), true);
-    for (const invalid of [receipt('incomplete'), receipt('reviewed', advanced), {...receipt(), commit_id: advanced}, {...receipt(), user: {login: 'maintainer', type: 'User'}}, {...receipt(), body: `${receipt().body}\n${receipt('incomplete').body}`}]) {
-        assert.equal(hasCompleteReceipt([invalid], head), false);
+test('coverage is a live Robin approval: bot identity, native commit id, matching last complete marker', () => {
+    for (const kind of ['reviewed', 'reused', 'skipped']) assert.equal(robinApprovals([receipt(kind)]).length, 1);
+    for (const invalid of [receipt('incomplete'), receipt('reviewed', head, 'COMMENTED'), receipt('reviewed', head, 'DISMISSED'), {...receipt(), commit_id: advanced}, {...receipt(), user: {login: 'maintainer', type: 'User'}}, {...receipt(), body: `${receipt().body}\n${receipt('incomplete').body}`}]) {
+        assert.equal(robinApprovals([invalid]).length, 0);
     }
+});
+
+test('a complete COMMENT receipt from before approvals does not cover its head, so /robin backfills it', async () => {
+    const legacy = fixture('workflow_dispatch');
+    legacy.state.reviews = [receipt('reviewed', head, 'COMMENTED')];
+    assert.equal((await prepareReview(legacy)).reason, 'review-required');
 });
 
 test('automatic target reads live head and skips an advanced or already covered SHA', async () => {
@@ -63,7 +69,7 @@ test('automatic target reads live head and skips an advanced or already covered 
     assert.ok(!covered.calls.some(call => call[0] === 'dispatch'));
 });
 
-test('a push dispatches only when it merges or rebases onto main', async () => {
+test('an own push skips only while Robin approval stands; a push onto main or an unapproved PR dispatches', async () => {
     const push = (comparison, parents) => {
         const current = fixture();
         current.context.payload.action = 'synchronize';
@@ -72,6 +78,7 @@ test('a push dispatches only when it merges or rebases onto main', async () => {
         return current;
     };
     const fix = push('ahead', 1);
+    fix.state.reviews = [receipt('reviewed', advanced)];
     assert.equal((await prepareReview(fix)).reason, 'own-push');
     assert.ok(!fix.calls.some(call => call[0] === 'dispatch'));
     assert.deepEqual(fix.calls.find(call => call[0] === 'compare')[1], {...repo, base: advanced, head, per_page: 1});
@@ -80,7 +87,12 @@ test('a push dispatches only when it merges or rebases onto main', async () => {
         assert.equal((await prepareReview(moved)).reason, 'dispatched');
         assert.deepEqual(moved.calls.at(-1)[1], {...repo, workflow_id: 'robin.yml', ref: 'main', inputs: {pr: '7', head}});
     }
+    const unapproved = push('ahead', 1);
+    unapproved.state.reviews = [receipt('reviewed', advanced, 'DISMISSED')];
+    assert.equal((await prepareReview(unapproved)).reason, 'dispatched');
+    assert.ok(!unapproved.calls.some(call => call[0] === 'compare'));
     const malformed = push('ahead', 1);
+    malformed.state.reviews = [receipt('reviewed', advanced)];
     malformed.context.payload.before = 'abc';
     await assert.rejects(prepareReview(malformed), /full lowercase/);
     await assert.rejects(integratesMain(fixture().github, repo, undefined, head), /full lowercase/);

@@ -49,7 +49,7 @@ on:
         type: string
         default: ""
       request-changes:
-        description: "Whether Robin posts REQUEST_CHANGES for high findings and APPROVE for a clean head. false always posts COMMENT."
+        description: "Whether Robin posts REQUEST_CHANGES for high findings. Either way a complete review approves when every high finding is an inline thread."
         required: false
         type: boolean
         default: true

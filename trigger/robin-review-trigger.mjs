@@ -26,11 +26,11 @@ export function eligiblePullRequest(pr, repository, expectedHead) {
     return {eligible: true, head, pr: reviewNumber(pr.number)};
 }
 
-export function hasCompleteReceipt(reviews, head) {
-    return reviews.some(review => {
-        if (review.user?.login !== 'github-actions[bot]' || review.user?.type !== 'Bot' || review.commit_id !== head) return false;
+export function robinApprovals(reviews) {
+    return reviews.filter(review => {
+        if (review.user?.login !== 'github-actions[bot]' || review.user?.type !== 'Bot' || review.state !== 'APPROVED') return false;
         const marker = [...String(review.body ?? '').matchAll(outcome)].at(-1);
-        return marker?.[2] === head && marker[1] !== 'incomplete';
+        return marker?.[2] === review.commit_id && marker[1] !== 'incomplete';
     });
 }
 
@@ -87,11 +87,12 @@ export async function prepareReview({github, context, expectedHead, prNumber}) {
     };
     if (context.eventName === 'issue_comment') return dispatch();
     const reviews = await github.paginate(github.rest.pulls.listReviews, {...repo, pull_number: number, per_page: 100});
-    if (hasCompleteReceipt(reviews, target.head)) return {...target, eligible: false, reason: 'already-covered'};
+    const approvals = robinApprovals(reviews);
+    if (approvals.some(review => review.commit_id === target.head)) return {...target, eligible: false, reason: 'already-covered'};
     // PR events re-enter as a main dispatch: the runner admits only immutable main
     // workflow sources, and a PR's recorded base SHA goes stale (ready_for_review).
     if (context.eventName === 'pull_request_target') {
-        if (context.payload.action === 'synchronize' && !await integratesMain(github, repo, context.payload.before, target.head))
+        if (context.payload.action === 'synchronize' && approvals.length > 0 && !await integratesMain(github, repo, context.payload.before, target.head))
             return {...target, eligible: false, reason: 'own-push'};
         return dispatch();
     }

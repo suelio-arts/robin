@@ -5,7 +5,7 @@ import { LLMClient } from "./llm-client";
 import { councilReceipt, createCouncilSeat } from "./council";
 import { GitUtils } from "./git-utils";
 import { StructuredReview } from "./review-parser";
-import { GitHubReviewer, ROBIN_SIGNATURE, reuseDecision, formatPriorFindings } from "./github-reviewer";
+import { GitHubReviewer, ROBIN_SIGNATURE, ReviewVerdict, reuseDecision, formatPriorFindings } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
 import { filterDiff, isWhitespaceOnlyDiff, splitDiffIntoFiles } from "./diff-filter";
 import {
@@ -320,9 +320,9 @@ async function run(): Promise<void> {
           owner,
           repo,
           statusCommentId,
-          buildReusedStatusBody(cached.event)
+          buildReusedStatusBody(posted.verdict)
         );
-        if (cached.event === "REQUEST_CHANGES" && failOnHigh) {
+        if (posted.verdict === "CHANGES_REQUESTED" && failOnHigh) {
           core.setFailed("Reused a blocking review for an unchanged diff.");
         }
         onJobCancelled = undefined;
@@ -491,10 +491,10 @@ async function updateStatusComment(
   }
 }
 
-function buildReusedStatusBody(event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT"): string {
-  const verdict = event === "REQUEST_CHANGES"
+function buildReusedStatusBody(posted: ReviewVerdict): string {
+  const verdict = posted === "CHANGES_REQUESTED"
     ? "re-posted the blocking review"
-    : event === "APPROVE"
+    : posted === "APPROVED"
       ? "re-posted the approval"
       : "re-posted the review";
   return [

@@ -20,7 +20,7 @@ skip-paths:
 | `max-diff-size` | Used when the workflow still passes the action default (`50000`) |
 | `max-comments` | Used when the workflow still passes the action default (`15`) |
 | `json-response-mode` | Used when `use-json-response-mode` is empty (action default defers to this file) |
-| `request-changes` | Used when `request-changes` input is empty. `true` (default) requests changes on high findings and approves otherwise; `false` posts advisor-only comments |
+| `request-changes` | Used when `request-changes` input is empty. `true` (default) requests changes on high findings; both modes approve a complete review whose high findings are all inline threads |
 | `skip-paths` | Extra paths removed from the diff before the LLM call |
 
 Lockfiles (npm, yarn, pnpm, Cargo, Gemfile, poetry), `dist/`, `node_modules/`, and minified assets are always skipped automatically. If every changed file is skipped, the action posts a status comment and skips the LLM call.
@@ -118,11 +118,11 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `council-fallback-model` | empty | Optional seat that takes over `council-model` for the rest of the review when the council seat hits a subscription quota or rate limit. `deepseek-v4.1-flash-deploy` runs DeepSeek V4.1 Flash (effort high) on Rolly's Deploy API key: the one API-billed seat. The receipt marks `SUBSTITUTED` |
 | `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
 | `fail-on-high` | `false` | Fail the check if high-severity issues are found |
-| `request-changes` | direct action: repo config → `true`; reusable workflow: `false` | `true` submits REQUEST_CHANGES on high findings and APPROVE only when there are no findings; `false` posts a non-blocking COMMENT. Reusable-workflow callers must pass `true` for enforcement. |
+| `request-changes` | direct action: repo config → `true`; reusable workflow: `false` | `true` submits REQUEST_CHANGES on high findings. In both modes a complete review (reviewed, reused or skipped) is an APPROVE when every high finding is an inline thread, and a COMMENT when one stays in the body; a non-approving review dismisses Robin's earlier approvals. Require one approval and conversation resolution on the branch to make Robin the gate, and enable **Allow GitHub Actions to create and approve pull requests**. |
 | `max-diff-size` | `50000` | Max diff characters sent to the model |
 | `max-output-tokens` | empty | Cap response tokens (optional) |
 | `llm-timeout-ms` | `600000` | LLM timeout (10 minutes) |
-| `max-comments` | `15` | Max inline comments |
+| `max-comments` | `15` | Max inline high findings; only high findings are posted inline |
 | `review-on-synchronize` | `false` | Review every new commit on the PR |
 | `runner` | `'"ubuntu-latest"'` | Reusable workflow only: runner as a JSON string or JSON array |
 | `min-command-permission` | `write` | Who can run `/review` |

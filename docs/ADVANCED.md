@@ -152,6 +152,8 @@ To measure or compare a review without posting anything, replay one base/head pa
 
 The broad and adversarial discovery passes run concurrently. Eight active pieces permit up to sixteen initial calls on a single model; a healthy council splits these into eight per seat. Each piece finishes its initial passes before any bounded evidence follow-up, and the final precision gate waits for every piece.
 
+Each changed file is one piece, and a file larger than `max-diff-size` is split on hunk boundaries. A pull request with more than 64 pieces is packed instead: files stay in path order, so a folder's files travel together, and the piece size grows from `max-diff-size` until at most 64 pieces cover the whole diff. Review time therefore stays bounded by eight rounds of eight pieces however many files change, and every file is still reviewed. The precision gate merges all pieces' candidates into one review.
+
 Every review summary ends with a timing receipt: wall time per stage (context, discovery, evidence, follow-up, final gate) and, per seat, calls, p50 and max call time, the provider's own duration when available, failed calls, stage activity and the peak number of calls in flight. Robin currently dispatches calls immediately (client queue time is zero); provider duration includes the external CLI and cannot isolate a provider-side queue. The log adds one line per call and per piece as it finishes. Stage activity is the union of overlapping intervals, so stage totals are not additive. Skipped and reused verdicts do not run the review core.
 
 ## Usage patterns
@@ -362,7 +364,6 @@ No daily quota from this action. Real limits:
 
 - `.github/robin.yml` config file
 - Provider presets
-- Large PR chunking by file
 - GitHub App install flow
 
 

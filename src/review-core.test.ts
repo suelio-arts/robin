@@ -1,4 +1,4 @@
-import { mapPool, runReviewCore } from "./review-core";
+import { MAX_REVIEW_PIECES, mapPool, reviewPieces, runReviewCore } from "./review-core";
 import { LLMClient } from "./llm-client";
 import { createCouncilSeat } from "./council";
 import { currentStage, ReviewTimings } from "./review-timing";
@@ -110,4 +110,24 @@ it("keeps both discovery passes and gates every piece together after parallel pr
   expect(result.findings.medium.map(({file}) => file)).toEqual(["a.ts", "b.ts"]);
   expect(passes.sort()).toEqual(["council:1", "council:2", "primary:1", "primary:2"]);
   expect(council.gateVoted).toBe(true);
+});
+
+describe("reviewPieces", () => {
+  const fileDiff = (file: string, lines: number) =>
+    `diff --git a/${file} b/${file}\n--- a/${file}\n+++ b/${file}\n@@ -1,${lines} +0,0 @@\n${"-// gone\n".repeat(lines)}`;
+  const diffOf = (files: number, lines = 1) =>
+    Array.from({length: files}, (_, index) => fileDiff(`src/f${String(index).padStart(4, "0")}.ts`, lines)).join("");
+
+  it("keeps one piece per file while the pull request fits the piece limit", () => {
+    const diff = diffOf(MAX_REVIEW_PIECES);
+    expect(reviewPieces(diff, 50000)).toEqual(Array.from({length: MAX_REVIEW_PIECES}, (_, index) =>
+      fileDiff(`src/f${String(index).padStart(4, "0")}.ts`, 1)));
+  });
+
+  it.each([[MAX_REVIEW_PIECES + 1, 1], [503, 54], [5000, 40]])("packs %i files into at most the piece limit, every file in path order", (files, lines) => {
+    const diff = diffOf(files, lines);
+    const pieces = reviewPieces(diff, 50000);
+    expect(pieces.length).toBeLessThanOrEqual(MAX_REVIEW_PIECES);
+    expect(pieces.join("")).toBe(diff);
+  });
 });

@@ -68,9 +68,15 @@ export async function mapPool<T, R>(items: T[], limit: number, run: (item: T, in
   return results;
 }
 
-/** Diff pieces: one per file, oversized files split on hunk boundaries. */
+export const MAX_REVIEW_PIECES = 64;
+
 export function reviewPieces(reviewDiff: string, maxDiffSize: number): string[] {
-  return splitDiffIntoFiles(reviewDiff).flatMap(({ content }) => chunkDiffByFile(content, maxDiffSize));
+  const perFile = splitDiffIntoFiles(reviewDiff).flatMap(({ content }) => chunkDiffByFile(content, maxDiffSize));
+  if (perFile.length <= MAX_REVIEW_PIECES) return perFile;
+  for (let budget = Math.max(maxDiffSize, Math.ceil(reviewDiff.length / MAX_REVIEW_PIECES)); ; budget = Math.ceil(budget * 1.25)) {
+    const packed = chunkDiffByFile(reviewDiff, budget);
+    if (packed.length <= MAX_REVIEW_PIECES) return packed;
+  }
 }
 
 /** Discovery on every piece, then one precision gate over all candidates. Posts nothing. */

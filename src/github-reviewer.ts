@@ -44,13 +44,15 @@ export interface PostedReview {
  * invalidates the key automatically — there is no cache version to remember to
  * bump.
  */
-export function reviewKey(parts: {
+export interface ReviewKeyParts {
   model: string;
   systemPrompt: string;
   precisionPrompt: string;
   gatekeeper: boolean;
   diff: string;
-}): string {
+}
+
+export function reviewKey(parts: ReviewKeyParts): string {
   return createHash("sha256")
     .update(
       [
@@ -68,13 +70,16 @@ export function cacheMarker(key: string, event: ReviewEvent): string {
   return `<!-- ${REVIEW_KEY_MARKER}: ${key} ${event} -->`;
 }
 
-export interface CachedVerdict {
+/** A prior verdict carried to a new head: its event, verbatim body and the counts from its outcome marker. */
+export interface CarriedReview {
   event: ReviewEvent;
   body: string;
+  counts: OutcomeCounts | null;
 }
 
 /**
- * Find a previous Robin review of this exact content.
+ * The one reuse decision: the key this head's review is stamped with, and the
+ * earlier Robin review of the same change and prompts it carries, or null.
  *
  * Deliberately does NOT filter on review state: `dismiss_stale_reviews` marks
  * the reviews we most want to reuse as DISMISSED. The author check is a trust
@@ -82,13 +87,14 @@ export interface CachedVerdict {
  * their own review body and have Robin post a genuine bot APPROVE, defeating
  * `require_last_push_approval`.
  */
-export function findCachedVerdict(
+export function reuseDecision(
   reviews: Array<{
     body?: string | null;
     user?: { login?: string; type?: string } | null;
   }>,
-  key: string
-): CachedVerdict | null {
+  parts: ReviewKeyParts
+): { key: string; carried: CarriedReview | null } {
+  const key = reviewKey(parts);
   for (let i = reviews.length - 1; i >= 0; i--) {
     const review = reviews[i];
     if (review.user?.type !== "Bot") continue;
@@ -97,9 +103,9 @@ export function findCachedVerdict(
     if (!body.includes(ROBIN_SIGNATURE)) continue;
     const match = REVIEW_KEY_PATTERN.exec(body);
     if (!match || match[1] !== key) continue;
-    return { event: match[2] as ReviewEvent, body };
+    return { key, carried: { event: match[2] as ReviewEvent, body, counts: parseOutcomeMarker(body)?.counts ?? null } };
   }
-  return null;
+  return { key, carried: null };
 }
 
 export class GitHubReviewer {
@@ -263,7 +269,7 @@ export class GitHubReviewer {
     owner: string,
     repo: string,
     pullNumber: number,
-    cached: CachedVerdict,
+    cached: CarriedReview,
     headSha: string
   ): Promise<PostedReview> {
     // Re-stamp the outcome at THIS head. The reused body still carries the
@@ -272,7 +278,7 @@ export class GitHubReviewer {
     // Counts come from the cached marker, never from the verdict. A body from
     // before markers existed leaves them out — the consumer falls back to the
     // stat blocks it already parses.
-    const counts = parseOutcomeMarker(cached.body)?.counts ?? null;
+    const counts = cached.counts;
     const body = appendOutcomeMarker(
       [
         "> Reused a prior review: this head's change is identical to one already",

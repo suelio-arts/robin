@@ -1,4 +1,4 @@
-import { GitHubReviewer, reviewKey, cacheMarker, findCachedVerdict, ROBIN_SIGNATURE } from "./github-reviewer";
+import { GitHubReviewer, reviewKey, cacheMarker, reuseDecision, ROBIN_SIGNATURE } from "./github-reviewer";
 import { parseOutcomeMarker } from "./outcome";
 
 const HEAD = "a".repeat(40);
@@ -39,7 +39,7 @@ describe("GitHubReviewer", () => {
         await reviewer.postReview("o", "r", 7, findings, false, undefined, HEAD);
       } else if (outcome === "reused") {
         await reviewer.postCachedReview("o", "r", 7, {
-          event: "COMMENT", body: "## " + ROBIN_SIGNATURE,
+          event: "COMMENT", body: "## " + ROBIN_SIGNATURE, counts: null,
         }, HEAD);
       } else if (outcome === "skipped") {
         await reviewer.postSkippedReview("o", "r", 7, HEAD, "whitespace only");
@@ -210,7 +210,7 @@ describe("GitHubReviewer", () => {
     ].join("\n");
 
     const posted = await new GitHubReviewer(octokit as any).postCachedReview(
-      "o", "r", 7, { event: "REQUEST_CHANGES", body: cachedBody }, HEAD
+      "o", "r", 7, { event: "REQUEST_CHANGES", body: cachedBody, counts: { high: 2, medium: 1, low: 0, suggestions: 3 } }, HEAD
     );
 
     const body = createReview.mock.calls[0][0].body;
@@ -231,7 +231,7 @@ describe("GitHubReviewer", () => {
     };
 
     await new GitHubReviewer(octokit as any).postCachedReview(
-      "o", "r", 7, { event: "APPROVE", body: "## " + ROBIN_SIGNATURE + "\n\n:white_check_mark: **No issues found**" }, HEAD
+      "o", "r", 7, { event: "APPROVE", body: "## " + ROBIN_SIGNATURE + "\n\n:white_check_mark: **No issues found**", counts: null }, HEAD
     );
 
     // Counts must never be invented from the verdict: an absent tail tells the
@@ -370,9 +370,9 @@ describe("content-addressed review reuse", () => {
   it("reuses a matching verdict regardless of dismissal state", () => {
     // dismiss_stale_reviews marks exactly the reviews we want as DISMISSED,
     // so state must not be part of the match.
-    expect(findCachedVerdict([{ body: robin("APPROVE"), user: bot }], key))
-      .toEqual({ event: "APPROVE", body: robin("APPROVE") });
-    expect(findCachedVerdict([{ body: robin("REQUEST_CHANGES"), user: bot }], key)?.event)
+    expect(reuseDecision([{ body: robin("APPROVE"), user: bot }], base).carried)
+      .toEqual({ event: "APPROVE", body: robin("APPROVE"), counts: null });
+    expect(reuseDecision([{ body: robin("REQUEST_CHANGES"), user: bot }], base).carried?.event)
       .toBe("REQUEST_CHANGES");
   });
 
@@ -381,28 +381,35 @@ describe("content-addressed review reuse", () => {
       { body: robin("REQUEST_CHANGES"), user: bot },
       { body: robin("APPROVE"), user: bot },
     ];
-    expect(findCachedVerdict(reviews, key)?.event).toBe("APPROVE");
+    expect(reuseDecision(reviews, base).carried?.event).toBe("APPROVE");
   });
 
-  it("misses on a different key", () => {
-    const other = reviewKey({ ...base, diff: base.diff.replace("+b", "+c") });
-    expect(findCachedVerdict([{ body: robin("APPROVE"), user: bot }], other)).toBeNull();
+  it("misses on a different change", () => {
+    expect(reuseDecision([{ body: robin("APPROVE"), user: bot }], { ...base, diff: base.diff.replace("+b", "+c") }).carried).toBeNull();
+  });
+
+  it("carries the verdict, body and counts to the new head and keys the review it posts", () => {
+    const body = robin("REQUEST_CHANGES") + "\n<!-- robin-outcome: v1 reviewed head=" + OLD_HEAD + " high=1 medium=2 low=0 suggestions=0 -->";
+    expect(reuseDecision([{ body, user: bot }], base)).toEqual({
+      key,
+      carried: { event: "REQUEST_CHANGES", body, counts: { high: 1, medium: 2, low: 0, suggestions: 0 } },
+    });
   });
 
   it("rejects forged markers", () => {
     const body = robin("APPROVE");
     // A human pasting the marker into their own review must not yield a bot APPROVE.
-    expect(findCachedVerdict([{ body, user: { login: "daydemir", type: "User" } }], key)).toBeNull();
+    expect(reuseDecision([{ body, user: { login: "daydemir", type: "User" } }], base).carried).toBeNull();
     // A different bot must not qualify either.
-    expect(findCachedVerdict([{ body, user: { login: "coderabbitai[bot]", type: "Bot" } }], key)).toBeNull();
+    expect(reuseDecision([{ body, user: { login: "coderabbitai[bot]", type: "Bot" } }], base).carried).toBeNull();
     // Bot author, right marker, but not a Robin review body.
     expect(
-      findCachedVerdict([{ body: "no signature here\n" + cacheMarker(key, "APPROVE"), user: bot }], key)
+      reuseDecision([{ body: "no signature here\n" + cacheMarker(key, "APPROVE"), user: bot }], base).carried
     ).toBeNull();
   });
 
   it("ignores reviews with no marker at all", () => {
-    expect(findCachedVerdict([{ body: "## " + ROBIN_SIGNATURE + "\n\nold review", user: bot }], key)).toBeNull();
-    expect(findCachedVerdict([{ body: null, user: bot }], key)).toBeNull();
+    expect(reuseDecision([{ body: "## " + ROBIN_SIGNATURE + "\n\nold review", user: bot }], base).carried).toBeNull();
+    expect(reuseDecision([{ body: null, user: bot }], base).carried).toBeNull();
   });
 });

@@ -1157,7 +1157,7 @@ exports.GitHubReviewer = exports.ROBIN_SIGNATURE = void 0;
 exports.reviewVerdict = reviewVerdict;
 exports.reviewKey = reviewKey;
 exports.cacheMarker = cacheMarker;
-exports.findCachedVerdict = findCachedVerdict;
+exports.reuseDecision = reuseDecision;
 exports.formatPriorFindings = formatPriorFindings;
 const core = __importStar(__nccwpck_require__(7484));
 const node_crypto_1 = __nccwpck_require__(7598);
@@ -1175,17 +1175,6 @@ function reviewVerdict(event) {
         return "CHANGES_REQUESTED";
     return "COMMENTED";
 }
-/**
- * Content address of everything that determines a verdict.
- *
- * A merge or rebase onto a moved main shifts hunk line numbers and blob ids
- * while the pull request's own change stays the same, so the diff enters the
- * key as its `git patch-id --verbatim`: whitespace and every changed or
- * context line count, line numbers and index lines do not. Hashing the prompts
- * and model alongside means any prompt, model, or repo-instruction edit
- * invalidates the key automatically — there is no cache version to remember to
- * bump.
- */
 function reviewKey(parts) {
     return (0, node_crypto_1.createHash)("sha256")
         .update([
@@ -1201,7 +1190,8 @@ function cacheMarker(key, event) {
     return `<!-- ${REVIEW_KEY_MARKER}: ${key} ${event} -->`;
 }
 /**
- * Find a previous Robin review of this exact content.
+ * The one reuse decision: the key this head's review is stamped with, and the
+ * earlier Robin review of the same change and prompts it carries, or null.
  *
  * Deliberately does NOT filter on review state: `dismiss_stale_reviews` marks
  * the reviews we most want to reuse as DISMISSED. The author check is a trust
@@ -1209,7 +1199,8 @@ function cacheMarker(key, event) {
  * their own review body and have Robin post a genuine bot APPROVE, defeating
  * `require_last_push_approval`.
  */
-function findCachedVerdict(reviews, key) {
+function reuseDecision(reviews, parts) {
+    const key = reviewKey(parts);
     for (let i = reviews.length - 1; i >= 0; i--) {
         const review = reviews[i];
         if (review.user?.type !== "Bot")
@@ -1222,9 +1213,9 @@ function findCachedVerdict(reviews, key) {
         const match = REVIEW_KEY_PATTERN.exec(body);
         if (!match || match[1] !== key)
             continue;
-        return { event: match[2], body };
+        return { key, carried: { event: match[2], body, counts: (0, outcome_1.parseOutcomeMarker)(body)?.counts ?? null } };
     }
-    return null;
+    return { key, carried: null };
 }
 class GitHubReviewer {
     octokit;
@@ -1354,7 +1345,7 @@ class GitHubReviewer {
         // Counts come from the cached marker, never from the verdict. A body from
         // before markers existed leaves them out — the consumer falls back to the
         // stat blocks it already parses.
-        const counts = (0, outcome_1.parseOutcomeMarker)(cached.body)?.counts ?? null;
+        const counts = cached.counts;
         const body = (0, outcome_1.appendOutcomeMarker)([
             "> Reused a prior review: this head's change is identical to one already",
             "> reviewed on this pull request, so no model call was made. Edit or delete",
@@ -2550,20 +2541,21 @@ async function run() {
         // structurally impossible. A miss falls through to the untouched path.
         let cacheKey;
         if (command === "review") {
-            cacheKey = (0, github_reviewer_1.reviewKey)({
-                model,
-                systemPrompt: (0, review_prompts_1.getReviewPrompt)(reviewInstructions),
-                precisionPrompt: [reviewInstructions, review_prompts_1.PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n"),
-                gatekeeper: requestChanges,
-                diff: reviewDiff,
-            });
             const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
                 owner,
                 repo,
                 pull_number: prNumber,
                 per_page: 100,
             });
-            const cached = (0, github_reviewer_1.findCachedVerdict)(priorReviews, cacheKey);
+            const decision = (0, github_reviewer_1.reuseDecision)(priorReviews, {
+                model,
+                systemPrompt: (0, review_prompts_1.getReviewPrompt)(reviewInstructions),
+                precisionPrompt: [reviewInstructions, review_prompts_1.PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n"),
+                gatekeeper: requestChanges,
+                diff: reviewDiff,
+            });
+            cacheKey = decision.key;
+            const cached = decision.carried;
             if (cached) {
                 core.info("Change is identical to an earlier review; reusing its " + cached.event + " verdict.");
                 const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);

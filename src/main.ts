@@ -5,7 +5,7 @@ import { LLMClient } from "./llm-client";
 import { councilReceipt, createCouncilSeat } from "./council";
 import { GitUtils } from "./git-utils";
 import { StructuredReview } from "./review-parser";
-import { GitHubReviewer, ROBIN_SIGNATURE, reviewKey, findCachedVerdict, formatPriorFindings } from "./github-reviewer";
+import { GitHubReviewer, ROBIN_SIGNATURE, reuseDecision, formatPriorFindings } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
 import { filterDiff, isWhitespaceOnlyDiff, splitDiffIntoFiles } from "./diff-filter";
 import {
@@ -294,21 +294,21 @@ async function run(): Promise<void> {
     // structurally impossible. A miss falls through to the untouched path.
     let cacheKey: string | undefined;
     if (command === "review") {
-      cacheKey = reviewKey({
-        model,
-        systemPrompt: getReviewPrompt(reviewInstructions),
-        precisionPrompt: [reviewInstructions, PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n"),
-        gatekeeper: requestChanges,
-        diff: reviewDiff,
-      });
-
       const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
         owner,
         repo,
         pull_number: prNumber,
         per_page: 100,
       });
-      const cached = findCachedVerdict(priorReviews, cacheKey);
+      const decision = reuseDecision(priorReviews, {
+        model,
+        systemPrompt: getReviewPrompt(reviewInstructions),
+        precisionPrompt: [reviewInstructions, PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n"),
+        gatekeeper: requestChanges,
+        diff: reviewDiff,
+      });
+      cacheKey = decision.key;
+      const cached = decision.carried;
 
       if (cached) {
         core.info("Change is identical to an earlier review; reusing its " + cached.event + " verdict.");

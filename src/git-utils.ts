@@ -47,15 +47,38 @@ export class GitUtils {
     return stdout;
   }
 
-  /** True only when `head` extends `ancestor` without merge commits. */
-  async isLinearDescendant(ancestor: string, head: string): Promise<boolean> {
+  /**
+   * The author's own change from `since` to `head`: the diffs of the
+   * first-parent commits that are not merges. A merge counts only when a clean
+   * automatic merge of its parents reproduces its tree exactly, so it brings
+   * nothing but the merged branch. Undefined when `head` does not extend
+   * `since` along its first parents or any merge was resolved by hand.
+   */
+  async authorDiff(since: string, head: string): Promise<string | undefined> {
+    const git = async (...args: string[]) => (await exec("git", ["-C", this.workspace, ...args], {encoding: "utf8", maxBuffer: 100 * 1024 * 1024})).stdout;
+    let chain: string[][];
     try {
-      await exec("git", ["-C", this.workspace, "merge-base", "--is-ancestor", ancestor, head]);
+      chain = (await git("rev-list", "--first-parent", "--reverse", "--parents", `${since}..${head}`)).trim().split("\n").filter(Boolean).map((line) => line.split(" "));
     } catch {
-      return false;
+      return undefined;
     }
-    const {stdout} = await exec("git", ["-C", this.workspace, "rev-list", "--merges", `${ancestor}..${head}`], {encoding: "utf8"});
-    return stdout.trim() === "";
+    if (chain.length === 0 || chain[0][1] !== since || chain[chain.length - 1][0] !== head) return undefined;
+    const diffs: string[] = [];
+    for (const [commit, parent, merged, ...rest] of chain) {
+      if (rest.length > 0) return undefined;
+      if (merged !== undefined) {
+        let tree: string;
+        try {
+          tree = (await git("merge-tree", "--write-tree", parent, merged)).split("\n")[0];
+        } catch {
+          return undefined;
+        }
+        if (tree !== (await git("rev-parse", `${commit}^{tree}`)).trim()) return undefined;
+        continue;
+      }
+      diffs.push(await git("diff", "--no-ext-diff", "--no-textconv", "--no-color", parent, commit, "--"));
+    }
+    return diffs.join("");
   }
 
   async getFileContent(owner: string, repo: string, path: string, ref: string): Promise<string> {

@@ -1020,16 +1020,43 @@ class GitUtils {
         });
         return stdout;
     }
-    /** True only when `head` extends `ancestor` without merge commits. */
-    async isLinearDescendant(ancestor, head) {
+    /**
+     * The author's own change from `since` to `head`: the diffs of the
+     * first-parent commits that are not merges. A merge counts only when a clean
+     * automatic merge of its parents reproduces its tree exactly, so it brings
+     * nothing but the merged branch. Undefined when `head` does not extend
+     * `since` along its first parents or any merge was resolved by hand.
+     */
+    async authorDiff(since, head) {
+        const git = async (...args) => (await exec("git", ["-C", this.workspace, ...args], { encoding: "utf8", maxBuffer: 100 * 1024 * 1024 })).stdout;
+        let chain;
         try {
-            await exec("git", ["-C", this.workspace, "merge-base", "--is-ancestor", ancestor, head]);
+            chain = (await git("rev-list", "--first-parent", "--reverse", "--parents", `${since}..${head}`)).trim().split("\n").filter(Boolean).map((line) => line.split(" "));
         }
         catch {
-            return false;
+            return undefined;
         }
-        const { stdout } = await exec("git", ["-C", this.workspace, "rev-list", "--merges", `${ancestor}..${head}`], { encoding: "utf8" });
-        return stdout.trim() === "";
+        if (chain.length === 0 || chain[0][1] !== since || chain[chain.length - 1][0] !== head)
+            return undefined;
+        const diffs = [];
+        for (const [commit, parent, merged, ...rest] of chain) {
+            if (rest.length > 0)
+                return undefined;
+            if (merged !== undefined) {
+                let tree;
+                try {
+                    tree = (await git("merge-tree", "--write-tree", parent, merged)).split("\n")[0];
+                }
+                catch {
+                    return undefined;
+                }
+                if (tree !== (await git("rev-parse", `${commit}^{tree}`)).trim())
+                    return undefined;
+                continue;
+            }
+            diffs.push(await git("diff", "--no-ext-diff", "--no-textconv", "--no-color", parent, commit, "--"));
+        }
+        return diffs.join("");
     }
     async getFileContent(owner, repo, path, ref) {
         const key = `${owner}/${repo}@${ref}:${path}`;
@@ -2559,7 +2586,7 @@ async function run() {
                 core.info("Done.");
                 return;
             }
-            const pass = await (0, review_pass_1.reviewPass)(priorReviews, headSha, (ancestor, head) => gitUtils.isLinearDescendant(ancestor, head), () => octokit.paginate(octokit.rest.pulls.listReviewComments, { owner, repo, pull_number: reviewTarget.pullNumber, per_page: 100 }));
+            const pass = await (0, review_pass_1.reviewPass)(priorReviews, headSha, (since, head) => gitUtils.authorDiff(since, head), () => octokit.paginate(octokit.rest.pulls.listReviewComments, { owner, repo, pull_number: reviewTarget.pullNumber, per_page: 100 }));
             if (pass.kind === "capped") {
                 core.info(`Review cap reached: ${pass.reason}`);
                 await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody(pass.reason));
@@ -2570,7 +2597,7 @@ async function run() {
                 fixPass = pass;
         }
         const passDiff = fixPass
-            ? (0, diff_filter_1.filterDiff)(await gitUtils.getPullRequestDiff(fixPass.since, headRef), repoConfig.skipPaths || []).filtered
+            ? (0, diff_filter_1.filterDiff)(fixPass.diff, repoConfig.skipPaths || []).filtered
             : reviewDiff;
         if (!passDiff.trim()) {
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody("The change since Robin's last review touches only skipped paths."));
@@ -4243,12 +4270,12 @@ function bodyOnlyHighs(body) {
 /**
  * The one decision on how far Robin reviews this head. Below the round cap it
  * reviews the whole change. At the cap it allows a single fix-only pass over
- * the commits since its last reviewed head, and only when those commits extend
- * that head without merges or rewritten history and its last review raised a
- * High finding to fix. Anything else is capped: Robin posts nothing and a
+ * the author's own commits since its last reviewed head, and only when merges
+ * among them are clean automatic merges and its last review raised a High
+ * finding to fix. Anything else is capped: Robin posts nothing and a
  * maintainer approves.
  */
-async function reviewPass(reviews, head, isLinearDescendant, loadComments) {
+async function reviewPass(reviews, head, authorDiff, loadComments) {
     const reviewed = reviews.filter(isRobin).flatMap((review) => {
         const marker = (0, outcome_1.parseOutcomeMarker)(review.body || "");
         return marker?.outcome === "reviewed" ? [{ review, head: marker.head }] : [];
@@ -4260,19 +4287,22 @@ async function reviewPass(reviews, head, isLinearDescendant, loadComments) {
     const last = reviewed[reviewed.length - 1];
     if (last.head === head)
         return { kind: "capped", reason: "Nothing changed since Robin's last review." };
-    if (!(await isLinearDescendant(last.head, head)))
-        return { kind: "capped", reason: `The change since ${last.head.slice(0, 7)} merges or rewrites history, so it is more than a fix.` };
+    const diff = await authorDiff(last.head, head);
+    if (diff === undefined)
+        return { kind: "capped", reason: `The change since ${last.head.slice(0, 7)} rewrites history or resolves a merge by hand, so it is more than a fix.` };
+    if (!diff.trim())
+        return { kind: "capped", reason: "Only merges changed since Robin's last review." };
     const threads = (await loadComments())
         .filter((comment) => comment.pull_request_review_id === last.review.id && /^\*\*Robin\*\*[^\n]*:rotating_light: HIGH/.test(comment.body || ""))
         .map((comment) => `${comment.path}:${comment.line ?? comment.original_line ?? 0}: ${comment.body}`);
     const highs = [...threads, ...bodyOnlyHighs(last.review.body || "")];
     if (highs.length === 0)
         return { kind: "capped", reason: "Robin's last review raised no High finding to fix." };
-    return { kind: "fix", since: last.head, highs };
+    return { kind: "fix", since: last.head, highs, diff };
 }
 function fixPassInstructions(pass) {
     return [
-        `FIX-ONLY SECOND PASS. You have reviewed this pull request ${exports.MAX_REVIEW_ROUNDS} times. The diff is only what changed since your last reviewed head ${pass.since}.`,
+        `FIX-ONLY SECOND PASS. You have reviewed this pull request ${exports.MAX_REVIEW_ROUNDS} times. The diff is only the author's commits since your last reviewed head ${pass.since}; clean merges of other branches are left out.`,
         "Your last review raised these High findings:",
         ...pass.highs.map((high, index) => `${index + 1}. ${high}`),
         "Confirm or reject the fix. Report one HIGH finding, anchored to a changed line, for each listed finding this diff does not fix, and for each change in this diff that is not needed to fix them. Report nothing else.",

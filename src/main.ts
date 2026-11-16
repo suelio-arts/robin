@@ -294,7 +294,7 @@ async function run(): Promise<void> {
     // Placed before the LLMClient is constructed so a hit makes a model call
     // structurally impossible. A miss falls through to the untouched path.
     let cacheKey: string | undefined;
-    let fixPass: { since: string; highs: string[] } | undefined;
+    let fixPass: { since: string; highs: string[]; diff: string } | undefined;
     if (command === "review") {
       const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
         owner,
@@ -331,7 +331,7 @@ async function run(): Promise<void> {
         core.info("Done.");
         return;
       }
-      const pass = await reviewPass(priorReviews, headSha, (ancestor, head) => gitUtils.isLinearDescendant(ancestor, head),
+      const pass = await reviewPass(priorReviews, headSha, (since, head) => gitUtils.authorDiff(since, head),
         () => octokit!.paginate(octokit!.rest.pulls.listReviewComments, {owner, repo, pull_number: reviewTarget.pullNumber, per_page: 100}));
       if (pass.kind === "capped") {
         core.info(`Review cap reached: ${pass.reason}`);
@@ -342,7 +342,7 @@ async function run(): Promise<void> {
       if (pass.kind === "fix") fixPass = pass;
     }
     const passDiff = fixPass
-      ? filterDiff(await gitUtils.getPullRequestDiff(fixPass.since, headRef), repoConfig.skipPaths || []).filtered
+      ? filterDiff(fixPass.diff, repoConfig.skipPaths || []).filtered
       : reviewDiff;
     if (!passDiff.trim()) {
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody("The change since Robin's last review touches only skipped paths."));

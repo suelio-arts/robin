@@ -24,8 +24,8 @@ function bodyOnlyHighs(body: string): string[] {
  * The one decision on how far Robin reviews this head. Below the round cap it
  * reviews the whole change. At the cap it allows a single fix-only pass over
  * the author's own commits since its last reviewed head, and only when merges
- * among them are clean automatic merges and its last review raised a High
- * finding to fix. Anything else is capped: Robin posts nothing and a
+ * among them are clean automatic merges and Robin raised a High finding on
+ * this pull request. Anything else is capped: Robin posts nothing and a
  * maintainer approves.
  */
 export async function reviewPass(
@@ -47,19 +47,20 @@ export async function reviewPass(
   if (diff === undefined)
     return { kind: "capped", reason: `The change since ${last.head.slice(0, 7)} rewrites history or resolves a merge by hand, so it is more than a fix.` };
   if (!diff.trim()) return { kind: "capped", reason: "Only merges changed since Robin's last review." };
+  const robinIds = new Set(reviewed.map((entry) => entry.review.id));
   const threads = (await loadComments())
-    .filter((comment) => comment.pull_request_review_id === last.review.id && /^\*\*Robin\*\*[^\n]*:rotating_light: HIGH/.test(comment.body || ""))
+    .filter((comment) => robinIds.has(comment.pull_request_review_id ?? 0) && /^\*\*Robin\*\*[^\n]*:rotating_light: HIGH/.test(comment.body || ""))
     .map((comment) => `${comment.path}:${comment.line ?? comment.original_line ?? 0}: ${comment.body}`);
-  const highs = [...threads, ...bodyOnlyHighs(last.review.body || "")];
-  if (highs.length === 0) return { kind: "capped", reason: "Robin's last review raised no High finding to fix." };
+  const highs = [...new Set([...threads, ...reviewed.flatMap((entry) => bodyOnlyHighs(entry.review.body || ""))])];
+  if (highs.length === 0) return { kind: "capped", reason: "Robin raised no High finding to fix." };
   return { kind: "fix", since: last.head, highs, diff };
 }
 
 export function fixPassInstructions(pass: { since: string; highs: string[] }): string {
   return [
     `FIX-ONLY SECOND PASS. You have reviewed this pull request ${MAX_REVIEW_ROUNDS} times. The diff is only the author's commits since your last reviewed head ${pass.since}; clean merges of other branches are left out.`,
-    "Your last review raised these High findings:",
+    "Your reviews of this pull request raised these High findings:",
     ...pass.highs.map((high, index) => `${index + 1}. ${high}`),
-    "Confirm or reject the fix. Report one HIGH finding, anchored to a changed line, for each listed finding this diff does not fix, and for each change in this diff that is not needed to fix them. Report nothing else.",
+    "Confirm or reject the fix. Report one HIGH finding for each listed finding still present at the head, and one HIGH finding, anchored to a changed line, for each change in this diff not needed to fix a listed finding. Report nothing else.",
   ].join("\n");
 }

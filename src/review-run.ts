@@ -1,5 +1,5 @@
 import * as core from "@actions/core";
-import { GitHubReviewer, PostedReview, ReviewVerdict } from "./github-reviewer";
+import { GitHubReviewer, PostedReview } from "./github-reviewer";
 import { validateExpectedHeadSha } from "./events";
 import { OutcomeCounts, ReviewOutcome, ZERO_COUNTS } from "./outcome";
 
@@ -26,7 +26,6 @@ export interface TerminalReceipt {
   head: string;
   reviewId?: number;
   reviewUrl?: string;
-  verdict?: ReviewVerdict;
   counts?: OutcomeCounts | null;
 }
 
@@ -43,7 +42,6 @@ export function setTerminalOutputs(receipt: TerminalReceipt): void {
   core.setOutput("head", receipt.head);
   core.setOutput("review-id", receipt.reviewId === undefined ? "" : String(receipt.reviewId));
   core.setOutput("review-url", receipt.reviewUrl || "");
-  core.setOutput("verdict", receipt.verdict || "");
   const counts = receipt.counts;
   core.setOutput("high", counts ? String(counts.high) : "");
   core.setOutput("medium", counts ? String(counts.medium) : "");
@@ -61,7 +59,6 @@ export function setPostedOutputs(
     head: headSha,
     reviewId: posted.id,
     reviewUrl: posted.url,
-    verdict: posted.verdict,
     counts: posted.counts,
   });
 }
@@ -114,7 +111,6 @@ export async function resolveReviewTarget(
 }
 
 export interface ReviewFailure {
-  gatekeeper: boolean;
   octokit: any;
   /** Undefined when no pull request was resolved and validated — then nothing is posted. */
   target: ReviewTarget | undefined;
@@ -122,16 +118,9 @@ export interface ReviewFailure {
   command: "review" | "summary";
 }
 
-/**
- * Post the head-bound incomplete receipt and then apply the mode's exit rule.
- *
- * The receipt is posted in BOTH modes: an advisory run that dies mid-review
- * used to post nothing head-bound and exit 0, which a consumer cannot tell from
- * "not started". Exit semantics are unchanged — advisory still warns, only a
- * gatekeeper fails the job.
- */
+/** Post the head-bound incomplete receipt, then fail the job. */
 export async function handleReviewFailure(failure: ReviewFailure): Promise<void> {
-  const {gatekeeper, octokit, target, message, command} = failure;
+  const {octokit, target, message, command} = failure;
 
   if (octokit && target && command === "review") {
     try {
@@ -143,7 +132,6 @@ export async function handleReviewFailure(failure: ReviewFailure): Promise<void>
         target.headSha
       );
       setPostedOutputs("incomplete", target.headSha, posted);
-      core.warning(`Incomplete review posted after execution failure: ${message}`);
     } catch (reviewError) {
       core.setFailed(`Could not post incomplete review: ${reviewError}`);
       setTerminalOutputs({outcome: "incomplete", head: target.headSha, counts: ZERO_COUNTS});
@@ -151,8 +139,7 @@ export async function handleReviewFailure(failure: ReviewFailure): Promise<void>
     }
   }
 
-  if (gatekeeper) core.setFailed(message);
-  else core.warning(`Informational Robin review did not complete: ${message}`);
+  core.setFailed(message);
 }
 
 /**

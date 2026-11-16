@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GitUtils, patchId } from "./git-utils";
+import { GitUtils } from "./git-utils";
 import { buildFileContext } from "./review-context";
 
 describe("GitUtils immutable local context", () => {
@@ -218,62 +218,5 @@ describe("GitUtils diff never runs a configured textconv filter", () => {
     // protecting anything.
     git("diff", "--no-ext-diff", "--no-color", `${baseSha}...${headSha}`, "--");
     expect(existsSync(marker)).toBe(true);
-  });
-});
-
-describe("patchId of a pull request diff across main updates", () => {
-  let fixture: string;
-  const git = (...args: string[]) => execFileSync("git", ["-C", fixture, ...args], {encoding: "utf8"}).trim();
-  const write = (text: string) => writeFileSync(join(fixture, "app.txt"), text);
-  const commit = (message: string) => { git("commit", "-qam", message); return git("rev-parse", "HEAD"); };
-  const lines = (from: number, to: number) => Array.from({length: to - from + 1}, (_, i) => `line ${from + i}`);
-  const prId = async (head: string) => patchId(await new GitUtils({} as never, fixture).getPullRequestDiff("main", head));
-
-  beforeEach(() => {
-    fixture = mkdtempSync(join(tmpdir(), "robin-patch-id-"));
-    git("init", "-q", "-b", "main");
-    git("config", "user.email", "robin@example.invalid");
-    git("config", "user.name", "Robin Test");
-    git("config", "commit.gpgsign", "false");
-    write([...lines(1, 20), ""].join("\n"));
-    git("add", "-A");
-    commit("base");
-    git("checkout", "-qb", "pr");
-    write([...lines(1, 15), "pr change", ...lines(17, 20), ""].join("\n"));
-    commit("pr");
-    git("checkout", "-q", "main");
-  });
-
-  afterEach(() => rmSync(fixture, {recursive: true, force: true}));
-
-  const mergeMainIntoPr = () => {
-    git("checkout", "-q", "pr");
-    git("merge", "-q", "--no-edit", "main");
-    return git("rev-parse", "HEAD");
-  };
-
-  it("keeps the id when main moved the file under the change and was merged in", async () => {
-    const reviewed = await prId("pr");
-    write(["main header", ...lines(1, 20), ""].join("\n"));
-    commit("main moves the file");
-    const merged = mergeMainIntoPr();
-    expect(await prId(merged)).toBe(reviewed);
-  });
-
-  it("changes the id when the pull request's own change changes", async () => {
-    const reviewed = await prId("pr");
-    git("checkout", "-q", "pr");
-    write([...lines(1, 15), "pr change, revised", ...lines(17, 20), ""].join("\n"));
-    expect(await prId(commit("revise"))).not.toBe(reviewed);
-  });
-
-  it("changes the id when a conflict resolution alters the pull request's change", async () => {
-    const reviewed = await prId("pr");
-    write([...lines(1, 15), "main change", ...lines(17, 20), ""].join("\n"));
-    commit("main edits the same line");
-    git("checkout", "-q", "pr");
-    expect(() => git("merge", "-q", "--no-edit", "main")).toThrow();
-    write([...lines(1, 15), "pr change and main change", ...lines(17, 20), ""].join("\n"));
-    expect(await prId(commit("resolve"))).not.toBe(reviewed);
   });
 });

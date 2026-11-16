@@ -203,7 +203,7 @@ the next review while replies or threads from the current review remain open.
 
 Robin’s recommended workflow does not review every push. After pushing a fix:
 
-1. Inspect the workflow and Actions runs for `synchronize` or `review-on-synchronize`.
+1. Inspect the workflow and Actions runs for `synchronize`.
 2. If the push started Robin, watch that run and do not post a duplicate command.
 3. Otherwise request the normal manual re-review with `/robin`, including the fix commit
    and verification summary.

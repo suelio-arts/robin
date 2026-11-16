@@ -7,13 +7,10 @@ needed to run it. Pass `github-token: ${{ github.token }}` and, in the review
 job, the earlier `pr-number` and `expected-head-sha` outputs.
 
 The hosted job needs actions write, contents read and pull-requests read. Review
-revalidation needs pull-requests read only. Open/reopened/ready same-repository
-main PRs, pushes that merge or rebase onto main or reach a PR without a
-standing Robin approval (`synchronize`; a plain push of the author's own commits
-to an approved PR does not) and write-authorized `/robin` comments dispatch
-`robin.yml` on main. A head is covered when Robin's approval of it stands. A dispatched review whose change and prompts match
-an earlier review on the PR reuses it without a model call. Main dispatches
-revalidate the live head and bot receipts before admission; the action applies the three-head review cap and its one fix-only pass.
+revalidation needs pull-requests read only. Every subscribed `pull_request_target`
+event on a same-repository main PR (subscribe to `opened` and `ready_for_review`
+for one review per PR) and every write-authorized `/robin` comment dispatches
+`robin.yml` on main. Main dispatches revalidate the live head before admission.
 Forks, drafts, closed PRs and moved heads are skipped. Permission lookup failures
 fail closed. This action does not check out or execute PR code or invoke models.
 The runner owner remains responsible for repository and workflow access policy.

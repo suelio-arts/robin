@@ -1,111 +1,16 @@
 import { Octokit } from "@octokit/rest";
 import * as core from "@actions/core";
-import { createHash } from "node:crypto";
 import { StructuredReview, ReviewFinding } from "./review-parser";
-import { patchId } from "./git-utils";
-import { OutcomeCounts, ZERO_COUNTS, appendOutcomeMarker, buildOutcomeMarker, fixPassMarker, parseOutcomeMarker } from "./outcome";
+import { OutcomeCounts, ZERO_COUNTS, appendOutcomeMarker, buildOutcomeMarker } from "./outcome";
 
 /** Marker present in every Robin review body; used to recognize Robin's own reviews. */
 export const ROBIN_SIGNATURE = ":bow_and_arrow: Robin";
-
-/** HTML-comment marker carrying the content address of the reviewed diff. */
-const REVIEW_KEY_MARKER = "robin-review-key";
-const REVIEW_KEY_PATTERN = new RegExp(
-  `<!--\\s*${REVIEW_KEY_MARKER}:\\s*([0-9a-f]{64})\\s+(APPROVE|REQUEST_CHANGES|COMMENT)\\s*-->`
-);
-
-export type ReviewEvent = "APPROVE" | "REQUEST_CHANGES" | "COMMENT";
-
-/** Verdict as GitHub reports it on a submitted review, for the action outputs. */
-export type ReviewVerdict = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED";
-
-export function reviewVerdict(event: ReviewEvent): ReviewVerdict {
-  if (event === "APPROVE") return "APPROVED";
-  if (event === "REQUEST_CHANGES") return "CHANGES_REQUESTED";
-  return "COMMENTED";
-}
 
 /** What a terminal post returns so the caller can emit a receipt. */
 export interface PostedReview {
   id: number;
   url: string;
-  verdict: ReviewVerdict;
-  counts: OutcomeCounts | null;
-}
-
-/**
- * Content address of everything that determines a verdict.
- *
- * A merge or rebase onto a moved main shifts hunk line numbers and blob ids
- * while the pull request's own change stays the same, so the diff enters the
- * key as its `git patch-id --verbatim`: whitespace and every changed or
- * context line count, line numbers and index lines do not. Hashing the prompts
- * and model alongside means any prompt, model, or repo-instruction edit
- * invalidates the key automatically — there is no cache version to remember to
- * bump.
- */
-export interface ReviewKeyParts {
-  model: string;
-  systemPrompt: string;
-  precisionPrompt: string;
-  gatekeeper: boolean;
-  diff: string;
-}
-
-export function reviewKey(parts: ReviewKeyParts): string {
-  return createHash("sha256")
-    .update(
-      [
-        parts.model,
-        parts.systemPrompt,
-        parts.precisionPrompt,
-        String(parts.gatekeeper),
-        patchId(parts.diff),
-      ].join("\0")
-    )
-    .digest("hex");
-}
-
-export function cacheMarker(key: string, event: ReviewEvent): string {
-  return `<!-- ${REVIEW_KEY_MARKER}: ${key} ${event} -->`;
-}
-
-/** A prior verdict carried to a new head: its event, verbatim body and the counts from its outcome marker. */
-export interface CarriedReview {
-  event: ReviewEvent;
-  body: string;
-  counts: OutcomeCounts | null;
-}
-
-/**
- * The one reuse decision: the key this head's review is stamped with, and the
- * earlier Robin review of the same change and prompts it carries, or null.
- *
- * Deliberately does NOT filter on review state: `dismiss_stale_reviews` marks
- * the reviews we most want to reuse as DISMISSED. The author check is a trust
- * boundary, not a nicety — without it a collaborator could paste a marker into
- * their own review body and have Robin post a genuine bot APPROVE, defeating
- * `require_last_push_approval`.
- */
-export function reuseDecision(
-  reviews: Array<{
-    body?: string | null;
-    user?: { login?: string; type?: string } | null;
-  }>,
-  parts: ReviewKeyParts
-): { key: string; carried: CarriedReview | null } {
-  const key = reviewKey(parts);
-  for (let i = reviews.length - 1; i >= 0; i--) {
-    const review = reviews[i];
-    if (review.user?.type !== "Bot") continue;
-    if (review.user?.login !== "github-actions[bot]") continue;
-    const body = review.body || "";
-    if (!body.includes(ROBIN_SIGNATURE)) continue;
-    const match = REVIEW_KEY_PATTERN.exec(body);
-    if (!match || match[1] !== key) continue;
-    return { key, carried: { event: match[2] as ReviewEvent, body, counts: parseOutcomeMarker(body)?.counts ?? null } };
-  }
-  return { key, carried: null };
+  counts: OutcomeCounts;
 }
 
 export class GitHubReviewer {
@@ -145,8 +50,7 @@ export class GitHubReviewer {
         ZERO_COUNTS
       ),
     });
-    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id, "COMMENT");
-    return {id: review.id, url: review.html_url, verdict: "COMMENTED", counts: ZERO_COUNTS};
+    return {id: review.id, url: review.html_url, counts: ZERO_COUNTS};
   }
 
   /**
@@ -155,9 +59,7 @@ export class GitHubReviewer {
    *
    * The status comment already says this, but a status comment is an issue
    * comment with no head binding: a consumer polling for coverage of head H
-   * cannot tell "skipped" from "not posted yet" and waits to its timeout. This
-   * review is a body-only approval, and it does not dismiss prior blocking
-   * reviews — nothing was reviewed, so nothing is superseded.
+   * cannot tell "skipped" from "not posted yet" and waits to its timeout.
    */
   async postSkippedReview(
     owner: string,
@@ -170,7 +72,7 @@ export class GitHubReviewer {
       owner,
       repo,
       pull_number: pullNumber,
-      event: "APPROVE",
+      event: "COMMENT",
       commit_id: headSha,
       body: appendOutcomeMarker(
         [
@@ -185,132 +87,7 @@ export class GitHubReviewer {
         ZERO_COUNTS
       ),
     });
-    return {id: review.id, url: review.html_url, verdict: "APPROVED", counts: ZERO_COUNTS};
-  }
-
-  /**
-   * A complete review approves when every High finding is a resolvable inline
-   * thread; branch protection's conversation resolution then holds the merge
-   * until each thread is resolved. A High left in the body fails closed.
-   */
-  static resolveReviewEvent(hasHigh: boolean, everyHighInline: boolean, requestChanges: boolean): ReviewEvent {
-    if (requestChanges && hasHigh) return "REQUEST_CHANGES";
-    return everyHighInline ? "APPROVE" : "COMMENT";
-  }
-
-  /** The event a reused review posts: its High findings are the original review's threads. */
-  static carriedEvent(cached: CarriedReview): ReviewEvent {
-    if (cached.event === "REQUEST_CHANGES") return cached.event;
-    return GitHubReviewer.hasUnpostedHighFinding(cached.body) ? "COMMENT" : "APPROVE";
-  }
-
-  /**
-   * A prior Robin review that a newly posted review supersedes: an approval
-   * whenever the new review does not approve, so an older approval never
-   * authorizes a merge past an incomplete or body-only-High review.
-   */
-  static isStaleRobinReview(
-    review: { id: number; state?: string; body?: string | null; user?: { type?: string } | null },
-    newReviewId: number,
-    newEvent: ReviewEvent
-  ): boolean {
-    if (review.id === newReviewId || review.user?.type !== "Bot" || !(review.body || "").includes(ROBIN_SIGNATURE)) return false;
-    if (review.state === "APPROVED") return newEvent !== "APPROVE";
-    return review.state === "CHANGES_REQUESTED" && !GitHubReviewer.hasUnpostedHighFinding(review.body || "");
-  }
-
-  static hasUnpostedHighFinding(body: string): boolean {
-    const section = body.split("### :page_facing_up: Findings Not Posted Inline", 2)[1];
-    return section?.includes(":rotating_light:") ?? false;
-  }
-
-  /**
-   * Dismiss superseded Robin reviews. Fails the run when a dismissal fails: an
-   * approval left standing would authorize a merge Robin no longer covers.
-   * CHANGES_REQUESTED reviews with a body-only High stay fail-closed.
-   */
-  private async dismissStaleRobinReviews(
-    owner: string,
-    repo: string,
-    pullNumber: number,
-    newReviewId: number,
-    newEvent: ReviewEvent
-  ): Promise<void> {
-    const reviews = await this.octokit.paginate(this.octokit.rest.pulls.listReviews, {
-      owner,
-      repo,
-      pull_number: pullNumber,
-      per_page: 100,
-    });
-    for (const review of reviews) {
-      if (!GitHubReviewer.isStaleRobinReview(review, newReviewId, newEvent)) continue;
-      await this.octokit.rest.pulls.dismissReview({
-        owner,
-        repo,
-        pull_number: pullNumber,
-        review_id: review.id,
-        message: "Superseded by a newer Robin review.",
-      });
-      core.info("Dismissed stale Robin review #" + review.id);
-    }
-  }
-
-  /**
-   * Re-post a verdict already derived from the same change and prompts.
-   *
-   * Body-only, with ZERO inline comments, and that constraint is the safety
-   * argument rather than a caveat on it. Re-mapping the original findings onto
-   * the new head would duplicate every thread on each rebase and un-resolve
-   * findings the author already fixed, so it is deliberately not done. Nothing
-   * here touches `required_conversation_resolution`.
-   *
-   * The prior body is reused verbatim so the `Findings Not Posted Inline`
-   * section survives — `isStaleRobinReview` keys on it to stay fail-closed on a
-   * body-only High — and so the marker and ROBIN_SIGNATURE come along for free.
-   */
-  async postCachedReview(
-    owner: string,
-    repo: string,
-    pullNumber: number,
-    cached: CarriedReview,
-    headSha: string
-  ): Promise<PostedReview> {
-    // Re-stamp the outcome at THIS head. The reused body still carries the
-    // original review's marker naming an older head; the last marker wins, so
-    // appending keeps the body verbatim and still names the head just covered.
-    // Counts come from the cached marker, never from the verdict. A body from
-    // before markers existed leaves them out — the consumer falls back to the
-    // stat blocks it already parses.
-    const counts = cached.counts;
-    const event = GitHubReviewer.carriedEvent(cached);
-    const body = appendOutcomeMarker(
-      [
-        "> Reused a prior review: this head's change is identical to one already",
-        "> reviewed on this pull request, so no model call was made. Edit or delete",
-        "> that review's body to force a full re-review.",
-        "",
-        cached.body,
-      ].join("\n"),
-      "reused",
-      headSha,
-      counts
-    );
-
-    const { data: review } = await this.octokit.rest.pulls.createReview({
-      owner,
-      repo,
-      pull_number: pullNumber,
-      body,
-      event,
-      commit_id: headSha,
-    });
-
-    core.info(
-      "Reused cached " + cached.event + " review as " + event + " review #" + review.id + " (0 model calls)"
-    );
-
-    await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id, event);
-    return {id: review.id, url: review.html_url, verdict: reviewVerdict(event), counts};
+    return {id: review.id, url: review.html_url, counts: ZERO_COUNTS};
   }
 
   async postReview(
@@ -318,10 +95,7 @@ export class GitHubReviewer {
     repo: string,
     pullNumber: number,
     findings: StructuredReview,
-    requestChanges: boolean,
-    cacheKey: string | undefined,
-    headSha: string,
-    fixPassSince?: string
+    headSha: string
   ): Promise<PostedReview> {
     core.info("Posting review to PR #" + pullNumber + "...");
     const files = await this.octokit.paginate(this.octokit.rest.pulls.listFiles, {
@@ -337,27 +111,17 @@ export class GitHubReviewer {
       suggestions: findings.suggestions.length,
     };
     const submit = async (comments: any[], postedFindings: Set<ReviewFinding>) => {
-      const event = GitHubReviewer.resolveReviewEvent(
-        findings.high.length > 0,
-        fixPassSince === undefined ? findings.high.every((finding) => postedFindings.has(finding)) : findings.high.length === 0,
-        requestChanges
-      );
-      const body =
-        this.buildReviewBody(findings, postedFindings) +
-        (cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "") +
-        (fixPassSince === undefined ? "" : "\n\n" + fixPassMarker(fixPassSince)) +
-        "\n\n" +
-        buildOutcomeMarker("reviewed", headSha, counts);
+      const body = this.buildReviewBody(findings, postedFindings) + "\n\n" + buildOutcomeMarker("reviewed", headSha, counts);
       const { data } = await this.octokit.rest.pulls.createReview({
         owner,
         repo,
         pull_number: pullNumber,
         body,
-        event,
+        event: "COMMENT",
         commit_id: headSha,
         comments,
       });
-      return { review: data, event, inline: comments.length };
+      return { review: data, inline: comments.length };
     };
 
     const { comments, postedFindings } = this.buildReviewComments(findings, files);
@@ -369,15 +133,14 @@ export class GitHubReviewer {
       core.warning("GitHub rejected one or more inline comments; posting summary review without inline comments.");
       posted = await submit([], new Set());
     }
-    core.info("Posted " + posted.event + " review #" + posted.review.id + " with " + posted.inline + " inline High findings");
-    await this.dismissStaleRobinReviews(owner, repo, pullNumber, posted.review.id, posted.event);
-    return {id: posted.review.id, url: posted.review.html_url, verdict: reviewVerdict(posted.event), counts};
+    core.info("Posted review #" + posted.review.id + " with " + posted.inline + " inline High findings");
+    return {id: posted.review.id, url: posted.review.html_url, counts};
   }
 
   /**
    * Build one line-level comment per High finding that maps to a diff line.
-   * Each High becomes a thread that must be resolved; Medium, Low and
-   * suggestions stay in the review body.
+   * Each High becomes a thread; Medium, Low and suggestions stay in the
+   * review body.
    */
   private buildReviewComments(
     findings: StructuredReview,

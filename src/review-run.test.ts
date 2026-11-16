@@ -66,7 +66,6 @@ describe("terminal review outcomes", () => {
       head: HEAD,
       "review-id": "",
       "review-url": "",
-      verdict: "",
       high: "",
       medium: "",
       low: "",
@@ -92,11 +91,10 @@ describe("terminal review outcomes", () => {
     "provider timeout",
     "codex subscription quota exhausted. Re-request with /robin after recovery.",
     "antigravity subscription rate limit reached. Re-request with /robin after recovery.",
-  ])("posts an explicit incomplete receipt for %s without failing the advisory job", async (message) => {
+  ])("posts an explicit incomplete receipt for %s and fails the job", async (message) => {
     const {octokit, createReview} = mockOctokit();
 
     await handleReviewFailure({
-      gatekeeper: false,
       octokit,
       target,
       message,
@@ -112,31 +110,14 @@ describe("terminal review outcomes", () => {
       head: HEAD,
       counts: {high: 0, medium: 0, low: 0, suggestions: 0},
     });
-    expect(setFailed).not.toHaveBeenCalled();
+    expect(setFailed).toHaveBeenCalledWith(message);
     expect(outputs(setOutput)).toMatchObject({outcome: "incomplete", head: HEAD, "review-id": "99", high: "0"});
-  });
-
-  it("posts the same incomplete receipt in gatekeeper mode and fails the job", async () => {
-    const {octokit, createReview} = mockOctokit();
-
-    await handleReviewFailure({
-      gatekeeper: true,
-      octokit,
-      target,
-      message: "provider timeout",
-      command: "review",
-    });
-
-    expect(createReview).toHaveBeenCalledTimes(1);
-    expect(parseOutcomeMarker(createReview.mock.calls[0][0].body)?.outcome).toBe("incomplete");
-    expect(setFailed).toHaveBeenCalledWith("provider timeout");
   });
 
   it("posts nothing when no validated target exists", async () => {
     const {octokit, createReview} = mockOctokit();
 
     await handleReviewFailure({
-      gatekeeper: true,
       octokit,
       target: undefined,
       message: "Pull request head advanced",
@@ -148,11 +129,11 @@ describe("terminal review outcomes", () => {
     expect(setFailed).toHaveBeenCalled();
   });
 
-  it("fails the job when the incomplete receipt cannot be posted, so a stale approval is never silent", async () => {
+  it("fails the job when the incomplete receipt cannot be posted", async () => {
     const {octokit, createReview} = mockOctokit();
     createReview.mockRejectedValue(new Error("403"));
 
-    await handleReviewFailure({gatekeeper: false, octokit, target, message: "boom", command: "review"});
+    await handleReviewFailure({octokit, target, message: "boom", command: "review"});
 
     expect(setFailed).toHaveBeenCalledWith("Could not post incomplete review: Error: 403");
     expect(outputs(setOutput)).toMatchObject({outcome: "incomplete", head: HEAD, "review-id": ""});
@@ -164,14 +145,14 @@ describe("terminal review outcomes", () => {
     await postSkippedReceipt(octokit, target, "only whitespace changed.");
 
     expect(createReview).toHaveBeenCalledWith(
-      expect.objectContaining({owner: "o", repo: "r", pull_number: 7, event: "APPROVE"})
+      expect.objectContaining({owner: "o", repo: "r", pull_number: 7, event: "COMMENT"})
     );
     expect(parseOutcomeMarker(createReview.mock.calls[0][0].body)).toEqual({
       outcome: "skipped",
       head: HEAD,
       counts: {high: 0, medium: 0, low: 0, suggestions: 0},
     });
-    expect(outputs(setOutput)).toMatchObject({outcome: "skipped", head: HEAD, verdict: "APPROVED"});
+    expect(outputs(setOutput)).toMatchObject({outcome: "skipped", head: HEAD});
     expect(warning).not.toHaveBeenCalled();
   });
 });

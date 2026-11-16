@@ -1,5 +1,5 @@
 name: "Robin"
-description: "Free AI code reviews for every PR. BYOK, works with OpenRouter free tier. Auto-reviews on open, /robin or /review on demand. No quotas."
+description: "Free AI code reviews for every PR. BYOK, works with OpenRouter free tier. Reviews once on open, again with /robin or /review. Advisory: never blocks a merge. No quotas."
 author: "antongulin"
 branding:
   icon: "feather"
@@ -52,14 +52,6 @@ inputs:
     description: "Optional reasoning effort for compatible models: low, medium, or high."
     required: false
     default: ""
-  fail-on-high:
-    description: "If true, the action will fail when high severity issues are found."
-    required: false
-    default: "false"
-  request-changes:
-    description: "Whether Robin posts REQUEST_CHANGES for high findings. Either way a complete review is an APPROVE when every high finding is an inline thread, and a COMMENT when one stays in the body. Needs Allow GitHub Actions to create and approve pull requests. Leave empty to use the repo config, which defaults to true."
-    required: false
-    default: ""
   max-diff-size:
     description: "Maximum diff size in characters to send to the model. Large diffs are truncated."
     required: false
@@ -73,13 +65,9 @@ inputs:
     required: false
     default: "600000"
   max-comments:
-    description: "Maximum number of inline high findings to post. Only high findings are posted inline; extra findings stay in the review body and withhold approval."
+    description: "Maximum number of inline high findings to post. Only high findings are posted inline; extra findings stay in the review body."
     required: false
     default: "15"
-  review-on-synchronize:
-    description: "Run automatic reviews for pull_request synchronize events, which happen after each new commit pushed to a PR. Set to true only if you want review on every push."
-    required: false
-    default: "false"
   min-command-permission:
     description: "Minimum repository permission required to run slash commands: read, triage, write, maintain, or admin."
     required: false
@@ -105,15 +93,13 @@ outputs:
   llm-usage-jsonl:
     description: "Resolved usage receipt path. Last line per attempt id supersedes prior progress; rejected attempts are not billable."
   outcome:
-    description: "Coverage of the reviewed head: reviewed, reused, skipped, incomplete, or stale-head (nothing posted)."
+    description: "Coverage of the reviewed head: reviewed, skipped, incomplete, or stale-head (nothing posted)."
   head:
     description: "Full head SHA this run covered. For stale-head it is the current head Robin found instead."
   review-id:
     description: "Numeric id of the review Robin posted, or empty when nothing was posted."
   review-url:
     description: "HTML URL of the review Robin posted, or empty when nothing was posted."
-  verdict:
-    description: "APPROVED, CHANGES_REQUESTED, or COMMENTED. Empty when nothing was posted."
   high:
     description: "High severity findings. Empty when unknown; 0 for skipped and incomplete."
   medium:

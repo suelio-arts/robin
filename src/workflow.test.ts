@@ -117,7 +117,7 @@ describe("reusable review workflow", () => {
       "uses: antongulin/robin/.github/workflows/review.yml@main",
     );
     expect(robinTemplate).toContain("types: [opened, reopened, ready_for_review]");
-    expect(robinTemplate).toContain("actions: read");
+    expect(robinTemplate).not.toContain("actions: read");
     expect(robinTemplate).toContain("LLM_API_KEY: ${{ secrets.LLM_API_KEY }}");
     expect(robinTemplate).not.toContain("- uses: antongulin/robin@");
   });
@@ -138,10 +138,10 @@ describe("reusable review workflow", () => {
     const synthetic = [
       "name: Test",
       "inputs:",
-      "  fail-on-high:",
-      "    description: Fail on high",
-      "  request-changes:",
-      "    description: Advisor mode",
+      "  model:",
+      "    description: Model",
+      "  max-comments:",
+      "    description: Inline cap",
       "outputs:",
       "  summary:",
       "    description: Review summary",
@@ -150,8 +150,8 @@ describe("reusable review workflow", () => {
       "",
     ].join("\n");
     expect(parseActionInputs(synthetic)).toEqual([
-      "fail-on-high",
-      "request-changes",
+      "model",
+      "max-comments",
     ]);
   });
 
@@ -162,12 +162,6 @@ describe("reusable review workflow", () => {
       expect(block).toContain("type: string");
       expect(block).toContain('default: ""');
     }
-  });
-
-  it("keeps the reusable request-changes input boolean-compatible", () => {
-    const block = workflowCallInputBlock(reviewWorkflow, "request-changes");
-    expect(block).toContain("type: boolean");
-    expect(block).toContain("default: true");
   });
 
   it("documents every public action input in ADVANCED.md", () => {

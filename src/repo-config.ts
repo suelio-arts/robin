@@ -8,7 +8,6 @@ export interface RepoConfig {
   maxComments?: number;
   skipPaths?: string[];
   jsonResponseMode?: boolean;
-  requestChanges?: boolean;
 }
 
 export function parseRepoConfigYaml(text: string): RepoConfig {
@@ -53,12 +52,6 @@ export function parseRepoConfigYaml(text: string): RepoConfig {
       config.jsonResponseMode = jsonModeMatch[1].toLowerCase() === "true";
       continue;
     }
-
-    const requestChangesMatch = trimmed.match(/^request-changes:\s*(true|false)\s*$/i);
-    if (requestChangesMatch) {
-      config.requestChanges = requestChangesMatch[1].toLowerCase() === "true";
-      continue;
-    }
   }
 
   return config;
@@ -90,11 +83,4 @@ export function resolveJsonResponseMode(actionInput: string, repoConfig?: RepoCo
   if (actionInput === "true") return true;
   if (actionInput === "false") return false;
   return repoConfig?.jsonResponseMode ?? true;
-}
-
-/** Whether Robin requests changes on High findings and approves otherwise. Default true. */
-export function resolveRequestChanges(actionInput: string, repoConfig?: RepoConfig): boolean {
-  if (actionInput === "true") return true;
-  if (actionInput === "false") return false;
-  return repoConfig?.requestChanges ?? true;
 }

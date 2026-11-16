@@ -4,7 +4,6 @@
 max-diff-size: 25000
 max-comments: 10
 json-response-mode: true
-# request-changes: true   # default; request changes on high findings and approve clean heads
 
 skip-paths:
   - "**/generated/**"

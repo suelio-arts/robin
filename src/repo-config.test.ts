@@ -5,7 +5,6 @@ import {
   resolveJsonResponseMode,
   resolveMaxComments,
   resolveMaxDiffSize,
-  resolveRequestChanges,
 } from "./repo-config";
 
 describe("parseRepoConfigYaml", () => {
@@ -60,14 +59,5 @@ describe("resolveJsonResponseMode", () => {
     expect(resolveJsonResponseMode("true", { jsonResponseMode: false })).toBe(true);
     expect(resolveJsonResponseMode("", { jsonResponseMode: false })).toBe(false);
     expect(resolveJsonResponseMode("", undefined)).toBe(true);
-  });
-});
-
-describe("resolveRequestChanges", () => {
-  it("prefers explicit action input, then repo config, then default true", () => {
-    expect(resolveRequestChanges("false", { requestChanges: true })).toBe(false);
-    expect(resolveRequestChanges("true", { requestChanges: false })).toBe(true);
-    expect(resolveRequestChanges("", { requestChanges: false })).toBe(false);
-    expect(resolveRequestChanges("", undefined)).toBe(true);
   });
 });

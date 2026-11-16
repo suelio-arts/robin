@@ -10,7 +10,6 @@ Copy [`.github/robin.yml.example`](../.github/robin.yml.example) to `.github/rob
 max-diff-size: 25000
 max-comments: 10
 json-response-mode: true
-request-changes: true
 skip-paths:
   - "**/generated/**"
 ```
@@ -20,10 +19,9 @@ skip-paths:
 | `max-diff-size` | Used when the workflow still passes the action default (`50000`) |
 | `max-comments` | Used when the workflow still passes the action default (`15`) |
 | `json-response-mode` | Used when `use-json-response-mode` is empty (action default defers to this file) |
-| `request-changes` | Used when `request-changes` input is empty. `true` (default) requests changes on high findings; both modes approve a complete review whose high findings are all inline threads |
 | `skip-paths` | Extra paths removed from the diff before the LLM call |
 
-Lockfiles (npm, yarn, pnpm, Cargo, Gemfile, poetry), `dist/`, `node_modules/`, and minified assets are always skipped automatically. If every changed file is skipped, the action posts a status comment and skips the LLM call.
+Lockfiles (npm, yarn, pnpm, Cargo, Gemfile, poetry), `dist/`, `node_modules/`, and minified assets are always skipped automatically. If every changed file is skipped, the action records that in its status line and skips the LLM call.
 
 The config file uses a small YAML subset (line-based keys only), not full YAML nesting.
 
@@ -78,7 +76,7 @@ jobs:
 
 ### Save GitHub Actions minutes
 
-- Keep the default flow: one review on PR open, then `/review` after fixes (do not enable `review-on-synchronize` unless you need it).
+- Robin reviews once on PR open; comment `/review` after fixes for another pass.
 - Use a smaller `max-diff-size` for huge PRs.
 - **Free tier:** GitHub Free includes about **2,000 Actions minutes/month** for public and private repos; GitHub Pro about **3,000 minutes/month** (limits can change — see [GitHub billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions) for your account).
 - **Heavy usage:** use a [self-hosted runner](https://docs.github.com/en/actions/hosting-your-own-runners) so LLM wait time does not consume hosted minutes.
@@ -117,13 +115,10 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `council-model` | empty | Optional second model family, on the same base URL, for the adversarial pass and a second vote on every finding. A High survives one approval; anything lower needs both |
 | `council-fallback-model` | empty | Optional seat that takes over `council-model` for the rest of the review when the council seat hits a subscription quota or rate limit. `deepseek-v4.1-flash-deploy` runs DeepSeek V4.1 Flash (effort high) on Rolly's Deploy API key: the one API-billed seat. The receipt marks `SUBSTITUTED` |
 | `reasoning-effort` | empty | Optional reasoning effort for compatible models: `low`, `medium`, or `high` |
-| `fail-on-high` | `false` | Fail the check if high-severity issues are found |
-| `request-changes` | direct action: repo config → `true`; reusable workflow: `false` | `true` submits REQUEST_CHANGES on high findings. In both modes a complete review (reviewed, reused or skipped) is an APPROVE when every high finding is an inline thread, and a COMMENT when one stays in the body; a non-approving review dismisses Robin's earlier approvals. Require one approval and conversation resolution on the branch to make Robin the gate, and enable **Allow GitHub Actions to create and approve pull requests**. |
 | `max-diff-size` | `50000` | Max diff characters sent to the model |
 | `max-output-tokens` | empty | Cap response tokens (optional) |
 | `llm-timeout-ms` | `600000` | LLM timeout (10 minutes) |
 | `max-comments` | `15` | Max inline high findings; only high findings are posted inline |
-| `review-on-synchronize` | `false` | Review every new commit on the PR |
 | `runner` | `'"ubuntu-latest"'` | Reusable workflow only: runner as a JSON string or JSON array |
 | `min-command-permission` | `write` | Who can run `/review` |
 | `review-instructions` | empty | Extra prompt text |
@@ -133,15 +128,14 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 
 ## Action outputs
 
-Direct action only. Every terminal path sets all nine outputs once a pull request has been resolved, so a caller never has to tell "empty" from "not reached". Each posted review body also carries the same values in an HTML-comment marker bound to the reviewed head, which is how a consumer distinguishes "Robin finished on this exact commit" from "Robin has not posted yet".
+Direct action only. Every terminal path sets all eight outputs once a pull request has been resolved, so a caller never has to tell "empty" from "not reached". Each posted review body also carries the same values in an HTML-comment marker bound to the reviewed head, which is how a consumer distinguishes "Robin finished on this exact commit" from "Robin has not posted yet".
 
 | Output | Values | Description |
 | --- | --- | --- |
-| `outcome` | `reviewed`, `reused`, `skipped`, `incomplete`, `stale-head` | Coverage of `head`. `reviewed`/`reused`/`skipped` are complete; `incomplete` means the run failed at that head; `stale-head` means the PR advanced and **nothing was posted** |
+| `outcome` | `reviewed`, `skipped`, `incomplete`, `stale-head` | Coverage of `head`. `reviewed`/`skipped` are complete; `incomplete` means the run failed at that head; `stale-head` means the PR advanced and **nothing was posted** |
 | `head` | 40-hex SHA | The head this run covered. For `stale-head`, the current head Robin found instead |
 | `review-id` | number or empty | Id of the review Robin posted |
 | `review-url` | URL or empty | HTML URL of that review |
-| `verdict` | `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, or empty | As submitted. Never infer finding counts from it |
 | `high` / `medium` / `low` / `suggestions` | number or empty | Finding counts. `0` for `skipped` and `incomplete`; empty when genuinely unknown |
 
 ## Local execution
@@ -154,50 +148,13 @@ The broad and adversarial discovery passes run concurrently. Eight active pieces
 
 Each changed file is one piece, and a file larger than `max-diff-size` is split on hunk boundaries. A pull request with more than 64 pieces is packed instead: files stay in path order, so a folder's files travel together, and the piece size grows from `max-diff-size` until at most 64 pieces cover the whole diff. Review time therefore stays bounded by eight rounds of eight pieces however many files change, and every file is still reviewed. The precision gate merges all pieces' candidates into one review.
 
-Every review summary ends with a timing receipt: wall time per stage (context, discovery, evidence, follow-up, final gate) and, per seat, calls, p50 and max call time, the provider's own duration when available, failed calls, stage activity and the peak number of calls in flight. Robin currently dispatches calls immediately (client queue time is zero); provider duration includes the external CLI and cannot isolate a provider-side queue. The log adds one line per call and per piece as it finishes. Stage activity is the union of overlapping intervals, so stage totals are not additive. Skipped and reused verdicts do not run the review core.
+Every review summary ends with a timing receipt: wall time per stage (context, discovery, evidence, follow-up, final gate) and, per seat, calls, p50 and max call time, the provider's own duration when available, failed calls, stage activity and the peak number of calls in flight. Robin currently dispatches calls immediately (client queue time is zero); provider duration includes the external CLI and cannot isolate a provider-side queue. The log adds one line per call and per piece as it finishes. Stage activity is the union of overlapping intervals, so stage totals are not additive. Skipped heads do not run the review core.
 
 ## Usage patterns
 
-### Advisor mode (never block the PR)
+### Advisory by design
 
-Useful when Robin is an assistant and humans own merge decisions. Prefer `.github/robin.yml` for repo-wide defaults; use the workflow input to override per workflow:
-
-```yaml
-# .github/robin.yml
-request-changes: false
-```
-
-```yaml
-jobs:
-  review:
-    uses: antongulin/robin/.github/workflows/review.yml@main
-    with:
-      request-changes: false
-    secrets:
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
-      LLM_MODEL: ${{ secrets.LLM_MODEL }}
-```
-
-### Review on every commit
-
-```yaml
-on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-  issue_comment:
-    types: [created]
-
-jobs:
-  review:
-    uses: antongulin/robin/.github/workflows/review.yml@main
-    with:
-      review-on-synchronize: true
-    secrets:
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
-      LLM_MODEL: ${{ secrets.LLM_MODEL }}
-```
+Robin never blocks a merge. Every review is a COMMENT review: High findings are inline threads, everything else stays in the body. Robin reviews a pull request once when it opens or becomes ready, and again only on `/robin` or `/review`, which also retries a failed or interrupted run. Each run keeps one line in a single status comment per pull request (`<!-- robin-status -->` … `<!-- /robin-status -->`); Robin rewrites only that region, so other tools may share the comment.
 
 ### Manual review only
 
@@ -250,20 +207,6 @@ jobs:
           llm-base-url: ${{ secrets.LLM_BASE_URL }}
           model: ${{ secrets.LLM_MODEL }}
           max-comments: "10"
-```
-
-### Strict mode (fail on high severity)
-
-```yaml
-jobs:
-  review:
-    uses: antongulin/robin/.github/workflows/review.yml@main
-    with:
-      fail-on-high: true
-    secrets:
-      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-      LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
-      LLM_MODEL: ${{ secrets.LLM_MODEL }}
 ```
 
 If you raise `llm-timeout-ms` above 10 minutes, also raise the job `timeout-minutes`.
@@ -319,7 +262,7 @@ PR diffs are sent to **your** configured LLM endpoint.
 Practices:
 
 - Store keys in GitHub Secrets only.
-- Use `permissions: actions: read`, `contents: read`, and `pull-requests: write`.
+- Use `permissions: contents: read` and `pull-requests: write`.
 - Use `pull_request_target` only from a pinned trusted workflow that does not
   check out or execute pull-request code. Robin fetches the diff through GitHub's API.
 - Keep slash commands at `min-command-permission: write` unless you accept cost/abuse risk.
@@ -342,7 +285,7 @@ No daily quota from this action. Real limits:
 | `Input required: model` | Missing secret | Add `LLM_MODEL` |
 | `Input required: llm-base-url` | Missing secret | Add `LLM_BASE_URL` |
 | `Empty response from LLM` | Free/unstable model returned no text | Action retries with backoff; comment `/review` again |
-| `OpenRouter stall: no first response` | Auto-router hung before picking a provider | Action retries every 45s (up to 5×); PR status comment updates each attempt |
+| `OpenRouter stall: no first response` | Auto-router hung before picking a provider | Action retries every 45s (up to 5×); the PR status line updates each attempt |
 | Job cancelled / 15 min with no review | Hung LLM or concurrency cancel while waiting | Status comment should say interrupted — comment `/robin` again; pin `@v2.0.4`+ for stall detect |
 | `404 Provider returned error` | OpenRouter free route missed one provider | Keep `LLM_MODEL=openrouter/free` — action retries (5×) with provider fallbacks; no secret updates when models rotate |
 | `Request timed out` | Large PR or slow free model | Lower `max-diff-size` or raise `llm-timeout-ms` (router models default to 2 min per attempt) |

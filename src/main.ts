@@ -4,8 +4,7 @@ import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
 import { councilReceipt, createCouncilSeat } from "./council";
 import { GitUtils } from "./git-utils";
-import { StructuredReview } from "./review-parser";
-import { GitHubReviewer, ROBIN_SIGNATURE, ReviewVerdict, reuseDecision, formatPriorFindings } from "./github-reviewer";
+import { GitHubReviewer, ROBIN_SIGNATURE, formatPriorFindings } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
 import { filterDiff, isWhitespaceOnlyDiff, splitDiffIntoFiles } from "./diff-filter";
 import {
@@ -13,9 +12,8 @@ import {
   resolveJsonResponseMode,
   resolveMaxComments,
   resolveMaxDiffSize,
-  resolveRequestChanges,
 } from "./repo-config";
-import { PRECISION_INSTRUCTIONS, getReviewPrompt, getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
+import { getSummaryPrompt, getHelpMessage } from "./prompts/review-prompts";
 import { ReviewerCommand, hasRequiredPermission, parseSlashCommand } from "./commands";
 import { isPullRequestReviewEvent, workflowDispatchPrNumber } from "./events";
 import {
@@ -27,21 +25,15 @@ import {
 } from "./review-run";
 import { PIECE_CONCURRENCY, reviewPieces, runReviewCore, seatCalls } from "./review-core";
 import { ReviewTimings } from "./review-timing";
-import { fixPassInstructions, reviewPass } from "./review-pass";
 import { loadRepoConfig, loadReviewInstructions } from "./review-settings";
+import { statusComment, statusLine } from "./status";
 
 async function run(): Promise<void> {
   let octokit: ReturnType<typeof github.getOctokit> | undefined;
-  let statusOwner = "";
-  let statusRepo = "";
-  let statusCommentId: number | undefined;
   let statusCommand: "review" | "summary" = "review";
-  let statusModel = "not configured";
-  // Assigned only once the head has been validated, so a stale head has nothing
-  // to post to.
   let target: ReviewTarget | undefined;
+  let showStatus: ((line: string) => Promise<void>) | undefined;
   let onJobCancelled: (() => Promise<void>) | undefined;
-  let gatekeeper = core.getInput("request-changes") !== "false";
 
   try {
     const eventName = github.context.eventName;
@@ -50,22 +42,19 @@ async function run(): Promise<void> {
     const token = core.getInput("github-token", { required: true });
     octokit = github.getOctokit(token);
     const minCommandPermission = core.getInput("min-command-permission") || "write";
-    const reviewOnSynchronize = core.getBooleanInput("review-on-synchronize");
 
     core.info(`Event: ${eventName}`);
 
     const owner = github.context.repo.owner;
     const repo = github.context.repo.repo;
-    statusOwner = owner;
-    statusRepo = repo;
 
     let shouldRun = false;
     let prNumber: number | undefined;
-    let command: ReviewerCommand = "review"; // default command for PR events
+    let command: ReviewerCommand = "review";
 
     if (isPullRequestReviewEvent(eventName)) {
-      if (payload.action === "synchronize" && !reviewOnSynchronize) {
-        core.info("Skipping pull_request synchronize event. Pushes to an existing PR are reviewed manually with /review unless review-on-synchronize is true.");
+      if (payload.action === "synchronize") {
+        core.info("Skipping pull_request synchronize event. Robin reviews a pull request once; comment /robin for another pass.");
         return;
       }
 
@@ -129,11 +118,6 @@ async function run(): Promise<void> {
     target = await resolveReviewTarget(octokit, owner, repo, prNumber, expectedHeadSha);
     const headSha = target.headSha;
     const reviewTarget = target;
-    // The skip conditions below are properties of the diff, so the receipt is
-    // honest either way, but /summary has never posted a review and must not
-    // start: only the review command leaves a coverage receipt.
-    const skipReceipt = (reason: string) =>
-      command === "review" ? postSkippedReceipt(octokit, reviewTarget, reason) : Promise.resolve();
     if (eventName === "issue_comment") {
       await addEyesReaction(octokit, owner, repo, payload.comment?.id);
     }
@@ -141,6 +125,12 @@ async function run(): Promise<void> {
       await postHelpComment(octokit, payload);
       return;
     }
+    const show = statusComment(octokit, owner, repo, prNumber);
+    showStatus = show;
+    const skip = async (reason: string) => {
+      await show(statusLine.skipped(headSha, reason));
+      if (command === "review") await postSkippedReceipt(octokit, reviewTarget, reason);
+    };
 
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
@@ -154,7 +144,6 @@ async function run(): Promise<void> {
     if (reasoningEffortInput && !["low", "medium", "high"].includes(reasoningEffortInput)) {
       throw new Error(`Invalid reasoning-effort: ${reasoningEffortInput}`);
     }
-    const failOnHigh = core.getInput("fail-on-high") === "true";
     const maxDiffSizeInput = core.getInput("max-diff-size") || "50000";
     const maxCommentsInput = core.getInput("max-comments") || "25";
     const maxOutputTokensInput = core.getInput("max-output-tokens") || "";
@@ -168,34 +157,14 @@ async function run(): Promise<void> {
     const reviewInstructionsFile = core.getInput("review-instructions-file") || "";
     const configFile = core.getInput("config-file") || DEFAULT_CONFIG_FILE;
     const jsonResponseModeInput = core.getInput("use-json-response-mode") || "";
-    const requestChangesInput = core.getInput("request-changes") || "";
 
     core.info(`Model: ${model || "(not configured)"}`);
 
     core.info(`Running /${command} on PR #${prNumber} in ${owner}/${repo}`);
     statusCommand = command === "summary" ? "summary" : "review";
-    statusModel = model || "not configured";
-    statusCommentId = await postStatusComment(octokit, owner, repo, prNumber, command, statusModel);
-    onJobCancelled = async () => {
-      if (octokit && statusCommentId) {
-        // The SIGTERM grace period is short — never let the superseded check
-        // delay the status update past it. On timeout the check is abandoned
-        // fire-and-forget; its own try/catch swallows any late rejection.
-        const superseded = await Promise.race([
-          isSupersededByNewerRun(octokit, statusOwner, statusRepo),
-          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3000).unref()),
-        ]);
-        await updateStatusComment(
-          octokit,
-          statusOwner,
-          statusRepo,
-          statusCommentId,
-          superseded
-            ? buildSupersededStatusBody(statusCommand)
-            : buildCancelledStatusBody(statusCommand)
-        );
-      }
-    };
+    const running = statusCommand === "summary" ? () => statusLine.summarizing(headSha) : (detail?: string) => statusLine.running(headSha, detail);
+    await show(running());
+    onJobCancelled = () => show(statusLine.interrupted(headSha));
     registerJobCancelHandler(async () => {
       if (onJobCancelled) {
         await onJobCancelled();
@@ -216,21 +185,13 @@ async function run(): Promise<void> {
     const maxDiffSize = resolveMaxDiffSize(maxDiffSizeInput, repoConfig);
     const maxComments = resolveMaxComments(maxCommentsInput, repoConfig);
     const jsonResponseMode = resolveJsonResponseMode(jsonResponseModeInput, repoConfig);
-    const requestChanges = resolveRequestChanges(requestChangesInput, repoConfig);
-    gatekeeper = requestChanges;
 
     const diff = await gitUtils.getPullRequestDiff(baseRef, headRef);
-    
+
     if (!diff || diff.trim().length === 0) {
       core.warning("No diff found for this PR.");
-      await updateStatusComment(
-        octokit,
-        owner,
-        repo,
-        statusCommentId,
-        buildFailedStatusBody("No diff found for this pull request.", statusCommand)
-      );
-      await skipReceipt("No diff found for this pull request.");
+      await skip("No diff found for this pull request.");
+      onJobCancelled = undefined;
       return;
     }
 
@@ -242,34 +203,16 @@ async function run(): Promise<void> {
 
     if (diffFiles.length > 0 && !filteredDiff.trim()) {
       core.info("All changed files were skipped by diff filters; no LLM review needed.");
-      await updateStatusComment(
-        octokit,
-        owner,
-        repo,
-        statusCommentId,
-        buildSkippedFilterStatusBody(removedFiles)
-      );
-      await skipReceipt(`every changed file was removed by diff filters (${removedFiles.length} file(s)).`);
+      await skip(`every changed file was removed by diff filters (${removedFiles.length} file(s)).`);
+      onJobCancelled = undefined;
       return;
     }
 
     const reviewDiff = filteredDiff.trim() ? filteredDiff : diff;
-    if (!reviewDiff.trim()) {
-      core.warning("No reviewable diff remained after filtering skipped paths.");
-      await updateStatusComment(
-        octokit,
-        owner,
-        repo,
-        statusCommentId,
-        buildFailedStatusBody("No reviewable diff remained after filtering skipped paths.", statusCommand)
-      );
-      await skipReceipt("No reviewable diff remained after filtering skipped paths.");
-      return;
-    }
     if (isWhitespaceOnlyDiff(reviewDiff)) {
       core.info("Only whitespace changed; no LLM review needed.");
-      await updateStatusComment(octokit, owner, repo, statusCommentId, buildSkippedWhitespaceStatusBody());
-      await skipReceipt("only whitespace changed.");
+      await skip("only whitespace changed.");
+      onJobCancelled = undefined;
       return;
     }
     const summaryDiff = reviewDiff.length > maxDiffSize
@@ -283,73 +226,6 @@ async function run(): Promise<void> {
       ? await loadReviewInstructions(gitUtils, owner, repo, inlineReviewInstructions, reviewInstructionsFile, baseRef)
       : "";
 
-    // Content-addressed review reuse.
-    //
-    // A rebase onto a moved main dismisses Robin's approval, but ~59% of those
-    // force-pushes leave the reviewed change identical. GitHub has already
-    // voided the approval by the time this runs, so skipping alone would
-    // deadlock the PR: the short-circuit must still POST a fresh review at the
-    // current head. It just must not call the model.
-    //
-    // Placed before the LLMClient is constructed so a hit makes a model call
-    // structurally impossible. A miss falls through to the untouched path.
-    let cacheKey: string | undefined;
-    let fixPass: { since: string; highs: string[]; diff: string } | undefined;
-    if (command === "review") {
-      const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
-        owner,
-        repo,
-        pull_number: prNumber,
-        per_page: 100,
-      });
-      const decision = reuseDecision(priorReviews, {
-        model,
-        systemPrompt: getReviewPrompt(reviewInstructions),
-        precisionPrompt: [reviewInstructions, PRECISION_INSTRUCTIONS].filter(Boolean).join("\n\n"),
-        gatekeeper: requestChanges,
-        diff: reviewDiff,
-      });
-      cacheKey = decision.key;
-      const cached = decision.carried;
-
-      if (cached) {
-        core.info("Change is identical to an earlier review; reusing its " + cached.event + " verdict.");
-        const reviewer = new GitHubReviewer(octokit as any, maxComments);
-        const posted = await reviewer.postCachedReview(owner, repo, prNumber, cached, headSha);
-        setPostedOutputs("reused", headSha, posted);
-        await updateStatusComment(
-          octokit,
-          owner,
-          repo,
-          statusCommentId,
-          buildReusedStatusBody(posted.verdict)
-        );
-        if (posted.verdict === "CHANGES_REQUESTED" && failOnHigh) {
-          core.setFailed("Reused a blocking review for an unchanged diff.");
-        }
-        onJobCancelled = undefined;
-        core.info("Done.");
-        return;
-      }
-      const pass = await reviewPass(priorReviews, headSha, (since, head) => gitUtils.authorDiff(since, head),
-        () => octokit!.paginate(octokit!.rest.pulls.listReviewComments, {owner, repo, pull_number: reviewTarget.pullNumber, per_page: 100}));
-      if (pass.kind === "capped") {
-        core.info(`Review cap reached: ${pass.reason}`);
-        await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody(pass.reason));
-        onJobCancelled = undefined;
-        return;
-      }
-      if (pass.kind === "fix") fixPass = pass;
-    }
-    const passDiff = fixPass
-      ? filterDiff(fixPass.diff, repoConfig.skipPaths || []).filtered
-      : reviewDiff;
-    if (!passDiff.trim()) {
-      await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody("The change since Robin's last review touches only skipped paths."));
-      onJobCancelled = undefined;
-      return;
-    }
-
     const createLlm = (seat: string, effort: typeof reasoningEffortInput) => new LLMClient(
       baseUrl,
       apiKey,
@@ -357,15 +233,7 @@ async function run(): Promise<void> {
       maxOutputTokens,
       llmTimeoutMs,
       undefined,
-      async (detail) => {
-        await updateStatusComment(
-          octokit!,
-          owner,
-          repo,
-          statusCommentId,
-          buildProgressStatusBody(detail, statusCommand, statusModel)
-        );
-      },
+      (detail) => show(running(detail)),
       effort as "low" | "medium" | "high" | undefined,
       providerOptions
     );
@@ -375,24 +243,21 @@ async function run(): Promise<void> {
         councilFallbackModel ? {llm: createLlm(councilFallbackModel, ""), model: councilFallbackModel} : undefined)
       : undefined;
     const useJsonMode = command === "review" && jsonResponseMode;
-    
+
     if (command === "summary") {
       const reviewText = (await runSummary(llm, summaryDiff)).content;
-      // Post summary as a regular comment
       await octokit.rest.issues.createComment({
         owner,
         repo,
         issue_number: prNumber,
         body: ["## " + ROBIN_SIGNATURE + " · Summary", "", reviewText].join("\n"),
       });
-      await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("summary"));
+      await show(statusLine.summarized(headSha));
     } else {
-      // Full review parsed and posted as a review
       const timings = new ReviewTimings();
       const {findings, evidenceRequests, usedFollowups} = await runReviewCore({
-        git: gitUtils, owner, repo, baseRef: fixPass?.since ?? baseRef, headRef, reviewDiff: passDiff, maxDiffSize, pieceConcurrency: PIECE_CONCURRENCY,
-        reviewInstructions: fixPass ? [reviewInstructions, fixPassInstructions(fixPass)].filter(Boolean).join("\n\n") : reviewInstructions,
-        jsonResponseMode: useJsonMode, llm, council, timings,
+        git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: PIECE_CONCURRENCY,
+        reviewInstructions, jsonResponseMode: useJsonMode, llm, council, timings,
         loadPriorFindings: () => loadPriorRobinFindings(octokit!, owner, repo, prNumber!),
       });
       const metrics = llm.getMetrics();
@@ -408,13 +273,9 @@ async function run(): Promise<void> {
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
 
       const reviewer = new GitHubReviewer(octokit as any, maxComments);
-      const posted = await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, fixPass ? undefined : cacheKey, headSha, fixPass?.since);
+      const posted = await reviewer.postReview(owner, repo, prNumber, findings, headSha);
       setPostedOutputs("reviewed", headSha, posted);
-      await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("review", findings));
-
-      if (findings.high.length > 0 && failOnHigh) {
-        core.setFailed(`Found ${findings.high.length} high severity issue(s). Failing check.`);
-      }
+      await show(statusLine.reviewed(headSha, posted.counts, posted.url));
     }
 
     onJobCancelled = undefined;
@@ -422,22 +283,14 @@ async function run(): Promise<void> {
 
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (octokit && statusOwner && statusRepo && statusCommentId) {
-      try {
-        await updateStatusComment(octokit, statusOwner, statusRepo, statusCommentId, buildFailedStatusBody(message, statusCommand));
-      } catch (statusError) {
-        core.warning(`Could not update Robin status comment: ${statusError}`);
-      }
-    }
+    onJobCancelled = undefined;
+    if (showStatus && target) await showStatus(statusLine.failed(target.headSha, message));
     await handleReviewFailure({
-      gatekeeper,
       octokit,
       target,
       message,
       command: statusCommand,
     });
-  } finally {
-    onJobCancelled = undefined;
   }
 }
 
@@ -459,223 +312,6 @@ async function addEyesReaction(
   } catch (error) {
     core.warning(`Could not add eyes reaction to trigger comment: ${error}`);
   }
-}
-
-async function postStatusComment(
-  octokit: any,
-  owner: string,
-  repo: string,
-  issueNumber: number,
-  command: ReviewerCommand,
-  model: string
-): Promise<number | undefined> {
-  try {
-    const { data } = await octokit.rest.issues.createComment({
-      owner,
-      repo,
-      issue_number: issueNumber,
-      body: [
-        "## " + ROBIN_SIGNATURE,
-        "",
-        ":eyes: On it — taking a look at this pull request.",
-        "",
-        `Mode: ${command === "summary" ? "summary" : "code review"}`,
-        `Model: ${model}`,
-      ].join("\n"),
-    });
-    return data.id;
-  } catch (error) {
-    core.warning(`Could not post status comment: ${error}`);
-    return undefined;
-  }
-}
-
-async function updateStatusComment(
-  octokit: any,
-  owner: string,
-  repo: string,
-  commentId: number | undefined,
-  body: string
-): Promise<void> {
-  if (!commentId) return;
-
-  try {
-    await octokit.rest.issues.updateComment({
-      owner,
-      repo,
-      comment_id: commentId,
-      body,
-    });
-  } catch (error) {
-    core.warning(`Could not update status comment: ${error}`);
-  }
-}
-
-function buildReusedStatusBody(posted: ReviewVerdict): string {
-  const verdict = posted === "CHANGES_REQUESTED"
-    ? "re-posted the blocking review"
-    : posted === "APPROVED"
-      ? "re-posted the approval"
-      : "re-posted the review";
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    `:recycle: This head's change is identical to one I already reviewed, so I ${verdict} without a model pass.`,
-    "",
-    "Edit or delete that review's body to force a full re-review.",
-  ].join("\n");
-}
-
-function buildCompletedStatusBody(command: "review" | "summary", findings?: StructuredReview): string {
-  if (command === "summary") {
-    return [
-      "## " + ROBIN_SIGNATURE,
-      "",
-      ":white_check_mark: Summary's ready above.",
-      "",
-      "Want the full review? Comment `/robin`.",
-    ].join("\n");
-  }
-
-  const totalFindings = findings
-    ? findings.high.length + findings.medium.length + findings.low.length + findings.suggestions.length
-    : 0;
-  const result = totalFindings === 0
-    ? "Nothing worth flagging — looks clean to me."
-    : `I flagged ${totalFindings} thing${totalFindings === 1 ? "" : "s"} worth a look.`;
-
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    `:white_check_mark: Review done. ${result}`,
-    "",
-    "Push fixes whenever you like, then comment `/robin` for another pass.",
-  ].join("\n");
-}
-
-function buildSkippedFilterStatusBody(removedFiles: string[]): string {
-  const preview = removedFiles.slice(0, 8).join(", ");
-  const suffix = removedFiles.length > 8 ? `, and ${removedFiles.length - 8} more` : "";
-
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    ":white_check_mark: Nothing to review here — only ignored paths changed.",
-    "",
-    `Skipped: ${preview}${suffix}`,
-    "",
-    "Add `skip-paths` in `.github/robin.yml` if that's not what you expected.",
-  ].join("\n");
-}
-
-function buildCappedStatusBody(reason: string): string {
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    `:stop_sign: I have reviewed this pull request as many times as I will. ${reason}`,
-    "",
-    "A maintainer's approval is needed to merge.",
-  ].join("\n");
-}
-
-function buildSkippedWhitespaceStatusBody(): string {
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    ":white_check_mark: Nothing substantive to review — only whitespace changed.",
-  ].join("\n");
-}
-
-function buildFailedStatusBody(errorMessage: string, command: "review" | "summary"): string {
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    `:warning: I couldn't finish the ${command === "summary" ? "summary" : "review"} this time.`,
-    "",
-    `Reason: ${errorMessage}`,
-    "",
-    "Free model routes drop sometimes — comment `/robin` to try again. (No secrets are included in this message.)",
-  ].join("\n");
-}
-
-function buildProgressStatusBody(
-  detail: string,
-  command: "review" | "summary",
-  model: string
-): string {
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    ":hourglass_flowing_sand: Still working on this pull request.",
-    "",
-    detail,
-    "",
-    `Mode: ${command === "summary" ? "summary" : "code review"}`,
-    `Model: ${model}`,
-  ].join("\n");
-}
-
-/**
- * True when a newer run of this same workflow exists — i.e. this run was
- * cancelled by concurrency `cancel-in-progress`, not by a human or a timeout.
- * Note: runs are matched per workflow, not per PR — a newer run on a different
- * PR can also count. Acceptable: this only softens the cancel-notice wording.
- * Best-effort: any API failure returns false.
- */
-async function isSupersededByNewerRun(octokit: any, owner: string, repo: string): Promise<boolean> {
-  try {
-    const runId = Number(process.env.GITHUB_RUN_ID);
-    const runNumber = Number(process.env.GITHUB_RUN_NUMBER);
-    if (!runId || !runNumber) return false;
-
-    const { data: currentRun } = await octokit.rest.actions.getWorkflowRun({
-      owner,
-      repo,
-      run_id: runId,
-    });
-
-    const { data } = await octokit.rest.actions.listWorkflowRuns({
-      owner,
-      repo,
-      workflow_id: currentRun.workflow_id,
-      per_page: 10,
-    });
-
-    const superseded = data.workflow_runs.some(
-      (run: { id: number; run_number: number }) => run.id !== runId && run.run_number > runNumber
-    );
-    core.info(
-      superseded
-        ? `Superseded by a newer workflow run (this is #${runNumber})`
-        : `No newer workflow run found (this is #${runNumber})`
-    );
-    return superseded;
-  } catch (error) {
-    core.warning(`Could not check for a superseding run: ${error}`);
-  }
-  return false;
-}
-
-function buildSupersededStatusBody(command: "review" | "summary"): string {
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    `:arrows_counterclockwise: This ${command === "summary" ? "summary" : "review"} run was replaced by a newer Robin run.`,
-    "",
-    "No action needed — the newer run posts its own result when it finishes.",
-  ].join("\n");
-}
-
-function buildCancelledStatusBody(command: "review" | "summary"): string {
-  return [
-    "## " + ROBIN_SIGNATURE,
-    "",
-    `:warning: The ${command === "summary" ? "summary" : "review"} was interrupted before it finished.`,
-    "",
-    "This usually means the GitHub Actions job was cancelled or hit its time limit while waiting on the model.",
-    "",
-    "Comment `/robin` to run again.",
-  ].join("\n");
 }
 
 function registerJobCancelHandler(onCancel: () => Promise<void>): void {

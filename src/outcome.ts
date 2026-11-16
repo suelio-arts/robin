@@ -10,7 +10,7 @@
  * The regex is duplicated verbatim in `bin/robin-pr.js`; keep the two identical.
  */
 
-export type ReviewOutcome = "reviewed" | "reused" | "skipped" | "incomplete";
+export type ReviewOutcome = "reviewed" | "skipped" | "incomplete";
 
 export interface OutcomeCounts {
   high: number;
@@ -30,7 +30,7 @@ export const ZERO_COUNTS: OutcomeCounts = {high: 0, medium: 0, low: 0, suggestio
 
 /** Shared with `bin/robin-pr.js`. Global: a body may carry several markers. */
 export const OUTCOME_MARKER_PATTERN =
-  /<!--\s*robin-outcome:\s*v1\s+(reviewed|reused|skipped|incomplete)\s+head=([0-9a-f]{40})(?:\s+high=(\d+)\s+medium=(\d+)\s+low=(\d+)\s+suggestions=(\d+))?\s*-->/g;
+  /<!--\s*robin-outcome:\s*v1\s+(reviewed|skipped|incomplete)\s+head=([0-9a-f]{40})(?:\s+high=(\d+)\s+medium=(\d+)\s+low=(\d+)\s+suggestions=(\d+))?\s*-->/g;
 
 export function buildOutcomeMarker(
   outcome: ReviewOutcome,
@@ -71,13 +71,4 @@ export function parseOutcomeMarker(body: string): OutcomeMarker | null {
       suggestions: Number(last[6]),
     };
   return {outcome: last[1] as ReviewOutcome, head: last[2], counts};
-}
-
-/** Stamped on Robin's single fix-only pass at the review cap, naming the reviewed head it started from. */
-export function fixPassMarker(since: string): string {
-  return `<!-- robin-fix-pass: since=${since} -->`;
-}
-
-export function hasFixPassMarker(body: string): boolean {
-  return /<!--\s*robin-fix-pass:\s*since=[0-9a-f]{40}\s*-->/.test(body);
 }

@@ -148,7 +148,6 @@ on:
     types: [created]
 
 permissions:
-  actions: read
   contents: read
   pull-requests: write
 
@@ -239,7 +238,7 @@ jobs:
 
 ## Example
 
-The bot posts a status comment, then a review with severity counts:
+The bot keeps one status line per PR, then posts an advisory review with severity counts:
 
 ```md
 ## 🏹 Robin

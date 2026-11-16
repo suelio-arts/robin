@@ -13,11 +13,6 @@ on:
         required: false
         type: string
         default: ""
-      fail-on-high:
-        description: "Fail the workflow when high severity issues are found."
-        required: false
-        type: boolean
-        default: false
       llm-user:
         description: "Optional OpenAI-compatible attribution user."
         required: false
@@ -48,11 +43,6 @@ on:
         required: false
         type: string
         default: ""
-      request-changes:
-        description: "Whether Robin posts REQUEST_CHANGES for high findings. Either way a complete review approves when every high finding is an inline thread."
-        required: false
-        type: boolean
-        default: true
       max-diff-size:
         description: "Maximum diff characters sent to the model."
         required: false
@@ -88,11 +78,6 @@ on:
         required: false
         type: string
         default: ""
-      review-on-synchronize:
-        description: "Run automatic reviews after each new commit pushed to a PR."
-        required: false
-        type: boolean
-        default: false
       config-file:
         description: "Optional repository config file on the PR base branch."
         required: false
@@ -117,7 +102,6 @@ on:
         required: true
 
 permissions:
-  actions: read # lets Robin detect when a cancelled run was superseded by a newer one
   contents: read
   pull-requests: write
 
@@ -165,8 +149,6 @@ jobs:
           council-model: ${{ inputs.council-model }}
           council-fallback-model: ${{ inputs.council-fallback-model }}
           reasoning-effort: ${{ inputs.reasoning-effort }}
-          fail-on-high: ${{ inputs.fail-on-high }}
-          request-changes: ${{ inputs.request-changes }}
           max-diff-size: ${{ inputs.max-diff-size }}
           max-comments: ${{ inputs.max-comments }}
           max-output-tokens: ${{ inputs.max-output-tokens }}
@@ -174,6 +156,5 @@ jobs:
           min-command-permission: ${{ inputs.min-command-permission }}
           review-instructions: ${{ inputs.review-instructions }}
           review-instructions-file: ${{ inputs.review-instructions-file }}
-          review-on-synchronize: ${{ inputs.review-on-synchronize }}
           config-file: ${{ inputs.config-file }}
           use-json-response-mode: ${{ inputs.use-json-response-mode }}

@@ -680,11 +680,11 @@ describe("robin-review pr", () => {
     );
   });
 
-  it("reads counts from the stat blocks when a reused marker carries none", () => {
+  it("reads counts from the stat blocks when a marker carries none", () => {
     withFixture({
       reviews: [
         botReview({
-          body: `## ${SIGNATURE}\n\n:white_check_mark: **No issues found**\n\n${marker("reused", HEAD)}`,
+          body: `## ${SIGNATURE}\n\n:white_check_mark: **No issues found**\n\n${marker("skipped", HEAD)}`,
         }),
       ],
     });
@@ -695,7 +695,7 @@ describe("robin-review pr", () => {
       code: 0,
       body: expect.objectContaining({
         status: "clean",
-        coverage: "reused",
+        coverage: "skipped",
         findings: { high: 0, medium: 0, low: 0, suggestions: 0 },
       }),
     });
@@ -704,7 +704,7 @@ describe("robin-review pr", () => {
   it("never calls a review clean when its counts are unknown", () => {
     withFixture({
       reviews: [
-        botReview({ body: `## ${SIGNATURE}\n${marker("reused", HEAD)}` }),
+        botReview({ body: `## ${SIGNATURE}\n${marker("skipped", HEAD)}` }),
       ],
     });
 
@@ -712,7 +712,7 @@ describe("robin-review pr", () => {
 
     expect(result.status).toBe(2);
     const body = parse(result);
-    expect(body).toEqual(expect.objectContaining({ status: "findings", coverage: "reused", findings: null }));
+    expect(body).toEqual(expect.objectContaining({ status: "findings", coverage: "skipped", findings: null }));
     expect(body.message).toContain("could not be read");
   });
 

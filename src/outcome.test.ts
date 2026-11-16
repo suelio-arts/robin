@@ -13,35 +13,35 @@ describe("outcome marker", () => {
     expect(buildOutcomeMarker("reviewed", HEAD, {high: 1, medium: 2, low: 3, suggestions: 4})).toBe(
       `<!-- robin-outcome: v1 reviewed head=${HEAD} high=1 medium=2 low=3 suggestions=4 -->`
     );
-    expect(buildOutcomeMarker("reused", HEAD)).toBe(`<!-- robin-outcome: v1 reused head=${HEAD} -->`);
+    expect(buildOutcomeMarker("skipped", HEAD)).toBe(`<!-- robin-outcome: v1 skipped head=${HEAD} -->`);
   });
 
   it("round-trips every outcome through the shared regex", () => {
-    for (const outcome of ["reviewed", "reused", "skipped", "incomplete"] as const) {
+    for (const outcome of ["reviewed", "skipped", "incomplete"] as const) {
       const counts = {high: 0, medium: 1, low: 0, suggestions: 2};
       const body = appendOutcomeMarker("## :bow_and_arrow: Robin\n\nbody", outcome, HEAD, counts);
       expect(parseOutcomeMarker(body)).toEqual({outcome, head: HEAD, counts});
     }
   });
 
-  it("lets the last marker win so a reused body names the head it was re-posted at", () => {
-    const cached = appendOutcomeMarker("original review", "reviewed", OTHER_HEAD, {
+  it("lets the last marker win", () => {
+    const first = appendOutcomeMarker("original review", "reviewed", OTHER_HEAD, {
       high: 1, medium: 0, low: 0, suggestions: 0,
     });
-    const reused = appendOutcomeMarker(`> quoted\n\n${cached}`, "reused", HEAD, {
+    const last = appendOutcomeMarker(`> quoted\n\n${first}`, "skipped", HEAD, {
       high: 1, medium: 0, low: 0, suggestions: 0,
     });
 
-    expect(parseOutcomeMarker(reused)).toEqual({
-      outcome: "reused",
+    expect(parseOutcomeMarker(last)).toEqual({
+      outcome: "skipped",
       head: HEAD,
       counts: {high: 1, medium: 0, low: 0, suggestions: 0},
     });
   });
 
   it("reports null counts when the marker carries none", () => {
-    expect(parseOutcomeMarker(buildOutcomeMarker("reused", HEAD))).toEqual({
-      outcome: "reused",
+    expect(parseOutcomeMarker(buildOutcomeMarker("skipped", HEAD))).toEqual({
+      outcome: "skipped",
       head: HEAD,
       counts: null,
     });

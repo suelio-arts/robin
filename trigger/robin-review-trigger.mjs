@@ -1,5 +1,4 @@
 const fullSha = /^[a-f0-9]{40}$/;
-const outcome = /<!--\s*robin-outcome:\s*v1\s+(reviewed|reused|skipped|incomplete)\s+head=([a-f0-9]{40})(?:\s+high=\d+\s+medium=\d+\s+low=\d+\s+suggestions=\d+)?\s*-->/g;
 
 export function reviewNumber(value) {
     const text = String(value ?? '');
@@ -24,22 +23,6 @@ export function eligiblePullRequest(pr, repository, expectedHead) {
     const head = reviewHead(pr.head.sha);
     if (expectedHead && head !== expectedHead) return {eligible: false, reason: 'stale-head'};
     return {eligible: true, head, pr: reviewNumber(pr.number)};
-}
-
-export function robinApprovals(reviews) {
-    return reviews.filter(review => {
-        if (review.user?.login !== 'github-actions[bot]' || review.user?.type !== 'Bot' || review.state !== 'APPROVED') return false;
-        const marker = [...String(review.body ?? '').matchAll(outcome)].at(-1);
-        return marker?.[2] === review.commit_id && marker[1] !== 'incomplete';
-    });
-}
-
-/** A push that merges or rebases onto main moves the head without the author editing the change: Robin reuses or reviews it. */
-export async function integratesMain(github, repo, before, head) {
-    const {data: comparison} = await github.rest.repos.compareCommits({...repo, base: reviewHead(before), head, per_page: 1});
-    if (comparison.status !== 'ahead') return true;
-    const {data: commit} = await github.rest.git.getCommit({...repo, commit_sha: head});
-    return commit.parents.length > 1;
 }
 
 export async function prepareReview({github, context, expectedHead, prNumber}) {
@@ -68,20 +51,7 @@ export async function prepareReview({github, context, expectedHead, prNumber}) {
     const {data: pr} = await github.rest.pulls.get({...repo, pull_number: number});
     const target = eligiblePullRequest(pr, repository, expected);
     if (!target.eligible) return target;
-    const dispatch = async () => {
-        await github.rest.actions.createWorkflowDispatch({...repo, workflow_id: 'robin.yml', ref: 'main', inputs: {pr: String(target.pr), head: target.head}});
-        return {eligible: false, reason: 'dispatched', pr: target.pr, head: target.head};
-    };
-    if (context.eventName === 'issue_comment') return dispatch();
-    const reviews = await github.paginate(github.rest.pulls.listReviews, {...repo, pull_number: number, per_page: 100});
-    const approvals = robinApprovals(reviews);
-    if (approvals.some(review => review.commit_id === target.head)) return {...target, eligible: false, reason: 'already-covered'};
-    // PR events re-enter as a main dispatch: the runner admits only immutable main
-    // workflow sources, and a PR's recorded base SHA goes stale (ready_for_review).
-    if (context.eventName === 'pull_request_target') {
-        if (context.payload.action === 'synchronize' && approvals.length > 0 && !await integratesMain(github, repo, context.payload.before, target.head))
-            return {...target, eligible: false, reason: 'own-push'};
-        return dispatch();
-    }
-    return {...target, reason: 'review-required'};
+    if (context.eventName === 'workflow_dispatch') return {...target, reason: 'review-required'};
+    await github.rest.actions.createWorkflowDispatch({...repo, workflow_id: 'robin.yml', ref: 'main', inputs: {pr: String(target.pr), head: target.head}});
+    return {eligible: false, reason: 'dispatched', pr: target.pr, head: target.head};
 }

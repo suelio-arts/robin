@@ -1,27 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {integratesMain, eligiblePullRequest, robinApprovals, isReviewCommand, prepareReview, reviewHead, reviewNumber} from './robin-review-trigger.mjs';
+import {eligiblePullRequest, isReviewCommand, prepareReview, reviewHead, reviewNumber} from './robin-review-trigger.mjs';
 
 const head = 'a'.repeat(40);
 const advanced = 'b'.repeat(40);
 const repository = 'suelio-arts/mix-mono';
 const repo = {owner: 'suelio-arts', repo: 'mix-mono'};
 const target = () => ({number: 7, state: 'open', draft: false, base: {ref: 'main', repo: {full_name: 'suelio-arts/mix-mono'}}, head: {sha: head, repo: {full_name: 'suelio-arts/mix-mono'}}});
-const receipt = (kind = 'reviewed', sha = head, state = 'APPROVED') => ({user: {login: 'github-actions[bot]', type: 'Bot'}, state, commit_id: sha, body: `<!-- robin-outcome: v1 ${kind} head=${sha} -->`});
 function fixture(eventName = 'pull_request_target') {
     const calls = [];
-    const state = {pr: target(), permission: 'write', reviews: [], comparison: 'ahead', parents: 1};
+    const state = {pr: target(), permission: 'write'};
     const context = {repo, eventName, ref: 'refs/heads/main', payload: {
         pull_request: target(), issue: {number: 7, pull_request: {}},
         comment: {body: '/robin', user: {login: 'maintainer'}}, inputs: {pr: '7', head},
     }};
     const github = {rest: {
-        repos: {getCollaboratorPermissionLevel: async args => {calls.push(['permission', args]); return {data: {permission: state.permission}};},
-            compareCommits: async args => {calls.push(['compare', args]); return {data: {status: state.comparison}};}},
-        git: {getCommit: async args => {calls.push(['commit', args]); return {data: {parents: Array.from({length: state.parents}, () => ({sha: advanced}))}};}},
-        pulls: {get: async args => {calls.push(['pull', args]); return {data: state.pr};}, listReviews: () => {}},
+        repos: {getCollaboratorPermissionLevel: async args => {calls.push(['permission', args]); return {data: {permission: state.permission}};}},
+        pulls: {get: async args => {calls.push(['pull', args]); return {data: state.pr};}},
         actions: {createWorkflowDispatch: async args => {calls.push(['dispatch', args]);}},
-    }, paginate: async () => {calls.push(['reviews']); return state.reviews;}};
+    }};
     return {github, context, state, calls};
 }
 
@@ -42,20 +39,7 @@ test('only open non-draft same-repository main PRs are eligible', () => {
     assert.equal(eligiblePullRequest(target(), repository, advanced).reason, 'stale-head');
 });
 
-test('coverage is a live Robin approval: bot identity, native commit id, matching last complete marker', () => {
-    for (const kind of ['reviewed', 'reused', 'skipped']) assert.equal(robinApprovals([receipt(kind)]).length, 1);
-    for (const invalid of [receipt('incomplete'), receipt('reviewed', head, 'COMMENTED'), receipt('reviewed', head, 'DISMISSED'), {...receipt(), commit_id: advanced}, {...receipt(), user: {login: 'maintainer', type: 'User'}}, {...receipt(), body: `${receipt().body}\n${receipt('incomplete').body}`}]) {
-        assert.equal(robinApprovals([invalid]).length, 0);
-    }
-});
-
-test('a complete COMMENT receipt from before approvals does not cover its head, so /robin backfills it', async () => {
-    const legacy = fixture('workflow_dispatch');
-    legacy.state.reviews = [receipt('reviewed', head, 'COMMENTED')];
-    assert.equal((await prepareReview(legacy)).reason, 'review-required');
-});
-
-test('automatic target reads live head and skips an advanced or already covered SHA', async () => {
+test('automatic target reads live head and skips an advanced SHA', async () => {
     const first = fixture();
     assert.equal((await prepareReview(first)).reason, 'dispatched');
     assert.deepEqual(first.calls.at(-1)[1], {...repo, workflow_id: 'robin.yml', ref: 'main', inputs: {pr: '7', head}});
@@ -63,39 +47,6 @@ test('automatic target reads live head and skips an advanced or already covered 
     moved.state.pr.head.sha = advanced;
     assert.equal((await prepareReview(moved)).reason, 'stale-head');
     assert.deepEqual(moved.calls.map(call => call[0]), ['pull']);
-    const covered = fixture();
-    covered.state.reviews = [receipt()];
-    assert.equal((await prepareReview(covered)).reason, 'already-covered');
-    assert.ok(!covered.calls.some(call => call[0] === 'dispatch'));
-});
-
-test('an own push skips only while Robin approval stands; a push onto main or an unapproved PR dispatches', async () => {
-    const push = (comparison, parents) => {
-        const current = fixture();
-        current.context.payload.action = 'synchronize';
-        current.context.payload.before = advanced;
-        Object.assign(current.state, {comparison, parents});
-        return current;
-    };
-    const fix = push('ahead', 1);
-    fix.state.reviews = [receipt('reviewed', advanced)];
-    assert.equal((await prepareReview(fix)).reason, 'own-push');
-    assert.ok(!fix.calls.some(call => call[0] === 'dispatch'));
-    assert.deepEqual(fix.calls.find(call => call[0] === 'compare')[1], {...repo, base: advanced, head, per_page: 1});
-    for (const [comparison, parents] of [['ahead', 2], ['diverged', 1], ['behind', 1]]) {
-        const moved = push(comparison, parents);
-        assert.equal((await prepareReview(moved)).reason, 'dispatched');
-        assert.deepEqual(moved.calls.at(-1)[1], {...repo, workflow_id: 'robin.yml', ref: 'main', inputs: {pr: '7', head}});
-    }
-    const unapproved = push('ahead', 1);
-    unapproved.state.reviews = [receipt('reviewed', advanced, 'DISMISSED')];
-    assert.equal((await prepareReview(unapproved)).reason, 'dispatched');
-    assert.ok(!unapproved.calls.some(call => call[0] === 'compare'));
-    const malformed = push('ahead', 1);
-    malformed.state.reviews = [receipt('reviewed', advanced)];
-    malformed.context.payload.before = 'abc';
-    await assert.rejects(prepareReview(malformed), /full lowercase/);
-    await assert.rejects(integratesMain(fixture().github, repo, undefined, head), /full lowercase/);
 });
 
 test('ready-for-review PRs with a stale recorded base still dispatch from main', async () => {
@@ -144,9 +95,6 @@ test('dispatch rejects non-main, malformed and moved heads before any review', a
     const moved = fixture('workflow_dispatch');
     moved.state.pr.head.sha = advanced;
     assert.equal((await prepareReview(moved)).reason, 'stale-head');
-    const replay = fixture('workflow_dispatch');
-    replay.state.reviews = [receipt()];
-    assert.equal((await prepareReview(replay)).reason, 'already-covered');
 });
 
 test('review-stage revalidation binds the earlier admitted snapshot', async () => {
@@ -157,23 +105,10 @@ test('review-stage revalidation binds the earlier admitted snapshot', async () =
     assert.equal((await prepareReview({...admitted, prNumber: '7', expectedHead: head})).reason, 'review-required');
 });
 
-test('admission leaves the round cap to the review pass', async () => {
-    const {github, context, state} = fixture('workflow_dispatch');
-    state.reviews = ['1', '2', '3', '4'].map(c => receipt('reviewed', c.repeat(40), 'COMMENTED'));
-    assert.equal((await prepareReview({github, context})).reason, 'review-required');
+test('a failed or reviewed head can always be reviewed again', async () => {
+    assert.equal((await prepareReview(fixture('workflow_dispatch'))).reason, 'review-required');
+    assert.equal((await prepareReview(fixture('issue_comment'))).reason, 'dispatched');
 });
-
-test('quota failures remain re-requestable on the same head without using review rounds', async () => {
-    const current = fixture('workflow_dispatch');
-    current.state.reviews = Array.from({length: 4}, () => ({
-        ...receipt('incomplete'), body: `codex subscription quota exhausted. Retry /robin after recovery.\n${receipt('incomplete').body}`,
-    }));
-    assert.equal((await prepareReview(current)).reason, 'review-required');
-    const comment = fixture('issue_comment');
-    comment.state.reviews = current.state.reviews;
-    assert.equal((await prepareReview(comment)).reason, 'dispatched');
-});
-
 
 test('repository context parameterizes all API calls and rejects cross-repository PRs', async () => {
     for (const name of ['mix-place-graph', 'walk-generation-lab', 'mix-app-research', 'mix-canon', 'rolly-brain', 'mix-dev', 'robin-benchmark']) {

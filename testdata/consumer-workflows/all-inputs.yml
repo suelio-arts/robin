@@ -13,7 +13,6 @@ on:
 permissions:
   contents: read
   pull-requests: write
-  actions: read
 
 jobs:
   review:
@@ -21,15 +20,12 @@ jobs:
     with:
       pr-number: ""
       expected-head-sha: ""
-      fail-on-high: false
       llm-user: "fixture-review"
       llm-metadata: '{"feature":"review"}'
       llm-usage-jsonl: "receipts.jsonl"
       council-model: opus-5-5-medium-subscription
       council-fallback-model: deepseek-v4.1-flash-deploy
       reasoning-effort: low
-      # String input preserves omission as empty so repository config can win.
-      request-changes: ${{ 'false' }}
       max-diff-size: "25000"
       max-comments: "10"
       max-output-tokens: ""
@@ -37,7 +33,6 @@ jobs:
       min-command-permission: write
       review-instructions-file: .github/code-reviewer.md
       review-instructions: ""
-      review-on-synchronize: false
       config-file: .github/robin.yml
       # String-typed defer-to-config knob: expression avoids actionlint bool/string clash.
       use-json-response-mode: ${{ 'true' }}

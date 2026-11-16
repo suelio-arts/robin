@@ -5,7 +5,7 @@
  * It answers three independent questions and lets the caller decide:
  *
  *   coverage — did Robin finish on this exact head?
- *              reviewed | reused | skipped (complete)
+ *              reviewed | skipped (complete)
  *              incomplete | outdated | missing | unavailable | running (not)
  *   findings — how many issues, at what severity, and did Robin request changes
  *   authority — none. Exit codes describe coverage and findings only.
@@ -28,12 +28,12 @@ const { isRobinWorkflow, hasIssueCommentTrigger } = require("./robin-workflow-re
 
 /** Identical to OUTCOME_MARKER_PATTERN in src/outcome.ts; keep the two in sync. */
 const OUTCOME_MARKER_PATTERN =
-  /<!--\s*robin-outcome:\s*v1\s+(reviewed|reused|skipped|incomplete)\s+head=([0-9a-f]{40})(?:\s+high=(\d+)\s+medium=(\d+)\s+low=(\d+)\s+suggestions=(\d+))?\s*-->/g;
+  /<!--\s*robin-outcome:\s*v1\s+(reviewed|skipped|incomplete)\s+head=([0-9a-f]{40})(?:\s+high=(\d+)\s+medium=(\d+)\s+low=(\d+)\s+suggestions=(\d+))?\s*-->/g;
 
 const ROBIN_SIGNATURE = ":bow_and_arrow: Robin";
 const LEGACY_INCOMPLETE = "Robin could not complete this review";
 const BOT_LOGIN = "github-actions[bot]";
-const COMPLETE_OUTCOMES = new Set(["reviewed", "reused", "skipped"]);
+const COMPLETE_OUTCOMES = new Set(["reviewed", "skipped"]);
 /** Run conclusions that mean "nothing went wrong", so a missing review is not a failure. */
 const BENIGN_CONCLUSIONS = new Set(["success", "skipped", "neutral"]);
 const ZERO_COUNTS = { high: 0, medium: 0, low: 0, suggestions: 0 };

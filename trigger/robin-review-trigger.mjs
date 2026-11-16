@@ -34,19 +34,6 @@ export function robinApprovals(reviews) {
     });
 }
 
-/** After this many reviewed heads another round rarely finds anything new: step back and rethink the approach. */
-export const MAX_REVIEW_ROUNDS = 3;
-
-export function completedRounds(reviews) {
-    const heads = new Set();
-    for (const review of reviews) {
-        if (review.user?.login !== 'github-actions[bot]' || review.user?.type !== 'Bot') continue;
-        const marker = [...String(review.body ?? '').matchAll(outcome)].at(-1);
-        if (marker?.[1] === 'reviewed') heads.add(marker[2]);
-    }
-    return heads.size;
-}
-
 /** A push that merges or rebases onto main moves the head without the author editing the change: Robin reuses or reviews it. */
 export async function integratesMain(github, repo, before, head) {
     const {data: comparison} = await github.rest.repos.compareCommits({...repo, base: reviewHead(before), head, per_page: 1});
@@ -96,6 +83,5 @@ export async function prepareReview({github, context, expectedHead, prNumber}) {
             return {...target, eligible: false, reason: 'own-push'};
         return dispatch();
     }
-    if (completedRounds(reviews) >= MAX_REVIEW_ROUNDS) return {...target, eligible: false, reason: 'round-cap'};
     return {...target, reason: 'review-required'};
 }

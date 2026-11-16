@@ -72,3 +72,12 @@ export function parseOutcomeMarker(body: string): OutcomeMarker | null {
     };
   return {outcome: last[1] as ReviewOutcome, head: last[2], counts};
 }
+
+/** Stamped on Robin's single fix-only pass at the review cap, naming the reviewed head it started from. */
+export function fixPassMarker(since: string): string {
+  return `<!-- robin-fix-pass: since=${since} -->`;
+}
+
+export function hasFixPassMarker(body: string): boolean {
+  return /<!--\s*robin-fix-pass:\s*since=[0-9a-f]{40}\s*-->/.test(body);
+}

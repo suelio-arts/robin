@@ -47,6 +47,17 @@ export class GitUtils {
     return stdout;
   }
 
+  /** True only when `head` extends `ancestor` without merge commits. */
+  async isLinearDescendant(ancestor: string, head: string): Promise<boolean> {
+    try {
+      await exec("git", ["-C", this.workspace, "merge-base", "--is-ancestor", ancestor, head]);
+    } catch {
+      return false;
+    }
+    const {stdout} = await exec("git", ["-C", this.workspace, "rev-list", "--merges", `${ancestor}..${head}`], {encoding: "utf8"});
+    return stdout.trim() === "";
+  }
+
   async getFileContent(owner: string, repo: string, path: string, ref: string): Promise<string> {
     const key = `${owner}/${repo}@${ref}:${path}`;
     if (!this.contents.has(key)) this.contents.set(key, this.fetchFileContent(owner, repo, path, ref));

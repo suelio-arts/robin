@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {MAX_REVIEW_ROUNDS, completedRounds, integratesMain, eligiblePullRequest, robinApprovals, isReviewCommand, prepareReview, reviewHead, reviewNumber} from './robin-review-trigger.mjs';
+import {integratesMain, eligiblePullRequest, robinApprovals, isReviewCommand, prepareReview, reviewHead, reviewNumber} from './robin-review-trigger.mjs';
 
 const head = 'a'.repeat(40);
 const advanced = 'b'.repeat(40);
@@ -157,27 +157,17 @@ test('review-stage revalidation binds the earlier admitted snapshot', async () =
     assert.equal((await prepareReview({...admitted, prNumber: '7', expectedHead: head})).reason, 'review-required');
 });
 
-test('a dispatch stops at the round cap, counting only reviewed heads', async () => {
-    const heads = ['1', '2', '3'].map(c => c.repeat(40));
-    const reviewed = heads.map(sha => receipt('reviewed', sha));
-    assert.equal(completedRounds([...reviewed, receipt('reviewed', heads[0])]), 3);
-    assert.equal(completedRounds([receipt('skipped', heads[0]), receipt('incomplete', heads[1])]), 0);
-    assert.equal(completedRounds([{...receipt('reviewed', heads[0]), user: {login: 'someone', type: 'User'}}]), 0);
+test('admission leaves the round cap to the review pass', async () => {
     const {github, context, state} = fixture('workflow_dispatch');
-    state.reviews = reviewed.slice(0, MAX_REVIEW_ROUNDS - 1);
+    state.reviews = ['1', '2', '3', '4'].map(c => receipt('reviewed', c.repeat(40), 'COMMENTED'));
     assert.equal((await prepareReview({github, context})).reason, 'review-required');
-    state.reviews = reviewed;
-    const capped = await prepareReview({github, context});
-    assert.equal(capped.eligible, false);
-    assert.equal(capped.reason, 'round-cap');
 });
 
 test('quota failures remain re-requestable on the same head without using review rounds', async () => {
     const current = fixture('workflow_dispatch');
-    current.state.reviews = Array.from({length: MAX_REVIEW_ROUNDS + 1}, () => ({
+    current.state.reviews = Array.from({length: 4}, () => ({
         ...receipt('incomplete'), body: `codex subscription quota exhausted. Retry /robin after recovery.\n${receipt('incomplete').body}`,
     }));
-    assert.equal(completedRounds(current.state.reviews), 0);
     assert.equal((await prepareReview(current)).reason, 'review-required');
     const comment = fixture('issue_comment');
     comment.state.reviews = current.state.reviews;

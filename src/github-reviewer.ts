@@ -3,7 +3,7 @@ import * as core from "@actions/core";
 import { createHash } from "node:crypto";
 import { StructuredReview, ReviewFinding } from "./review-parser";
 import { patchId } from "./git-utils";
-import { OutcomeCounts, ZERO_COUNTS, appendOutcomeMarker, buildOutcomeMarker, parseOutcomeMarker } from "./outcome";
+import { OutcomeCounts, ZERO_COUNTS, appendOutcomeMarker, buildOutcomeMarker, fixPassMarker, parseOutcomeMarker } from "./outcome";
 
 /** Marker present in every Robin review body; used to recognize Robin's own reviews. */
 export const ROBIN_SIGNATURE = ":bow_and_arrow: Robin";
@@ -320,7 +320,8 @@ export class GitHubReviewer {
     findings: StructuredReview,
     requestChanges: boolean,
     cacheKey: string | undefined,
-    headSha: string
+    headSha: string,
+    fixPassSince?: string
   ): Promise<PostedReview> {
     core.info("Posting review to PR #" + pullNumber + "...");
     const files = await this.octokit.paginate(this.octokit.rest.pulls.listFiles, {
@@ -338,12 +339,13 @@ export class GitHubReviewer {
     const submit = async (comments: any[], postedFindings: Set<ReviewFinding>) => {
       const event = GitHubReviewer.resolveReviewEvent(
         findings.high.length > 0,
-        findings.high.every((finding) => postedFindings.has(finding)),
+        fixPassSince === undefined ? findings.high.every((finding) => postedFindings.has(finding)) : findings.high.length === 0,
         requestChanges
       );
       const body =
         this.buildReviewBody(findings, postedFindings) +
         (cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "") +
+        (fixPassSince === undefined ? "" : "\n\n" + fixPassMarker(fixPassSince)) +
         "\n\n" +
         buildOutcomeMarker("reviewed", headSha, counts);
       const { data } = await this.octokit.rest.pulls.createReview({

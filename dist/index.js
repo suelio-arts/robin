@@ -1020,6 +1020,44 @@ class GitUtils {
         });
         return stdout;
     }
+    /**
+     * The author's own change from `since` to `head`: the diffs of the
+     * first-parent commits that are not merges. A merge counts only when a clean
+     * automatic merge of its parents reproduces its tree exactly, so it brings
+     * nothing but the merged branch. Undefined when `head` does not extend
+     * `since` along its first parents or any merge was resolved by hand.
+     */
+    async authorDiff(since, head) {
+        const git = async (...args) => (await exec("git", ["-C", this.workspace, ...args], { encoding: "utf8", maxBuffer: 100 * 1024 * 1024 })).stdout;
+        let chain;
+        try {
+            chain = (await git("rev-list", "--first-parent", "--reverse", "--parents", `${since}..${head}`)).trim().split("\n").filter(Boolean).map((line) => line.split(" "));
+        }
+        catch {
+            return undefined;
+        }
+        if (chain.length === 0 || chain[0][1] !== since || chain[chain.length - 1][0] !== head)
+            return undefined;
+        const diffs = [];
+        for (const [commit, parent, merged, ...rest] of chain) {
+            if (rest.length > 0)
+                return undefined;
+            if (merged !== undefined) {
+                let tree;
+                try {
+                    tree = (await git("merge-tree", "--write-tree", parent, merged)).split("\n")[0];
+                }
+                catch {
+                    return undefined;
+                }
+                if (tree !== (await git("rev-parse", `${commit}^{tree}`)).trim())
+                    return undefined;
+                continue;
+            }
+            diffs.push(await git("diff", "--no-ext-diff", "--no-textconv", "--no-color", parent, commit, "--"));
+        }
+        return diffs.join("");
+    }
     async getFileContent(owner, repo, path, ref) {
         const key = `${owner}/${repo}@${ref}:${path}`;
         if (!this.contents.has(key))
@@ -1369,7 +1407,7 @@ class GitHubReviewer {
         await this.dismissStaleRobinReviews(owner, repo, pullNumber, review.id, event);
         return { id: review.id, url: review.html_url, verdict: reviewVerdict(event), counts };
     }
-    async postReview(owner, repo, pullNumber, findings, requestChanges, cacheKey, headSha) {
+    async postReview(owner, repo, pullNumber, findings, requestChanges, cacheKey, headSha, fixPassSince) {
         core.info("Posting review to PR #" + pullNumber + "...");
         const files = await this.octokit.paginate(this.octokit.rest.pulls.listFiles, {
             owner,
@@ -1384,9 +1422,10 @@ class GitHubReviewer {
             suggestions: findings.suggestions.length,
         };
         const submit = async (comments, postedFindings) => {
-            const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, findings.high.every((finding) => postedFindings.has(finding)), requestChanges);
+            const event = GitHubReviewer.resolveReviewEvent(findings.high.length > 0, fixPassSince === undefined ? findings.high.every((finding) => postedFindings.has(finding)) : findings.high.length === 0, requestChanges);
             const body = this.buildReviewBody(findings, postedFindings) +
                 (cacheKey ? "\n\n" + cacheMarker(cacheKey, event) : "") +
+                (fixPassSince === undefined ? "" : "\n\n" + (0, outcome_1.fixPassMarker)(fixPassSince)) +
                 "\n\n" +
                 (0, outcome_1.buildOutcomeMarker)("reviewed", headSha, counts);
             const { data } = await this.octokit.rest.pulls.createReview({
@@ -2312,6 +2351,7 @@ const events_1 = __nccwpck_require__(6420);
 const review_run_1 = __nccwpck_require__(7917);
 const review_core_1 = __nccwpck_require__(5105);
 const review_timing_1 = __nccwpck_require__(4220);
+const review_pass_1 = __nccwpck_require__(5839);
 const review_settings_1 = __nccwpck_require__(5111);
 async function run() {
     let octokit;
@@ -2516,6 +2556,7 @@ async function run() {
         // Placed before the LLMClient is constructed so a hit makes a model call
         // structurally impossible. A miss falls through to the untouched path.
         let cacheKey;
+        let fixPass;
         if (command === "review") {
             const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
                 owner,
@@ -2545,6 +2586,23 @@ async function run() {
                 core.info("Done.");
                 return;
             }
+            const pass = await (0, review_pass_1.reviewPass)(priorReviews, headSha, (since, head) => gitUtils.authorDiff(since, head), () => octokit.paginate(octokit.rest.pulls.listReviewComments, { owner, repo, pull_number: reviewTarget.pullNumber, per_page: 100 }));
+            if (pass.kind === "capped") {
+                core.info(`Review cap reached: ${pass.reason}`);
+                await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody(pass.reason));
+                onJobCancelled = undefined;
+                return;
+            }
+            if (pass.kind === "fix")
+                fixPass = pass;
+        }
+        const passDiff = fixPass
+            ? (0, diff_filter_1.filterDiff)(fixPass.diff, repoConfig.skipPaths || []).filtered
+            : reviewDiff;
+        if (!passDiff.trim()) {
+            await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody("The change since Robin's last review touches only skipped paths."));
+            onJobCancelled = undefined;
+            return;
         }
         const createLlm = (seat, effort) => new llm_client_1.LLMClient(baseUrl, apiKey, seat, maxOutputTokens, llmTimeoutMs, undefined, async (detail) => {
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildProgressStatusBody(detail, statusCommand, statusModel));
@@ -2569,7 +2627,8 @@ async function run() {
             // Full review parsed and posted as a review
             const timings = new review_timing_1.ReviewTimings();
             const { findings, evidenceRequests, usedFollowups } = await (0, review_core_1.runReviewCore)({
-                git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: review_core_1.PIECE_CONCURRENCY, reviewInstructions,
+                git: gitUtils, owner, repo, baseRef: fixPass?.since ?? baseRef, headRef, reviewDiff: passDiff, maxDiffSize, pieceConcurrency: review_core_1.PIECE_CONCURRENCY,
+                reviewInstructions: fixPass ? [reviewInstructions, (0, review_pass_1.fixPassInstructions)(fixPass)].filter(Boolean).join("\n\n") : reviewInstructions,
                 jsonResponseMode: useJsonMode, llm, council, timings,
                 loadPriorFindings: () => loadPriorRobinFindings(octokit, owner, repo, prNumber),
             });
@@ -2584,7 +2643,7 @@ async function run() {
             ].join("\n");
             core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
             const reviewer = new github_reviewer_1.GitHubReviewer(octokit, maxComments);
-            const posted = await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, cacheKey, headSha);
+            const posted = await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, fixPass ? undefined : cacheKey, headSha, fixPass?.since);
             (0, review_run_1.setPostedOutputs)("reviewed", headSha, posted);
             await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("review", findings));
             if (findings.high.length > 0 && failOnHigh) {
@@ -2717,6 +2776,15 @@ function buildSkippedFilterStatusBody(removedFiles) {
         `Skipped: ${preview}${suffix}`,
         "",
         "Add `skip-paths` in `.github/robin.yml` if that's not what you expected.",
+    ].join("\n");
+}
+function buildCappedStatusBody(reason) {
+    return [
+        "## " + github_reviewer_1.ROBIN_SIGNATURE,
+        "",
+        `:stop_sign: I have reviewed this pull request as many times as I will. ${reason}`,
+        "",
+        "A maintainer's approval is needed to merge.",
     ].join("\n");
 }
 function buildSkippedWhitespaceStatusBody() {
@@ -2956,6 +3024,8 @@ exports.OUTCOME_MARKER_PATTERN = exports.ZERO_COUNTS = void 0;
 exports.buildOutcomeMarker = buildOutcomeMarker;
 exports.appendOutcomeMarker = appendOutcomeMarker;
 exports.parseOutcomeMarker = parseOutcomeMarker;
+exports.fixPassMarker = fixPassMarker;
+exports.hasFixPassMarker = hasFixPassMarker;
 exports.ZERO_COUNTS = { high: 0, medium: 0, low: 0, suggestions: 0 };
 /** Shared with `bin/robin-pr.js`. Global: a body may carry several markers. */
 exports.OUTCOME_MARKER_PATTERN = /<!--\s*robin-outcome:\s*v1\s+(reviewed|reused|skipped|incomplete)\s+head=([0-9a-f]{40})(?:\s+high=(\d+)\s+medium=(\d+)\s+low=(\d+)\s+suggestions=(\d+))?\s*-->/g;
@@ -2988,6 +3058,13 @@ function parseOutcomeMarker(body) {
             suggestions: Number(last[6]),
         };
     return { outcome: last[1], head: last[2], counts };
+}
+/** Stamped on Robin's single fix-only pass at the review cap, naming the reviewed head it started from. */
+function fixPassMarker(since) {
+    return `<!-- robin-fix-pass: since=${since} -->`;
+}
+function hasFixPassMarker(body) {
+    return /<!--\s*robin-fix-pass:\s*since=[0-9a-f]{40}\s*-->/.test(body);
 }
 //# sourceMappingURL=outcome.js.map
 
@@ -4169,6 +4246,69 @@ class ReviewParser {
 }
 exports.ReviewParser = ReviewParser;
 //# sourceMappingURL=review-parser.js.map
+
+/***/ }),
+
+/***/ 5839:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.MAX_REVIEW_ROUNDS = void 0;
+exports.reviewPass = reviewPass;
+exports.fixPassInstructions = fixPassInstructions;
+const github_reviewer_1 = __nccwpck_require__(268);
+const outcome_1 = __nccwpck_require__(2513);
+/** After this many reviewed heads Robin stops reviewing; one fix-only pass may still confirm the fix for its last High findings. */
+exports.MAX_REVIEW_ROUNDS = 3;
+const isRobin = (review) => review.user?.login === "github-actions[bot]" && review.user?.type === "Bot" && (review.body || "").includes(github_reviewer_1.ROBIN_SIGNATURE);
+function bodyOnlyHighs(body) {
+    const section = body.split("### :page_facing_up: Findings Not Posted Inline", 2)[1]?.split("\n---", 1)[0] ?? "";
+    return section.split("\n\n").map((entry) => entry.trim()).filter((entry) => entry.startsWith(":rotating_light:"));
+}
+/**
+ * The one decision on how far Robin reviews this head. Below the round cap it
+ * reviews the whole change. At the cap it allows a single fix-only pass over
+ * the author's own commits since its last reviewed head, and only when merges
+ * among them are clean automatic merges and its last review raised a High
+ * finding to fix. Anything else is capped: Robin posts nothing and a
+ * maintainer approves.
+ */
+async function reviewPass(reviews, head, authorDiff, loadComments) {
+    const reviewed = reviews.filter(isRobin).flatMap((review) => {
+        const marker = (0, outcome_1.parseOutcomeMarker)(review.body || "");
+        return marker?.outcome === "reviewed" ? [{ review, head: marker.head }] : [];
+    });
+    if (new Set(reviewed.map((entry) => entry.head)).size < exports.MAX_REVIEW_ROUNDS)
+        return { kind: "full" };
+    if (reviews.some((review) => isRobin(review) && (0, outcome_1.hasFixPassMarker)(review.body || "")))
+        return { kind: "capped", reason: "Robin already ran its fix-only pass on this pull request." };
+    const last = reviewed[reviewed.length - 1];
+    if (last.head === head)
+        return { kind: "capped", reason: "Nothing changed since Robin's last review." };
+    const diff = await authorDiff(last.head, head);
+    if (diff === undefined)
+        return { kind: "capped", reason: `The change since ${last.head.slice(0, 7)} rewrites history or resolves a merge by hand, so it is more than a fix.` };
+    if (!diff.trim())
+        return { kind: "capped", reason: "Only merges changed since Robin's last review." };
+    const threads = (await loadComments())
+        .filter((comment) => comment.pull_request_review_id === last.review.id && /^\*\*Robin\*\*[^\n]*:rotating_light: HIGH/.test(comment.body || ""))
+        .map((comment) => `${comment.path}:${comment.line ?? comment.original_line ?? 0}: ${comment.body}`);
+    const highs = [...threads, ...bodyOnlyHighs(last.review.body || "")];
+    if (highs.length === 0)
+        return { kind: "capped", reason: "Robin's last review raised no High finding to fix." };
+    return { kind: "fix", since: last.head, highs, diff };
+}
+function fixPassInstructions(pass) {
+    return [
+        `FIX-ONLY SECOND PASS. You have reviewed this pull request ${exports.MAX_REVIEW_ROUNDS} times. The diff is only the author's commits since your last reviewed head ${pass.since}; clean merges of other branches are left out.`,
+        "Your last review raised these High findings:",
+        ...pass.highs.map((high, index) => `${index + 1}. ${high}`),
+        "Confirm or reject the fix. Report one HIGH finding, anchored to a changed line, for each listed finding this diff does not fix, and for each change in this diff that is not needed to fix them. Report nothing else.",
+    ].join("\n");
+}
+//# sourceMappingURL=review-pass.js.map
 
 /***/ }),
 

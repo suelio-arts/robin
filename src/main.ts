@@ -27,6 +27,7 @@ import {
 } from "./review-run";
 import { PIECE_CONCURRENCY, reviewPieces, runReviewCore, seatCalls } from "./review-core";
 import { ReviewTimings } from "./review-timing";
+import { fixPassInstructions, reviewPass } from "./review-pass";
 import { loadRepoConfig, loadReviewInstructions } from "./review-settings";
 
 async function run(): Promise<void> {
@@ -293,6 +294,7 @@ async function run(): Promise<void> {
     // Placed before the LLMClient is constructed so a hit makes a model call
     // structurally impossible. A miss falls through to the untouched path.
     let cacheKey: string | undefined;
+    let fixPass: { since: string; highs: string[]; diff: string } | undefined;
     if (command === "review") {
       const priorReviews = await octokit.paginate(octokit.rest.pulls.listReviews, {
         owner,
@@ -329,6 +331,23 @@ async function run(): Promise<void> {
         core.info("Done.");
         return;
       }
+      const pass = await reviewPass(priorReviews, headSha, (since, head) => gitUtils.authorDiff(since, head),
+        () => octokit!.paginate(octokit!.rest.pulls.listReviewComments, {owner, repo, pull_number: reviewTarget.pullNumber, per_page: 100}));
+      if (pass.kind === "capped") {
+        core.info(`Review cap reached: ${pass.reason}`);
+        await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody(pass.reason));
+        onJobCancelled = undefined;
+        return;
+      }
+      if (pass.kind === "fix") fixPass = pass;
+    }
+    const passDiff = fixPass
+      ? filterDiff(fixPass.diff, repoConfig.skipPaths || []).filtered
+      : reviewDiff;
+    if (!passDiff.trim()) {
+      await updateStatusComment(octokit, owner, repo, statusCommentId, buildCappedStatusBody("The change since Robin's last review touches only skipped paths."));
+      onJobCancelled = undefined;
+      return;
     }
 
     const createLlm = (seat: string, effort: typeof reasoningEffortInput) => new LLMClient(
@@ -371,7 +390,8 @@ async function run(): Promise<void> {
       // Full review parsed and posted as a review
       const timings = new ReviewTimings();
       const {findings, evidenceRequests, usedFollowups} = await runReviewCore({
-        git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: PIECE_CONCURRENCY, reviewInstructions,
+        git: gitUtils, owner, repo, baseRef: fixPass?.since ?? baseRef, headRef, reviewDiff: passDiff, maxDiffSize, pieceConcurrency: PIECE_CONCURRENCY,
+        reviewInstructions: fixPass ? [reviewInstructions, fixPassInstructions(fixPass)].filter(Boolean).join("\n\n") : reviewInstructions,
         jsonResponseMode: useJsonMode, llm, council, timings,
         loadPriorFindings: () => loadPriorRobinFindings(octokit!, owner, repo, prNumber!),
       });
@@ -388,7 +408,7 @@ async function run(): Promise<void> {
       core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
 
       const reviewer = new GitHubReviewer(octokit as any, maxComments);
-      const posted = await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, cacheKey, headSha);
+      const posted = await reviewer.postReview(owner, repo, prNumber, findings, requestChanges, fixPass ? undefined : cacheKey, headSha, fixPass?.since);
       setPostedOutputs("reviewed", headSha, posted);
       await updateStatusComment(octokit, owner, repo, statusCommentId, buildCompletedStatusBody("review", findings));
 
@@ -545,6 +565,16 @@ function buildSkippedFilterStatusBody(removedFiles: string[]): string {
     `Skipped: ${preview}${suffix}`,
     "",
     "Add `skip-paths` in `.github/robin.yml` if that's not what you expected.",
+  ].join("\n");
+}
+
+function buildCappedStatusBody(reason: string): string {
+  return [
+    "## " + ROBIN_SIGNATURE,
+    "",
+    `:stop_sign: I have reviewed this pull request as many times as I will. ${reason}`,
+    "",
+    "A maintainer's approval is needed to merge.",
   ].join("\n");
 }
 

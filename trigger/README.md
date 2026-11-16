@@ -13,7 +13,7 @@ standing Robin approval (`synchronize`; a plain push of the author's own commits
 to an approved PR does not) and write-authorized `/robin` comments dispatch
 `robin.yml` on main. A head is covered when Robin's approval of it stands. A dispatched review whose change and prompts match
 an earlier review on the PR reuses it without a model call. Main dispatches
-revalidate the live head, bot receipts and three-head cap before admission.
+revalidate the live head and bot receipts before admission; the action applies the three-head review cap and its one fix-only pass.
 Forks, drafts, closed PRs and moved heads are skipped. Permission lookup failures
 fail closed. This action does not check out or execute PR code or invoke models.
 The runner owner remains responsible for repository and workflow access policy.

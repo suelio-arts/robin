@@ -43,7 +43,7 @@ export class GitHubReviewer {
           "",
           `\`${message}\``,
           "",
-          "Re-run Robin after the transient failure is resolved.",
+          "Comment `/robin` to retry.",
         ].join("\n"),
         "incomplete",
         headSha,

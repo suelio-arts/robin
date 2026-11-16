@@ -1171,7 +1171,7 @@ class GitHubReviewer {
                 "",
                 `\`${message}\``,
                 "",
-                "Re-run Robin after the transient failure is resolved.",
+                "Comment `/robin` to retry.",
             ].join("\n"), "incomplete", headSha, outcome_1.ZERO_COUNTS),
         });
         return { id: review.id, url: review.html_url, counts: outcome_1.ZERO_COUNTS };
@@ -1524,7 +1524,10 @@ exports.LOCAL_AGENT_COMPLETION_CONTRACT = [
 function runFile(file, args, options) {
     return new Promise((resolve, reject) => {
         (0, child_process_1.execFile)(file, args, options, (error, stdout, stderr) => error
-            ? reject((0, subscription_limit_1.subscriptionLimitFromStderr)(String(stderr)) || error)
+            ? reject((0, subscription_limit_1.subscriptionLimitFromStderr)(String(stderr)) ||
+                (file === DARMA && /: timed out\s*$/.test(String(stderr))
+                    ? new Error(`Subscription model call timed out after ${args[args.indexOf("--timeout") + 1]} seconds.`)
+                    : error))
             : resolve(String(stdout)));
     });
 }

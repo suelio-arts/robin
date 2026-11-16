@@ -6,6 +6,7 @@ import { dirname, join } from "path";
 jest.mock("child_process", () => ({ execFile: jest.fn() }));
 
 import { LLMClient, LOCAL_AGENT_COMPLETION_CONTRACT } from "./llm-client";
+import { statusLine } from "./status";
 import { SubscriptionLimitError } from "./subscription-limit";
 
 type Callback = (error: Error | null, stdout: string, stderr: string) => void;
@@ -47,6 +48,19 @@ describe("LLMClient", () => {
     await expect(result).rejects.toThrow("re-request with /robin");
     expect(mock).toHaveBeenCalledTimes(1);
     expect(client.calls).toEqual([expect.objectContaining({failed: true, inFlight: 1})]);
+  });
+
+  it("reports the actual subscription deadline without command paths or prompt data", async () => {
+    mock.mockReset();
+    mock.mockImplementation((_file, _args, _options, callback: Callback) =>
+      callback(new Error("Command failed: private prompt path"), "",
+        "darma: codex run failed; logs in /private/run: timed out\n"));
+    const client = new LLMClient("rolly-agent", "", "sol-6.1-medium-subscription", undefined, 180000);
+    await expect(client.chatCompletion("system", "user")).rejects.toThrow(
+      "Subscription model call timed out after 180 seconds.");
+    expect(statusLine.failed("a".repeat(40), "Subscription model call timed out after 180 seconds.")).toContain("180 seconds. Comment `/robin` to retry.");
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(existsSync(mock.mock.calls[0][2].env.TMPDIR)).toBe(false);
   });
 
   const claudeEvents = [

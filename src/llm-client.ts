@@ -60,7 +60,10 @@ export const LOCAL_AGENT_COMPLETION_CONTRACT = [
 function runFile(file: string, args: string[], options: { timeout: number; maxBuffer: number; env?: NodeJS.ProcessEnv }): Promise<string> {
   return new Promise((resolve, reject) => {
     execFile(file, args, options, (error, stdout, stderr) => error
-      ? reject(subscriptionLimitFromStderr(String(stderr)) || error)
+      ? reject(subscriptionLimitFromStderr(String(stderr)) ||
+        (file === DARMA && /: timed out\s*$/.test(String(stderr))
+          ? new Error(`Subscription model call timed out after ${args[args.indexOf("--timeout") + 1]} seconds.`)
+          : error))
       : resolve(String(stdout)));
   });
 }

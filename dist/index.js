@@ -974,13 +974,35 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.GitUtils = void 0;
+exports.GitUtils = exports.MAX_CONCURRENT_WORKSPACE_GREPS = void 0;
 const core = __importStar(__nccwpck_require__(7484));
 const node_child_process_1 = __nccwpck_require__(1421);
 const node_fs_1 = __nccwpck_require__(3024);
 const node_path_1 = __nccwpck_require__(6760);
 const node_util_1 = __nccwpck_require__(7975);
 const exec = (0, node_util_1.promisify)(node_child_process_1.execFile);
+// Each `git grep` over a large checkout can take hundreds of megabytes. Model
+// tool calls fan out searches concurrently, so run only a couple at a time.
+exports.MAX_CONCURRENT_WORKSPACE_GREPS = 2;
+let grepsInFlight = 0;
+const grepWaiters = [];
+async function withGrepSlot(run) {
+    if (grepsInFlight < exports.MAX_CONCURRENT_WORKSPACE_GREPS)
+        grepsInFlight++;
+    else
+        await new Promise((resolve) => grepWaiters.push(resolve));
+    try {
+        return await run();
+    }
+    finally {
+        // Hand the slot straight to the next waiter so the count never drifts.
+        const next = grepWaiters.shift();
+        if (next)
+            next();
+        else
+            grepsInFlight--;
+    }
+}
 class GitUtils {
     octokit;
     contents = new Map();
@@ -1067,10 +1089,10 @@ class GitUtils {
     }
     async searchWorkspace(query) {
         try {
-            const { stdout } = await exec("git", ["-C", this.workspace, "grep", "-l", "-z", "-F", "-e", query, "HEAD", "--"], {
+            const { stdout } = await withGrepSlot(() => exec("git", ["-C", this.workspace, "grep", "-l", "-z", "-F", "-e", query, "HEAD", "--"], {
                 encoding: "utf8",
                 maxBuffer: 10 * 1024 * 1024,
-            });
+            }));
             return stdout.split("\0").filter(Boolean).map((path) => path.replace(/^HEAD:/, ""));
         }
         catch (error) {

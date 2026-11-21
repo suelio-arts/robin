@@ -2,8 +2,26 @@ import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { GitUtils } from "./git-utils";
+import { GitUtils, MAX_CONCURRENT_WORKSPACE_GREPS } from "./git-utils";
 import { buildFileContext } from "./review-context";
+
+// Everything but `git grep` still runs for real; the grep hook lets a test see
+// how many workspace searches are actually in flight at once.
+jest.mock("node:child_process", () => {
+  const actual = jest.requireActual("node:child_process");
+  const {promisify} = jest.requireActual("node:util");
+  const grep = {impl: undefined as undefined | ((...args: any[]) => void)};
+  const execFile: any = (...args: any[]) => {
+    const argv = args[1] as string[] | undefined;
+    return argv?.[2] === "grep" && grep.impl ? grep.impl(...args) : actual.execFile(...args);
+  };
+  // Keep the {stdout, stderr} resolution `promisify(execFile)` normally has.
+  execFile[promisify.custom] = (...args: any[]) => new Promise((resolve, reject) => {
+    execFile(...args, (error: any, stdout: string, stderr: string) => error ? reject(error) : resolve({stdout, stderr}));
+  });
+  return {...actual, execFile, grepHook: grep};
+});
+const grepHook = (jest.requireMock("node:child_process") as {grepHook: {impl?: (...args: any[]) => void}}).grepHook;
 
 describe("GitUtils immutable local context", () => {
   let fixture: string;
@@ -115,6 +133,34 @@ describe("GitUtils tree paths", () => {
       git.searchPaths("o", "r", query),
       git.searchPaths("o", "r", query),
     ])).resolves.toEqual([["src/git-utils.test.ts"], ["src/git-utils.test.ts"]]);
+  });
+
+  it("limits concurrent workspace greps and returns each query's own result", async () => {
+    const git = new GitUtils({} as never, process.cwd());
+    let inFlight = 0;
+    let peak = 0;
+    let grepCalls = 0;
+    const queries = ["one", "two", "three", "four", "five", "six"];
+    grepHook.impl = (_file: any, args: string[], _options: any, callback: any) => {
+      const query = args[args.indexOf("-e") + 1];
+      inFlight++;
+      grepCalls++;
+      peak = Math.max(peak, inFlight);
+      setTimeout(() => {
+        inFlight--;
+        callback(null, `HEAD:${query}.txt\0HEAD:${query}-b.txt\0`, "");
+      }, 5);
+    };
+
+    try {
+      const results = await Promise.all(queries.map((query) => git.searchPaths("o", "r", query)));
+      expect(MAX_CONCURRENT_WORKSPACE_GREPS).toBe(2);
+      expect(peak).toBe(2);
+      expect(grepCalls).toBe(queries.length);
+      expect(results).toEqual(queries.map((query) => [`${query}.txt`, `${query}-b.txt`]));
+    } finally {
+      grepHook.impl = undefined;
+    }
   });
 
   it("coalesces repository file reads", async () => {

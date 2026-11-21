@@ -7,6 +7,26 @@ import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 
+// Each `git grep` over a large checkout can take hundreds of megabytes. Model
+// tool calls fan out searches concurrently, so run only a couple at a time.
+export const MAX_CONCURRENT_WORKSPACE_GREPS = 2;
+
+let grepsInFlight = 0;
+const grepWaiters: Array<() => void> = [];
+
+async function withGrepSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (grepsInFlight < MAX_CONCURRENT_WORKSPACE_GREPS) grepsInFlight++;
+  else await new Promise<void>((resolve) => grepWaiters.push(resolve));
+  try {
+    return await run();
+  } finally {
+    // Hand the slot straight to the next waiter so the count never drifts.
+    const next = grepWaiters.shift();
+    if (next) next();
+    else grepsInFlight--;
+  }
+}
+
 export class GitUtils {
   private octokit: Octokit;
   private contents = new Map<string, Promise<string>>();
@@ -95,10 +115,10 @@ export class GitUtils {
 
   private async searchWorkspace(query: string): Promise<string[]> {
     try {
-      const {stdout} = await exec("git", ["-C", this.workspace, "grep", "-l", "-z", "-F", "-e", query, "HEAD", "--"], {
+      const {stdout} = await withGrepSlot(() => exec("git", ["-C", this.workspace, "grep", "-l", "-z", "-F", "-e", query, "HEAD", "--"], {
         encoding: "utf8",
         maxBuffer: 10 * 1024 * 1024,
-      });
+      }));
       return stdout.split("\0").filter(Boolean).map((path) => path.replace(/^HEAD:/, ""));
     } catch (error) {
       if ((error as {code?: number}).code === 1) return [];

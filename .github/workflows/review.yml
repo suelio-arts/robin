@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: ""
+      fallback-model:
+        description: "Optional seat that replaces model for the rest of the review when the primary seat hits a subscription quota or rate limit."
+        required: false
+        type: string
+        default: ""
       council-model:
         description: "Optional second model family, on the same base URL, for the adversarial pass and a second vote on every finding."
         required: false
@@ -146,6 +151,7 @@ jobs:
           llm-user: ${{ inputs.llm-user }}
           llm-metadata: ${{ inputs.llm-metadata }}
           llm-usage-jsonl: ${{ inputs.llm-usage-jsonl }}
+          fallback-model: ${{ inputs.fallback-model }}
           council-model: ${{ inputs.council-model }}
           council-fallback-model: ${{ inputs.council-fallback-model }}
           reasoning-effort: ${{ inputs.reasoning-effort }}

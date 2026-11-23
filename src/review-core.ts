@@ -2,6 +2,7 @@ import * as core from "@actions/core";
 import type { LLMClient } from "./llm-client";
 import { SubscriptionLimitError } from "./subscription-limit";
 import { type CouncilSeat, onCouncilSeat } from "./council";
+import type { ChatSeat, PrimarySeat } from "./primary-seat";
 import type { GitUtils } from "./git-utils";
 import { ReviewFinding, ReviewParser, StructuredReview } from "./review-parser";
 import { shouldRetryStructuredReview } from "./review-retry";
@@ -31,7 +32,7 @@ export interface ReviewCoreInput {
   pieceConcurrency: number;
   reviewInstructions: string;
   jsonResponseMode: boolean;
-  llm: LLMClient;
+  llm: ChatSeat;
   council?: CouncilSeat;
   loadPriorFindings: () => Promise<string>;
   timings: ReviewTimings;
@@ -112,7 +113,7 @@ export async function runReviewCore(input: ReviewCoreInput): Promise<ReviewCoreR
 }
 
 async function runReview(
-  llm: LLMClient,
+  llm: ChatSeat,
   diff: string,
   reviewInstructions: string,
   jsonResponseMode: boolean,
@@ -129,7 +130,7 @@ async function runReview(
 }
 
 async function discoverPiece(
-  llm: LLMClient,
+  llm: ChatSeat,
   diff: string,
   context: string,
   reviewInstructions: string,
@@ -140,7 +141,7 @@ async function discoverPiece(
   piece: number,
   council?: CouncilSeat
 ): Promise<{review: StructuredReview; evidenceRequests: number; followedUp: boolean}> {
-  const completeWith = (seat: LLMClient) => async (instructions: string) => {
+  const completeWith = (seat: ChatSeat) => async (instructions: string) => {
     const response = await runReview(seat, diff, reviewInstructions, jsonResponseMode, context, instructions);
     const parsed = ReviewParser.parseDetailed(response.content);
     if (!shouldRetryStructuredReview(parsed.findings, parsed.usedJson)) return parsed.findings;
@@ -164,7 +165,7 @@ async function discoverPiece(
 }
 
 async function runFinalGate(
-  llm: LLMClient,
+  llm: ChatSeat,
   reviews: StructuredReview[],
   diff: string,
   contractEvidence: string,
@@ -272,10 +273,20 @@ function buildReviewInput(diff: string, context = ""): string {
   return input.join("\n");
 }
 
-/** Every seat that took calls, including a council seat replaced by its fallback. */
-export function seatCalls(llm: LLMClient, model: string, council?: CouncilSeat): Array<{model: string; calls: CallSpan[]}> {
+/** Every seat that took calls, including any primary or council seat replaced by its fallback. */
+export function seatCalls(
+  llm: Pick<LLMClient, "calls"> | PrimarySeat,
+  model: string,
+  council?: CouncilSeat
+): Array<{model: string; calls: CallSpan[]}> {
+  const primarySeats = "llm" in llm
+    ? [
+        ...(llm.substitutedFor ? [{model: llm.substitutedFor.model, calls: llm.substitutedFor.llm.calls}] : []),
+        {model: llm.model, calls: llm.llm.calls},
+      ]
+    : [{model, calls: llm.calls}];
   return [
-    {model, calls: llm.calls},
+    ...primarySeats,
     ...(council?.substitutedFor ? [{model: council.substitutedFor.model, calls: council.substitutedFor.llm.calls}] : []),
     ...(council ? [{model: council.model, calls: council.llm.calls}] : []),
   ];

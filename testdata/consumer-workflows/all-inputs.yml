@@ -23,6 +23,7 @@ jobs:
       llm-user: "fixture-review"
       llm-metadata: '{"feature":"review"}'
       llm-usage-jsonl: "receipts.jsonl"
+      fallback-model: deepseek-v4.1-flash-deploy
       council-model: opus-5-5-medium-subscription
       council-fallback-model: deepseek-v4.1-flash-deploy
       reasoning-effort: low

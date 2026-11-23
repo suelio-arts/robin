@@ -29,7 +29,7 @@ on:
         type: string
         default: ""
       fallback-model:
-        description: "Optional seat that replaces model for the rest of the review when the primary seat hits a subscription quota or rate limit."
+        description: "Optional seat or comma/newline-separated ordered chain of seats that replace model for the rest of the review when a seat hits a subscription quota or rate limit."
         required: false
         type: string
         default: ""

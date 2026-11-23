@@ -75,10 +75,12 @@ describe("LLMClient", () => {
       {inputTokens: 120, cachedInputTokens: 90, outputTokens: 5, reasoningOutputTokens: 0, durationMs: 1500}],
     ["sol-6.1-medium-subscription", "codex", "codex", "gpt-6.1-sol", "medium", codexEvents,
       {inputTokens: 100, cachedInputTokens: 40, outputTokens: 20, reasoningOutputTokens: 5, durationMs: 1500}],
+    ["luna-6-personal-high-subscription", "codex-personal", "codex", "gpt-6-luna", "high", codexEvents,
+      {inputTokens: 100, cachedInputTokens: 40, outputTokens: 20, reasoningOutputTokens: 5, durationMs: 1500}],
     ["gemini-4-carbon-medium-subscription", "antigravity", "antigravity", "gemini-4-carbon", "medium", undefined, undefined],
   ])("runs %s through darma t3 run on the T3 %s account", async (model, instance, provider, slug, effort, events, usage) => {
     const provenance = {provider, auth: "subscription", model: slug, effort};
-    const runs = fakeDarma({session: "call-1", duration_seconds: 1.5, ...provenance}, events);
+    const runs = fakeDarma({session: "call-1", instance, duration_seconds: 1.5, ...provenance}, events);
     const client = new LLMClient("rolly-agent", "", model);
     const response = await client.chatCompletion("system", "untrusted PR evidence");
     expect(response).toEqual({content: "clean", model, callId: "call-1", provenance, ...(usage ? {usage} : {})});
@@ -86,7 +88,7 @@ describe("LLMClient", () => {
     const [file, args, options] = mock.mock.calls[0];
     expect(file).toBe("/Users/rolly/.local/bin/darma");
     const root = options.env.TMPDIR as string;
-    expect(args).toEqual(["t3", "run", "--root", "/Users/rolly/.t3", "--instance", instance, "--model", slug,
+    expect(args).toEqual(["t3", "run", "--instance", instance, "--model", slug,
       "--effort", effort, "--prompt", join(root, "prompt.md"), "--workdir", join(root, "context"), "--timeout", expect.stringMatching(/^\d+$/)]);
     expect(options.env).toEqual({HOME: "/Users/rolly", PATH: "/Users/rolly/.local/bin:/usr/bin:/bin", TMPDIR: root});
     expect(dirname(runs[0])).toBe(root);
@@ -94,7 +96,7 @@ describe("LLMClient", () => {
     expect(client.getMetrics().calls).toBe(1);
   });
 
-  it("rejects a darma receipt for another seat or auth route without falling back", async () => {
+  it("rejects a darma receipt for another seat, instance, or auth route without falling back", async () => {
     for (const meta of [
       {session: "s", provider: "antigravity", auth: "api", model: "gemini-4-carbon", effort: "medium"},
       {session: "s", provider: "antigravity", auth: "subscription", model: "gemini-4-carbon", effort: "high"},
@@ -105,6 +107,9 @@ describe("LLMClient", () => {
         .rejects.toThrow("Invalid subscription completion receipt");
       expect(mock).toHaveBeenCalledTimes(1);
     }
+    fakeDarma({session: "s", instance: "codex", provider: "codex", auth: "subscription", model: "gpt-6-luna", effort: "high"}, codexEvents);
+    await expect(new LLMClient("rolly-agent", "", "luna-6-personal-high-subscription").chatCompletion("system", "user"))
+      .rejects.toThrow("Invalid subscription completion receipt");
   });
 
   it("runs the DeepSeek fallback seat on the Deploy API with an API-billed receipt", async () => {
@@ -147,7 +152,7 @@ describe("LLMClient", () => {
 
 
   it("accepts only known subscription families at low, medium or high effort", () => {
-    for (const family of ["sol-6.1", "luna-6", "opus-5-5", "sonnet-5-5", "gemini-4-carbon"]) {
+    for (const family of ["sol-6.1", "luna-6", "luna-6-personal", "opus-5-5", "sonnet-5-5", "gemini-4-carbon"]) {
       for (const effort of ["low", "medium", "high"]) {
         expect(() => new LLMClient("rolly-agent", "", `${family}-${effort}-subscription`)).not.toThrow();
       }

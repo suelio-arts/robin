@@ -281,7 +281,7 @@ export function seatCalls(
 ): Array<{model: string; calls: CallSpan[]}> {
   const primarySeats = "llm" in llm
     ? [
-        ...(llm.substitutedFor ? [{model: llm.substitutedFor.model, calls: llm.substitutedFor.llm.calls}] : []),
+        ...llm.replaced.map((seat) => ({model: seat.model, calls: seat.llm.calls})),
         {model: llm.model, calls: llm.llm.calls},
       ]
     : [{model, calls: llm.calls}];

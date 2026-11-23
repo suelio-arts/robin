@@ -29,7 +29,7 @@ inputs:
     description: "Provider model name (for example gpt-6-luna on the OpenAI API), or a subscription seat such as sol-6.1-low-subscription or opus-5-5-low-subscription with rolly-agent (run through darma t3 run)."
     required: true
   fallback-model:
-    description: "Optional seat that replaces model for the rest of the review when the primary seat hits a subscription quota or rate limit, such as deepseek-v4.1-flash-deploy with rolly-agent. The receipt marks the substitution."
+    description: "Optional seat or comma/newline-separated ordered chain of seats that replace model for the rest of the review when a seat hits a subscription quota or rate limit, such as \"luna-6-personal-high-subscription, deepseek-v4.1-flash-deploy\" with rolly-agent. The receipt marks the substitution."
     required: false
     default: ""
   council-model:

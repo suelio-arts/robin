@@ -109,7 +109,7 @@ Available on the [direct action](../action.yml) and the [reusable workflow](../.
 | `llm-api-key` / `LLM_API_KEY` | `ollama` | Provider API key |
 | `llm-base-url` / `LLM_BASE_URL` | — | OpenAI-compatible base URL (required) |
 | `model` / `LLM_MODEL` | — | Model name (required) |
-| `fallback-model` | empty | Optional seat that takes over `model` for the rest of the review when the primary seat hits a subscription quota or rate limit. `deepseek-v4.1-flash-deploy` runs DeepSeek V4.1 Flash (effort high) on Rolly's Deploy API key: the one API-billed seat. The receipt marks `SUBSTITUTED` |
+| `fallback-model` | empty | Optional seat or comma/newline-separated ordered chain of seats that take over `model` for the rest of the review when a seat hits a subscription quota or rate limit (for example `luna-6-personal-high-subscription, deepseek-v4.1-flash-deploy`). `deepseek-v4.1-flash-deploy` runs DeepSeek V4.1 Flash (effort high) on Rolly's Deploy API key: the one API-billed seat. The receipt marks `SUBSTITUTED` |
 | `llm-user` | empty | Optional generic OpenAI-compatible attribution user |
 | `llm-metadata` | empty | Optional JSON object of string local receipt metadata (at most 16 keys); Chat Completions uses `llm-user` and `store=false`, without wire metadata |
 | `llm-usage-jsonl` | empty | Optional local path for durable metadata-only receipts per API attempt |

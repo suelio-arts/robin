@@ -374,6 +374,6 @@ Runtime code lives in `dist/index.js`; run `npm run build` before releasing. A f
 
 If you ran `tsc` alone and see extra files under `dist/`, run `npm run clean`.
 
-`fallback-model: deepseek-v4.1-flash-deploy` and `council-fallback-model: deepseek-v4.1-flash-deploy` replace a primary or council seat that
-hits its subscription quota or rate limit with DeepSeek V4.1 Flash on Rolly's
+`fallback-model` (a single seat or ordered comma/newline-separated chain, e.g. `luna-6-personal-high-subscription, deepseek-v4.1-flash-deploy`) and `council-fallback-model: deepseek-v4.1-flash-deploy` replace a primary or council seat that
+hits its subscription quota or rate limit, falling through to DeepSeek V4.1 Flash on Rolly's
 Deploy API key (the same provider OpenCode uses there), called tool-free.

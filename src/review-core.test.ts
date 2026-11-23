@@ -114,7 +114,7 @@ it("keeps both discovery passes and gates every piece together after parallel pr
   expect(council.gateVoted).toBe(true);
 });
 
-it("falls back to the backup primary seat when the primary hits its subscription limit", async () => {
+it("falls through a two-step primary fallback chain when subscription seats hit limits", async () => {
   const calls: string[] = [];
   const luna = {
     calls: [],
@@ -123,6 +123,14 @@ it("falls back to the backup primary seat when the primary hits its subscription
       throw new SubscriptionLimitError("codex", "quota");
     },
     getMetrics: () => ({calls: 0, durationMs: 100, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0}),
+  } as unknown as LLMClient;
+  const personal = {
+    calls: [],
+    chatCompletion: async () => {
+      calls.push("personal");
+      throw new SubscriptionLimitError("codex", "quota");
+    },
+    getMetrics: () => ({calls: 0, durationMs: 200, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0}),
   } as unknown as LLMClient;
   const deepseek = {
     calls: [],
@@ -139,7 +147,10 @@ it("falls back to the backup primary seat when the primary hits its subscription
   } as unknown as LLMClient;
   const primary = createPrimarySeat(
     {llm: luna, model: "luna-6-high-subscription"},
-    {llm: deepseek, model: "deepseek-v4.1-flash-deploy"}
+    [
+      {llm: personal, model: "luna-6-personal-high-subscription"},
+      {llm: deepseek, model: "deepseek-v4.1-flash-deploy"},
+    ]
   );
   const result = await runReviewCore({
     git: {getFileContent: async () => "", getTreePaths: async () => [], searchPaths: async () => []},
@@ -150,8 +161,12 @@ it("falls back to the backup primary seat when the primary hits its subscription
     loadPriorFindings: async () => "",
   });
   expect(primary.model).toBe("deepseek-v4.1-flash-deploy");
-  expect(primary.substitutedFor?.model).toBe("luna-6-high-subscription");
+  expect(primary.replaced.map(({model}) => model)).toEqual([
+    "luna-6-high-subscription",
+    "luna-6-personal-high-subscription",
+  ]);
   expect(calls).toContain("luna");
+  expect(calls).toContain("personal");
   expect(calls).toContain("deepseek:discovery");
   expect(calls).toContain("deepseek:final-gate");
   expect(result.findings.high).toHaveLength(1);

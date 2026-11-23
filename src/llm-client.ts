@@ -27,13 +27,18 @@ import { type CallSpan, currentStage } from "./review-timing";
 const LOCAL_AGENT_URL = "rolly-agent";
 const HOME = "/Users/rolly";
 const DARMA = `${HOME}/.local/bin/darma`;
-const T3_ROOT = `${HOME}/.t3`;
-type T3Instance = "claudeAgent" | "codex" | "antigravity";
+type T3Instance = "claudeAgent" | "codex" | "codex-personal" | "antigravity";
 /** darma's provenance provider name for each T3 instance. */
-const T3_PROVIDERS: Record<T3Instance, string> = {claudeAgent: "claude", codex: "codex", antigravity: "antigravity"};
+const T3_PROVIDERS: Record<T3Instance, string> = {
+  claudeAgent: "claude",
+  codex: "codex",
+  "codex-personal": "codex",
+  antigravity: "antigravity",
+};
 const SUBSCRIPTION_FAMILIES: Record<string, {instance: T3Instance; model: string}> = {
   "sol-6.1": {instance: "codex", model: "gpt-6.1-sol"},
   "luna-6": {instance: "codex", model: "gpt-6-luna"},
+  "luna-6-personal": {instance: "codex-personal", model: "gpt-6-luna"},
   "opus-5-5": {instance: "claudeAgent", model: "claude-opus-5-5"},
   "sonnet-5-5": {instance: "claudeAgent", model: "claude-sonnet-5-5"},
   "gemini-4-carbon": {instance: "antigravity", model: "gemini-4-carbon"},
@@ -70,6 +75,7 @@ function runFile(file: string, args: string[], options: { timeout: number; maxBu
 
 interface DarmaMeta {
   session?: string;
+  instance?: string;
   provider?: string;
   auth?: string;
   model?: string;
@@ -125,7 +131,8 @@ async function readSubscriptionReceipt(resultPath: string, seat: SubscriptionSea
     Promise<Pick<ChatCompletionResult, "callId" | "provenance" | "usage">> {
   const meta = JSON.parse(await readFile(`${resultPath}.meta.json`, "utf8")) as DarmaMeta;
   const provenance = {provider: T3_PROVIDERS[seat.instance], auth: "subscription", model: seat.model, effort: seat.effort};
-  if (!meta.session || meta.provider !== provenance.provider || meta.auth !== provenance.auth ||
+  if (!meta.session || (meta.instance !== undefined && meta.instance !== seat.instance) ||
+      meta.provider !== provenance.provider || meta.auth !== provenance.auth ||
       meta.model !== provenance.model || meta.effort !== provenance.effort) {
     throw new Error("Invalid subscription completion receipt");
   }
@@ -381,10 +388,10 @@ export class LLMClient {
         }
         return result;
       }
-      // darma writes its run directory under TMPDIR, inside `root`, removed below.
+      // darma discovers the matching T3 root (~/.t3, ~/.t3-*) for the named instance
+      // and writes its run directory under TMPDIR, inside `root`, removed below.
       const stdout = await runFile(DARMA, [
         "t3", "run",
-        "--root", T3_ROOT,
         "--instance", seat.instance,
         "--model", seat.model,
         "--effort", seat.effort,

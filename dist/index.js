@@ -1522,12 +1522,17 @@ const review_timing_1 = __nccwpck_require__(4220);
 const LOCAL_AGENT_URL = "rolly-agent";
 const HOME = "/Users/rolly";
 const DARMA = `${HOME}/.local/bin/darma`;
-const T3_ROOT = `${HOME}/.t3`;
 /** darma's provenance provider name for each T3 instance. */
-const T3_PROVIDERS = { claudeAgent: "claude", codex: "codex", antigravity: "antigravity" };
+const T3_PROVIDERS = {
+    claudeAgent: "claude",
+    codex: "codex",
+    "codex-personal": "codex",
+    antigravity: "antigravity",
+};
 const SUBSCRIPTION_FAMILIES = {
     "sol-6.1": { instance: "codex", model: "gpt-6.1-sol" },
     "luna-6": { instance: "codex", model: "gpt-6-luna" },
+    "luna-6-personal": { instance: "codex-personal", model: "gpt-6-luna" },
     "opus-5-5": { instance: "claudeAgent", model: "claude-opus-5-5" },
     "sonnet-5-5": { instance: "claudeAgent", model: "claude-sonnet-5-5" },
     "gemini-4-carbon": { instance: "antigravity", model: "gemini-4-carbon" },
@@ -1589,7 +1594,8 @@ async function readEventUsage(events) {
 async function readSubscriptionReceipt(resultPath, seat) {
     const meta = JSON.parse(await (0, promises_1.readFile)(`${resultPath}.meta.json`, "utf8"));
     const provenance = { provider: T3_PROVIDERS[seat.instance], auth: "subscription", model: seat.model, effort: seat.effort };
-    if (!meta.session || meta.provider !== provenance.provider || meta.auth !== provenance.auth ||
+    if (!meta.session || (meta.instance !== undefined && meta.instance !== seat.instance) ||
+        meta.provider !== provenance.provider || meta.auth !== provenance.auth ||
         meta.model !== provenance.model || meta.effort !== provenance.effort) {
         throw new Error("Invalid subscription completion receipt");
     }
@@ -1771,10 +1777,10 @@ class LLMClient {
                 }
                 return result;
             }
-            // darma writes its run directory under TMPDIR, inside `root`, removed below.
+            // darma discovers the matching T3 root (~/.t3, ~/.t3-*) for the named instance
+            // and writes its run directory under TMPDIR, inside `root`, removed below.
             const stdout = await runFile(DARMA, [
                 "t3", "run",
-                "--root", T3_ROOT,
                 "--instance", seat.instance,
                 "--model", seat.model,
                 "--effort", seat.effort,
@@ -2250,7 +2256,7 @@ async function run() {
         const apiKey = core.getInput("llm-api-key") || "ollama";
         const baseUrl = core.getInput("llm-base-url") || "";
         const model = core.getInput("model") || "";
-        const fallbackModel = core.getInput("fallback-model") || "";
+        const fallbackModels = (0, primary_seat_1.parseFallbackModels)(core.getInput("fallback-model") || "");
         const councilModel = core.getInput("council-model") || "";
         const councilFallbackModel = core.getInput("council-fallback-model") || "";
         if (councilFallbackModel && !councilModel)
@@ -2275,7 +2281,7 @@ async function run() {
         const reviewInstructionsFile = core.getInput("review-instructions-file") || "";
         const configFile = core.getInput("config-file") || repo_config_1.DEFAULT_CONFIG_FILE;
         const jsonResponseModeInput = core.getInput("use-json-response-mode") || "";
-        core.info(`Model: ${model || "(not configured)"}${fallbackModel ? ` (fallback: ${fallbackModel})` : ""}`);
+        core.info(`Model: ${model || "(not configured)"}${fallbackModels.length > 0 ? ` (fallback: ${fallbackModels.join(" -> ")})` : ""}`);
         core.info(`Running /${command} on PR #${prNumber} in ${owner}/${repo}`);
         statusCommand = command === "summary" ? "summary" : "review";
         const running = statusCommand === "summary" ? () => status_1.statusLine.summarizing(headSha) : (detail) => status_1.statusLine.running(headSha, detail);
@@ -2332,7 +2338,7 @@ async function run() {
             ? await (0, review_settings_1.loadReviewInstructions)(gitUtils, owner, repo, inlineReviewInstructions, reviewInstructionsFile, baseRef)
             : "";
         const createLlm = (seat, effort) => new llm_client_1.LLMClient(baseUrl, apiKey, seat, maxOutputTokens, llmTimeoutMs, undefined, (detail) => show(running(detail)), effort, providerOptions);
-        const primary = (0, primary_seat_1.createPrimarySeat)({ llm: createLlm(model, reasoningEffortInput), model }, fallbackModel ? { llm: createLlm(fallbackModel, ""), model: fallbackModel } : undefined);
+        const primary = (0, primary_seat_1.createPrimarySeat)({ llm: createLlm(model, reasoningEffortInput), model }, fallbackModels.map((seat) => ({ llm: createLlm(seat, ""), model: seat })));
         const council = councilModel && command === "review"
             ? (0, council_1.createCouncilSeat)({ llm: createLlm(councilModel, ""), model: councilModel }, councilFallbackModel ? { llm: createLlm(councilFallbackModel, ""), model: councilFallbackModel } : undefined)
             : undefined;
@@ -2750,39 +2756,46 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseFallbackModels = parseFallbackModels;
 exports.createPrimarySeat = createPrimarySeat;
 exports.onPrimarySeat = onPrimarySeat;
 exports.primaryFallbackReceipt = primaryFallbackReceipt;
 const core = __importStar(__nccwpck_require__(7484));
 const subscription_limit_1 = __nccwpck_require__(3478);
+/** Parses a single fallback model or a comma/newline-separated fallback chain. */
+function parseFallbackModels(input) {
+    return input.split(/[\n,]+/).map((entry) => entry.trim()).filter(Boolean);
+}
 function createPrimarySeat(seat, fallback) {
+    const fallbacks = Array.isArray(fallback) ? [...fallback] : fallback ? [fallback] : [];
     const primary = {
         ...seat,
-        fallback,
+        fallbacks,
+        replaced: [],
         chatCompletion(systemPrompt, userContent, jsonResponseMode) {
             return onPrimarySeat(primary, (active) => active.chatCompletion(systemPrompt, userContent, jsonResponseMode));
         },
         getMetrics() {
             const current = primary.llm.getMetrics();
-            if (!primary.substitutedFor)
+            if (primary.replaced.length === 0)
                 return current;
-            const original = primary.substitutedFor.llm.getMetrics();
+            const all = [...primary.replaced.map((prior) => prior.llm.getMetrics()), current];
             return {
-                calls: original.calls + current.calls,
-                durationMs: Math.max(original.durationMs, current.durationMs),
-                inputTokens: original.inputTokens + current.inputTokens,
-                cachedInputTokens: original.cachedInputTokens + current.cachedInputTokens,
-                outputTokens: original.outputTokens + current.outputTokens,
-                reasoningOutputTokens: original.reasoningOutputTokens + current.reasoningOutputTokens,
+                calls: all.reduce((sum, item) => sum + item.calls, 0),
+                durationMs: Math.max(...all.map((item) => item.durationMs)),
+                inputTokens: all.reduce((sum, item) => sum + item.inputTokens, 0),
+                cachedInputTokens: all.reduce((sum, item) => sum + item.cachedInputTokens, 0),
+                outputTokens: all.reduce((sum, item) => sum + item.outputTokens, 0),
+                reasoningOutputTokens: all.reduce((sum, item) => sum + item.reasoningOutputTokens, 0),
             };
         },
     };
     return primary;
 }
 /**
- * Runs one primary-seat call. A subscription limit hands the seat to the
- * fallback for this call and the rest of the review; without one it stays
- * fatal. A limit on the fallback itself stays fatal and does not recurse.
+ * Runs one primary-seat call. A subscription limit advances the seat to the
+ * next configured fallback for this call and the rest of the review; once the
+ * fallback chain is exhausted, a subscription limit stays fatal.
  */
 async function onPrimarySeat(primary, run) {
     const seat = primary.llm;
@@ -2790,24 +2803,28 @@ async function onPrimarySeat(primary, run) {
         return await run(seat);
     }
     catch (error) {
-        const { fallback } = primary;
-        if (!(error instanceof subscription_limit_1.SubscriptionLimitError) || !fallback || seat === fallback.llm)
+        if (!(error instanceof subscription_limit_1.SubscriptionLimitError))
             throw error;
-        if (primary.llm !== fallback.llm) {
-            core.warning(`Primary seat ${primary.model} hit its subscription limit; ${fallback.model} takes the seat: ${error.message}`);
-            primary.substitutedFor = { llm: primary.llm, model: primary.model };
-            primary.llm = fallback.llm;
-            primary.model = fallback.model;
+        if (seat === primary.llm) {
+            const next = primary.fallbacks.shift();
+            if (!next)
+                throw error;
+            core.warning(`Primary seat ${primary.model} hit its subscription limit; ${next.model} takes the seat: ${error.message}`);
+            primary.replaced.push({ llm: primary.llm, model: primary.model });
+            primary.llm = next.llm;
+            primary.model = next.model;
         }
         return onPrimarySeat(primary, run);
     }
 }
 function primaryFallbackReceipt(primary) {
-    const { substitutedFor } = primary;
-    if (!substitutedFor)
+    if (primary.replaced.length === 0)
         return undefined;
     const metrics = primary.llm.getMetrics();
-    return `Robin fallback: ${primary.model} (${metrics.calls} calls) · SUBSTITUTED: ${substitutedFor.model} hit its subscription limit;`
+    const replaced = primary.replaced.length === 1
+        ? `${primary.replaced[0].model} hit its subscription limit`
+        : `${primary.replaced.map(({ model }) => model).join(" -> ")} hit subscription limits`;
+    return `Robin fallback: ${primary.model} (${metrics.calls} calls) · SUBSTITUTED: ${replaced};`
         + ` ${primary.model} used ${metrics.inputTokens} input and ${metrics.outputTokens} output tokens`;
 }
 //# sourceMappingURL=primary-seat.js.map
@@ -3587,7 +3604,7 @@ function buildReviewInput(diff, context = "") {
 function seatCalls(llm, model, council) {
     const primarySeats = "llm" in llm
         ? [
-            ...(llm.substitutedFor ? [{ model: llm.substitutedFor.model, calls: llm.substitutedFor.llm.calls }] : []),
+            ...llm.replaced.map((seat) => ({ model: seat.model, calls: seat.llm.calls })),
             { model: llm.model, calls: llm.llm.calls },
         ]
         : [{ model, calls: llm.calls }];

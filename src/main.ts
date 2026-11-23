@@ -3,7 +3,7 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
 import { councilReceipt, createCouncilSeat } from "./council";
-import { type ChatSeat, createPrimarySeat, primaryFallbackReceipt } from "./primary-seat";
+import { type ChatSeat, createPrimarySeat, parseFallbackModels, primaryFallbackReceipt } from "./primary-seat";
 import { GitUtils } from "./git-utils";
 import { GitHubReviewer, ROBIN_SIGNATURE, formatPriorFindings } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
@@ -136,7 +136,7 @@ async function run(): Promise<void> {
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
     const model = core.getInput("model") || "";
-    const fallbackModel = core.getInput("fallback-model") || "";
+    const fallbackModels = parseFallbackModels(core.getInput("fallback-model") || "");
     const councilModel = core.getInput("council-model") || "";
     const councilFallbackModel = core.getInput("council-fallback-model") || "";
     if (councilFallbackModel && !councilModel) throw new Error("council-fallback-model requires council-model");
@@ -160,7 +160,7 @@ async function run(): Promise<void> {
     const configFile = core.getInput("config-file") || DEFAULT_CONFIG_FILE;
     const jsonResponseModeInput = core.getInput("use-json-response-mode") || "";
 
-    core.info(`Model: ${model || "(not configured)"}${fallbackModel ? ` (fallback: ${fallbackModel})` : ""}`);
+    core.info(`Model: ${model || "(not configured)"}${fallbackModels.length > 0 ? ` (fallback: ${fallbackModels.join(" -> ")})` : ""}`);
 
     core.info(`Running /${command} on PR #${prNumber} in ${owner}/${repo}`);
     statusCommand = command === "summary" ? "summary" : "review";
@@ -241,7 +241,7 @@ async function run(): Promise<void> {
     );
     const primary = createPrimarySeat(
       {llm: createLlm(model, reasoningEffortInput), model},
-      fallbackModel ? {llm: createLlm(fallbackModel, ""), model: fallbackModel} : undefined
+      fallbackModels.map((seat) => ({llm: createLlm(seat, ""), model: seat}))
     );
     const council = councilModel && command === "review"
       ? createCouncilSeat({llm: createLlm(councilModel, ""), model: councilModel},

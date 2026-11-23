@@ -3,6 +3,7 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { LLMClient } from "./llm-client";
 import { councilReceipt, createCouncilSeat } from "./council";
+import { type ChatSeat, createPrimarySeat, primaryFallbackReceipt } from "./primary-seat";
 import { GitUtils } from "./git-utils";
 import { GitHubReviewer, ROBIN_SIGNATURE, formatPriorFindings } from "./github-reviewer";
 import { DEFAULT_LLM_TIMEOUT_MS, parseLLMTimeout } from "./config";
@@ -135,6 +136,7 @@ async function run(): Promise<void> {
     const apiKey = core.getInput("llm-api-key") || "ollama";
     const baseUrl = core.getInput("llm-base-url") || "";
     const model = core.getInput("model") || "";
+    const fallbackModel = core.getInput("fallback-model") || "";
     const councilModel = core.getInput("council-model") || "";
     const councilFallbackModel = core.getInput("council-fallback-model") || "";
     if (councilFallbackModel && !councilModel) throw new Error("council-fallback-model requires council-model");
@@ -158,7 +160,7 @@ async function run(): Promise<void> {
     const configFile = core.getInput("config-file") || DEFAULT_CONFIG_FILE;
     const jsonResponseModeInput = core.getInput("use-json-response-mode") || "";
 
-    core.info(`Model: ${model || "(not configured)"}`);
+    core.info(`Model: ${model || "(not configured)"}${fallbackModel ? ` (fallback: ${fallbackModel})` : ""}`);
 
     core.info(`Running /${command} on PR #${prNumber} in ${owner}/${repo}`);
     statusCommand = command === "summary" ? "summary" : "review";
@@ -237,7 +239,10 @@ async function run(): Promise<void> {
       effort as "low" | "medium" | "high" | undefined,
       providerOptions
     );
-    const llm = createLlm(model, reasoningEffortInput);
+    const primary = createPrimarySeat(
+      {llm: createLlm(model, reasoningEffortInput), model},
+      fallbackModel ? {llm: createLlm(fallbackModel, ""), model: fallbackModel} : undefined
+    );
     const council = councilModel && command === "review"
       ? createCouncilSeat({llm: createLlm(councilModel, ""), model: councilModel},
         councilFallbackModel ? {llm: createLlm(councilFallbackModel, ""), model: councilFallbackModel} : undefined)
@@ -245,7 +250,7 @@ async function run(): Promise<void> {
     const useJsonMode = command === "review" && jsonResponseMode;
 
     if (command === "summary") {
-      const reviewText = (await runSummary(llm, summaryDiff)).content;
+      const reviewText = (await runSummary(primary, summaryDiff)).content;
       await octokit.rest.issues.createComment({
         owner,
         repo,
@@ -257,16 +262,18 @@ async function run(): Promise<void> {
       const timings = new ReviewTimings();
       const {findings, evidenceRequests, usedFollowups} = await runReviewCore({
         git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: PIECE_CONCURRENCY,
-        reviewInstructions, jsonResponseMode: useJsonMode, llm, council, timings,
+        reviewInstructions, jsonResponseMode: useJsonMode, llm: primary, council, timings,
         loadPriorFindings: () => loadPriorRobinFindings(octokit!, owner, repo, prNumber!),
       });
-      const metrics = llm.getMetrics();
-      const timingReceipt = timings.receipt(seatCalls(llm, model, council));
+      const metrics = primary.getMetrics();
+      const timingReceipt = timings.receipt(seatCalls(primary, model, council));
+      const fallbackReceipt = primaryFallbackReceipt(primary);
       core.info(timingReceipt);
       findings.summary += [
         "",
         `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${usedFollowups} evidence follow-ups`,
-        ...(council ? [councilReceipt(model, council)] : []),
+        ...(fallbackReceipt ? [fallbackReceipt] : []),
+        ...(council ? [councilReceipt(primary.model, council)] : []),
         timingReceipt,
       ].join("\n");
 
@@ -441,7 +448,7 @@ async function resolvedReviewCommentIds(
   return resolved;
 }
 
-async function runSummary(llm: LLMClient, diff: string) {
+async function runSummary(llm: ChatSeat, diff: string) {
   const systemPrompt = getSummaryPrompt();
   const userContent = buildSummaryInput(diff);
   core.info("Getting PR summary...");

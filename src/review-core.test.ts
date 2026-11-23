@@ -1,6 +1,8 @@
 import { MAX_REVIEW_PIECES, mapPool, reviewPieces, runReviewCore } from "./review-core";
 import { LLMClient } from "./llm-client";
 import { createCouncilSeat } from "./council";
+import { createPrimarySeat } from "./primary-seat";
+import { SubscriptionLimitError } from "./subscription-limit";
 import { currentStage, ReviewTimings } from "./review-timing";
 
 describe("mapPool", () => {
@@ -110,6 +112,49 @@ it("keeps both discovery passes and gates every piece together after parallel pr
   expect(result.findings.medium.map(({file}) => file)).toEqual(["a.ts", "b.ts"]);
   expect(passes.sort()).toEqual(["council:1", "council:2", "primary:1", "primary:2"]);
   expect(council.gateVoted).toBe(true);
+});
+
+it("falls back to the backup primary seat when the primary hits its subscription limit", async () => {
+  const calls: string[] = [];
+  const luna = {
+    calls: [],
+    chatCompletion: async () => {
+      calls.push("luna");
+      throw new SubscriptionLimitError("codex", "quota");
+    },
+    getMetrics: () => ({calls: 0, durationMs: 100, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, reasoningOutputTokens: 0}),
+  } as unknown as LLMClient;
+  const deepseek = {
+    calls: [],
+    chatCompletion: async () => {
+      const stage = currentStage()?.stage ?? "unknown";
+      calls.push(`deepseek:${stage}`);
+      if (stage === "final-gate") {
+        const proof = {trigger: "call", path: "changed line", impact: "failure", evidence: "exact diff"};
+        return {content: JSON.stringify({approved: {c1: proof}, rejected: {}, already_reported: {}})};
+      }
+      return {content: JSON.stringify({summary: "", high: [{file: "a.ts", line: 1, description: "Real bug"}], medium: [], low: [], suggestions: []})};
+    },
+    getMetrics: () => ({calls: 3, durationMs: 500, inputTokens: 200, cachedInputTokens: 0, outputTokens: 40, reasoningOutputTokens: 0}),
+  } as unknown as LLMClient;
+  const primary = createPrimarySeat(
+    {llm: luna, model: "luna-6-high-subscription"},
+    {llm: deepseek, model: "deepseek-v4.1-flash-deploy"}
+  );
+  const result = await runReviewCore({
+    git: {getFileContent: async () => "", getTreePaths: async () => [], searchPaths: async () => []},
+    owner: "o", repo: "r", baseRef: "base", headRef: "head",
+    reviewDiff: "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n",
+    maxDiffSize: 50000, pieceConcurrency: 2, reviewInstructions: "", jsonResponseMode: true,
+    llm: primary, timings: new ReviewTimings(),
+    loadPriorFindings: async () => "",
+  });
+  expect(primary.model).toBe("deepseek-v4.1-flash-deploy");
+  expect(primary.substitutedFor?.model).toBe("luna-6-high-subscription");
+  expect(calls).toContain("luna");
+  expect(calls).toContain("deepseek:discovery");
+  expect(calls).toContain("deepseek:final-gate");
+  expect(result.findings.high).toHaveLength(1);
 });
 
 describe("reviewPieces", () => {

@@ -2153,6 +2153,7 @@ const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const llm_client_1 = __nccwpck_require__(3316);
 const council_1 = __nccwpck_require__(6178);
+const primary_seat_1 = __nccwpck_require__(2557);
 const git_utils_1 = __nccwpck_require__(8529);
 const github_reviewer_1 = __nccwpck_require__(268);
 const config_1 = __nccwpck_require__(4008);
@@ -2249,6 +2250,7 @@ async function run() {
         const apiKey = core.getInput("llm-api-key") || "ollama";
         const baseUrl = core.getInput("llm-base-url") || "";
         const model = core.getInput("model") || "";
+        const fallbackModel = core.getInput("fallback-model") || "";
         const councilModel = core.getInput("council-model") || "";
         const councilFallbackModel = core.getInput("council-fallback-model") || "";
         if (councilFallbackModel && !councilModel)
@@ -2273,7 +2275,7 @@ async function run() {
         const reviewInstructionsFile = core.getInput("review-instructions-file") || "";
         const configFile = core.getInput("config-file") || repo_config_1.DEFAULT_CONFIG_FILE;
         const jsonResponseModeInput = core.getInput("use-json-response-mode") || "";
-        core.info(`Model: ${model || "(not configured)"}`);
+        core.info(`Model: ${model || "(not configured)"}${fallbackModel ? ` (fallback: ${fallbackModel})` : ""}`);
         core.info(`Running /${command} on PR #${prNumber} in ${owner}/${repo}`);
         statusCommand = command === "summary" ? "summary" : "review";
         const running = statusCommand === "summary" ? () => status_1.statusLine.summarizing(headSha) : (detail) => status_1.statusLine.running(headSha, detail);
@@ -2330,13 +2332,13 @@ async function run() {
             ? await (0, review_settings_1.loadReviewInstructions)(gitUtils, owner, repo, inlineReviewInstructions, reviewInstructionsFile, baseRef)
             : "";
         const createLlm = (seat, effort) => new llm_client_1.LLMClient(baseUrl, apiKey, seat, maxOutputTokens, llmTimeoutMs, undefined, (detail) => show(running(detail)), effort, providerOptions);
-        const llm = createLlm(model, reasoningEffortInput);
+        const primary = (0, primary_seat_1.createPrimarySeat)({ llm: createLlm(model, reasoningEffortInput), model }, fallbackModel ? { llm: createLlm(fallbackModel, ""), model: fallbackModel } : undefined);
         const council = councilModel && command === "review"
             ? (0, council_1.createCouncilSeat)({ llm: createLlm(councilModel, ""), model: councilModel }, councilFallbackModel ? { llm: createLlm(councilFallbackModel, ""), model: councilFallbackModel } : undefined)
             : undefined;
         const useJsonMode = command === "review" && jsonResponseMode;
         if (command === "summary") {
-            const reviewText = (await runSummary(llm, summaryDiff)).content;
+            const reviewText = (await runSummary(primary, summaryDiff)).content;
             await octokit.rest.issues.createComment({
                 owner,
                 repo,
@@ -2349,16 +2351,18 @@ async function run() {
             const timings = new review_timing_1.ReviewTimings();
             const { findings, evidenceRequests, usedFollowups } = await (0, review_core_1.runReviewCore)({
                 git: gitUtils, owner, repo, baseRef, headRef, reviewDiff, maxDiffSize, pieceConcurrency: review_core_1.PIECE_CONCURRENCY,
-                reviewInstructions, jsonResponseMode: useJsonMode, llm, council, timings,
+                reviewInstructions, jsonResponseMode: useJsonMode, llm: primary, council, timings,
                 loadPriorFindings: () => loadPriorRobinFindings(octokit, owner, repo, prNumber),
             });
-            const metrics = llm.getMetrics();
-            const timingReceipt = timings.receipt((0, review_core_1.seatCalls)(llm, model, council));
+            const metrics = primary.getMetrics();
+            const timingReceipt = timings.receipt((0, review_core_1.seatCalls)(primary, model, council));
+            const fallbackReceipt = (0, primary_seat_1.primaryFallbackReceipt)(primary);
             core.info(timingReceipt);
             findings.summary += [
                 "",
                 `Robin metrics: ${(metrics.durationMs / 1000).toFixed(1)}s · ${metrics.calls} calls · ${metrics.inputTokens} input tokens (${metrics.cachedInputTokens} cached) · ${metrics.outputTokens} output tokens (${metrics.reasoningOutputTokens} reasoning) · ${evidenceRequests} evidence requests · ${usedFollowups} evidence follow-ups`,
-                ...(council ? [(0, council_1.councilReceipt)(model, council)] : []),
+                ...(fallbackReceipt ? [fallbackReceipt] : []),
+                ...(council ? [(0, council_1.councilReceipt)(primary.model, council)] : []),
                 timingReceipt,
             ].join("\n");
             core.info(`Found ${findings.high.length} high, ${findings.medium.length} medium, ${findings.low.length} low, ${findings.suggestions.length} suggestions`);
@@ -2704,6 +2708,109 @@ function isApprovalProof(value) {
     return ["trigger", "path", "impact", "evidence"].every((key) => typeof proof[key] === "string" && proof[key].trim().length > 0);
 }
 //# sourceMappingURL=precision-gate.js.map
+
+/***/ }),
+
+/***/ 2557:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+"use strict";
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createPrimarySeat = createPrimarySeat;
+exports.onPrimarySeat = onPrimarySeat;
+exports.primaryFallbackReceipt = primaryFallbackReceipt;
+const core = __importStar(__nccwpck_require__(7484));
+const subscription_limit_1 = __nccwpck_require__(3478);
+function createPrimarySeat(seat, fallback) {
+    const primary = {
+        ...seat,
+        fallback,
+        chatCompletion(systemPrompt, userContent, jsonResponseMode) {
+            return onPrimarySeat(primary, (active) => active.chatCompletion(systemPrompt, userContent, jsonResponseMode));
+        },
+        getMetrics() {
+            const current = primary.llm.getMetrics();
+            if (!primary.substitutedFor)
+                return current;
+            const original = primary.substitutedFor.llm.getMetrics();
+            return {
+                calls: original.calls + current.calls,
+                durationMs: Math.max(original.durationMs, current.durationMs),
+                inputTokens: original.inputTokens + current.inputTokens,
+                cachedInputTokens: original.cachedInputTokens + current.cachedInputTokens,
+                outputTokens: original.outputTokens + current.outputTokens,
+                reasoningOutputTokens: original.reasoningOutputTokens + current.reasoningOutputTokens,
+            };
+        },
+    };
+    return primary;
+}
+/**
+ * Runs one primary-seat call. A subscription limit hands the seat to the
+ * fallback for this call and the rest of the review; without one it stays
+ * fatal. A limit on the fallback itself stays fatal and does not recurse.
+ */
+async function onPrimarySeat(primary, run) {
+    const seat = primary.llm;
+    try {
+        return await run(seat);
+    }
+    catch (error) {
+        const { fallback } = primary;
+        if (!(error instanceof subscription_limit_1.SubscriptionLimitError) || !fallback || seat === fallback.llm)
+            throw error;
+        if (primary.llm !== fallback.llm) {
+            core.warning(`Primary seat ${primary.model} hit its subscription limit; ${fallback.model} takes the seat: ${error.message}`);
+            primary.substitutedFor = { llm: primary.llm, model: primary.model };
+            primary.llm = fallback.llm;
+            primary.model = fallback.model;
+        }
+        return onPrimarySeat(primary, run);
+    }
+}
+function primaryFallbackReceipt(primary) {
+    const { substitutedFor } = primary;
+    if (!substitutedFor)
+        return undefined;
+    const metrics = primary.llm.getMetrics();
+    return `Robin fallback: ${primary.model} (${metrics.calls} calls) · SUBSTITUTED: ${substitutedFor.model} hit its subscription limit;`
+        + ` ${primary.model} used ${metrics.inputTokens} input and ${metrics.outputTokens} output tokens`;
+}
+//# sourceMappingURL=primary-seat.js.map
 
 /***/ }),
 
@@ -3476,10 +3583,16 @@ function buildReviewInput(diff, context = "") {
     }
     return input.join("\n");
 }
-/** Every seat that took calls, including a council seat replaced by its fallback. */
+/** Every seat that took calls, including any primary or council seat replaced by its fallback. */
 function seatCalls(llm, model, council) {
+    const primarySeats = "llm" in llm
+        ? [
+            ...(llm.substitutedFor ? [{ model: llm.substitutedFor.model, calls: llm.substitutedFor.llm.calls }] : []),
+            { model: llm.model, calls: llm.llm.calls },
+        ]
+        : [{ model, calls: llm.calls }];
     return [
-        { model, calls: llm.calls },
+        ...primarySeats,
         ...(council?.substitutedFor ? [{ model: council.substitutedFor.model, calls: council.substitutedFor.llm.calls }] : []),
         ...(council ? [{ model: council.model, calls: council.llm.calls }] : []),
     ];
